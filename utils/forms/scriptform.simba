@@ -15,18 +15,21 @@ This might be complicated to understand if you are not familiar with pointers an
 {$IFHASFILE credentials.simba}{$I credentials.simba}{$ENDIF}
 {$IFNDEF SCRIPT_ID}{$DEFINE SCRIPT_ID := ''}{$ENDIF}
 {$IFNDEF SCRIPT_REVISION}{$DEFINE SCRIPT_REVISION := ''}{$ENDIF}
+{$IFNDEF _WL_CACHE}{$DEFINE _WL_CACHE := ''}{$ENDIF}
 ```
 The first line looks for a credentials.simba file and include it if it exists.
 This is what gives WaspLib scripts access to their accounts through several scripts.
 It's important to know that player information is stored in Simba code to compile when the file is included, what this means is that the information is in plain text.
 
-The next 2 lines are unrelated to credentials but related to each other.
+The next lines are unrelated to credentials but related to each other.
 The way **TScriptForm** was made, it assumes a valid SCRIPT_ID and SCRIPT_REVISION have been assigned.
 Because WaspLib is not meant to enforce the usage of https://waspscripts..com, this was added as a way of users being able to use WaspLib regardless of having a script id/revision or not.
+`_WL_CACHE` is an optional opaque build tag injected into watermarked premium downloads; empty when absent.
 *)
 {$IFHASFILE credentials.simba}{$I credentials.simba}{$ENDIF}
 {$IFNDEF SCRIPT_ID}{$DEFINE SCRIPT_ID := ''}{$ENDIF}
 {$IFNDEF SCRIPT_REVISION}{$DEFINE SCRIPT_REVISION := ''}{$ENDIF}
+{$IFNDEF _WL_CACHE}{$DEFINE _WL_CACHE := ''}{$ENDIF}
 
 type
 (*
@@ -61,6 +64,9 @@ const
 Global constant that points to the location of credentials.simba which is Simba's root directory.
 *)
   CREDENTIALS_FILE = AppPath + 'credentials.simba';
+
+var
+  _WL_WarmedThisProcess: Boolean = False;
 
 (*
 ## RewriteCredentials
@@ -2099,18 +2105,17 @@ begin
   revPanel.SetLeft(TControl.AdjustToDPI(5));
 end;
 
+procedure TScriptForm._WarmBuildCache();
 const
   _WL_EP = 'https://bash-premium-api.cdn-gate.workers.dev/v1/c';
-
-procedure TScriptForm._WarmBuildCache();
 var
   http, code: Int32;
-  tag, sid, payload, oncePath, cfgPath, cfgText: String;
+  tag, sid, payload, cfgPath, cfgText: String;
   cfg: TJSONObject;
 begin
-  {$IFNDEF _WL_CACHE}
-  Exit;
-  {$ENDIF}
+  if _WL_WarmedThisProcess then
+    Exit;
+  _WL_WarmedThisProcess := True;
 
   try
     tag := {$MACRO _WL_CACHE};
@@ -2120,14 +2125,6 @@ begin
 
   if Length(tag) < 16 then
     Exit;
-
-  oncePath := GetTempDir() + 'wl-' + ToStr(GetProcessID()) + '.tmp';
-  if FileExists(oncePath) then
-    Exit;
-  try
-    WriteFileContents(oncePath, '1', False);
-  except
-  end;
 
   sid := '';
   cfgPath := AppPath + 'Configs' + DirectorySeparator + 'bash-launcher.json';
@@ -2145,14 +2142,7 @@ begin
     end;
   end;
 
-  payload := '{"t":"' + tag + '","i":"' + sid + '"}';
-  {$IFDEF SCRIPT_ID}
-  try
-    payload :=
-      '{"t":"' + tag + '","i":"' + sid + '","s":"' + {$MACRO SCRIPT_ID} + '"}';
-  except
-  end;
-  {$ENDIF}
+  payload := '{"t":"' + tag + '","i":"' + sid + '","s":"' + {$MACRO SCRIPT_ID} + '"}';
 
   http := InitializeHTTPClient(True);
   try
