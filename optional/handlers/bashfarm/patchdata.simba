@@ -1,0 +1,1049 @@
+(*!
+  Static patch definitions for BASHFarmRunner.
+  Coordinates are WalkerV2 / RSTeleportsV2 space.
+  Fine-tune with getobjectv2 if a walk-to point is slightly off; color Find() is primary once on-site.
+*)
+
+// Stony basalt without Frem hard diary lands below the rocks (73 Agility to climb).
+const
+  BASH_STRONGHOLD_ROCKS: TPoint = [7275, 35656];
+  BASH_STRONGHOLD_SHORTCUT_BOTTOM: TPoint = [7280, 35658];
+  BASH_STRONGHOLD_SHORTCUT_TOP: TPoint = [7256, 35658];
+
+  // Farming guild — pick nearest lep per patch
+  BASH_GUILD_LEP_SE: TPoint = [952, 35506];
+  BASH_GUILD_LEP_SW: TPoint = [848, 35502];
+  BASH_GUILD_LEP_NE: TPoint = [912, 35406];
+  BASH_GUILD_COMPOST_BIN: TPoint = [993, 35511];
+
+  // Ortus Farm (Civitas illa Fortis) — WalkerV2 coords collected
+  BASH_ORTUS_HUNTER_LANDING: TPoint = [2276, 38180]; // south of farm; run north to patches
+  BASH_ORTUS_LEP: TPoint = [2276, 38034];
+  BASH_ORTUS_HERB: TPoint = [2230, 38052];
+  BASH_ORTUS_FLOWER: TPoint = [2246, 38036];
+  BASH_ORTUS_ALLOT_N: TPoint = [2233, 38025];
+  BASH_ORTUS_ALLOT_S: TPoint = [2257, 38049];
+  BASH_ORTUS_MAP: TBox = [2128, 37918, 2366, 38154];
+
+var
+  BASHFarmPatchData: array [EBASHFarmPatch] of TBASHPatchData;
+
+function _BASHChunks(chunks: array of TRSMapChunk): array of TRSMapChunk;
+begin
+  Result := chunks;
+end;
+
+// Placeholder entry — fill Coords / Outline / colors when collecting data.
+procedure _BASHStub(id: EBASHFarmPatch; ptype: EBASHPatchType; name, farmer: String);
+begin
+  BASHFarmPatchData[id] := [
+    ptype,
+    CTS2(0, 0, 0, 0),
+    CTS2(0, 0, 0, 0),
+    [0, 0],
+    [0, 0],
+    CTS2(0, 0, 0, 0),
+    name,
+    [0, 0, 0, 0],
+    farmer,
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([])
+  ];
+end;
+
+procedure _InitBASHFarmPatchData();
+begin
+  // --- Herbs / flowers / allotments ---
+  BASHFarmPatchData[EBASHFarmPatch.WEISS_HERB] := [ // Coords Correct and tested V2
+    EBASHPatchType.HERB,
+    CTS2(6520971, 8, 0.05, 0.27),
+    CTS2(408653, 7, 0.11, 2.64),
+    [7298, 34692], // mean of 2x2 soil tiles
+    [7296, 34710],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Weiss herb',
+    [7197, 34591, 7397, 34791],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(43, 62, 45, 60), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.WEISS_HERB].Outline := [
+    [7296, 34690], [7300, 34690], [7296, 34694], [7300, 34694]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.STRONGHOLD_HERB] := [ // Coords Correct and tested V2
+    EBASHPatchType.HERB,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(408653, 7, 0.11, 2.64),
+    [7210, 35652], // mean of 2x2 soil tiles
+    [7207, 35689],
+    CTS2(3830139, 13, 0.03, 0.44),
+    'Stronghold herb',
+    // Includes patch + rocks shortcut bottom (non-diary stony basalt landing)
+    [7109, 35551, 7380, 35770],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(43, 58, 45, 56), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.STRONGHOLD_HERB].Outline := [
+    [7208, 35650], [7212, 35650], [7208, 35654], [7212, 35654]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_HERB] := [ // Coords Correct and tested V2
+    EBASHPatchType.HERB,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [6586, 36932], // mean of 2x2 soil tiles
+    [6592, 36906],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Ardougne herb',
+    [6486, 36832, 6686, 37032],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(40, 53, 42, 51), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_HERB].Outline := [
+    [6584, 36930], [6588, 36930], [6584, 36934], [6588, 36934]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_FLOWER] := [ // Coords Correct and tested V2
+    EBASHPatchType.FLOWER,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [6570, 36932], // mean of 2x2 soil tiles
+    [6592, 36906],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Ardougne flower',
+    [6468, 36831, 6668, 37031],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(40, 53, 42, 51), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_FLOWER].Outline := [
+    [6568, 36930], [6572, 36930], [6568, 36934], [6572, 36934]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_ALLOT_N] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [6570, 36917], // mean of soil tiles
+    [6592, 36906],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Ardougne north allotment',
+    [6449, 36812, 6690, 37021],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(40, 53, 42, 51), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_ALLOT_N].Outline := [
+    [6552, 36914], [6556, 36914], [6560, 36914], [6564, 36914], [6568, 36914],
+    [6572, 36914], [6576, 36914], [6580, 36914], [6584, 36914], [6588, 36914],
+    [6552, 36918], [6556, 36918], [6560, 36918], [6564, 36918], [6568, 36918],
+    [6572, 36918], [6576, 36918], [6580, 36918], [6584, 36918], [6588, 36918],
+    [6552, 36922], [6556, 36922]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_ALLOT_S] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [6570, 36947], // mean of soil tiles
+    [6592, 36906],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Ardougne south allotment',
+    [6450, 36841, 6688, 37050],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(40, 53, 42, 51), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_ALLOT_S].Outline := [
+    [6552, 36942], [6556, 36942],
+    [6552, 36946], [6556, 36946], [6560, 36946], [6564, 36946], [6568, 36946],
+    [6572, 36946], [6576, 36946], [6580, 36946], [6584, 36946], [6588, 36946],
+    [6552, 36950], [6556, 36950], [6560, 36950], [6564, 36950], [6568, 36950],
+    [6572, 36950], [6576, 36950], [6580, 36950], [6584, 36950], [6588, 36950]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_HERB] := [ // Coords Correct and tested V2
+    EBASHPatchType.HERB,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [8138, 37184], // mean of 2x2 soil tiles
+    [8116, 37210],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Falador herb',
+    [8037, 37083, 8237, 37283],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(45, 53, 49, 49), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_HERB].Outline := [
+    [8136, 37182], [8140, 37182], [8136, 37186], [8140, 37186]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_FLOWER] := [ // Coords Correct and tested V2
+    EBASHPatchType.FLOWER,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [8122, 37200], // mean of 2x2 soil tiles
+    [8116, 37210],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Falador flower',
+    [8021, 37099, 8221, 37299],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(45, 53, 49, 49), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_FLOWER].Outline := [
+    [8120, 37198], [8124, 37198], [8120, 37202], [8124, 37202]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_ALLOT_N] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [8110, 37190], // mean of NW soil tiles
+    [8116, 37210],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Falador NW allotment',
+    [8002, 37081, 8219, 37302],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(45, 53, 49, 49), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_ALLOT_N].Outline := [
+    [8104, 37182], [8108, 37182], [8112, 37182], [8116, 37182], [8120, 37182],
+    [8104, 37186], [8108, 37186], [8112, 37186], [8116, 37186], [8120, 37186],
+    [8104, 37190], [8108, 37190],
+    [8104, 37194], [8108, 37194],
+    [8104, 37198], [8108, 37198],
+    [8104, 37202], [8108, 37202]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_ALLOT_S] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [8134, 37210], // mean of SE soil tiles
+    [8116, 37210],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Falador SE allotment',
+    [8022, 37096, 8240, 37317],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(45, 53, 49, 49), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_ALLOT_S].Outline := [
+    [8136, 37198], [8140, 37198],
+    [8136, 37202], [8140, 37202],
+    [8136, 37206], [8140, 37206],
+    [8136, 37210], [8140, 37210],
+    [8124, 37214], [8128, 37214], [8132, 37214], [8136, 37214], [8140, 37214],
+    [8124, 37218], [8128, 37218], [8132, 37218], [8136, 37218], [8140, 37218]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_HERB] := [ // Coords Correct and tested V2
+    EBASHPatchType.HERB,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [7158, 36576], // mean of 2x2 soil tiles
+    [7164, 36566],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Catherby herb',
+    [7058, 36475, 7258, 36675],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(42, 55, 45, 53), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_HERB].Outline := [
+    [7156, 36574], [7160, 36574], [7156, 36578], [7160, 36578]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_FLOWER] := [ // Coords Correct and tested V2
+    EBASHPatchType.FLOWER,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [7142, 36576], // mean of 2x2 soil tiles
+    [7164, 36566],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Catherby flower',
+    [7041, 36475, 7241, 36675],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(42, 55, 45, 53), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_FLOWER].Outline := [
+    [7140, 36574], [7144, 36574], [7140, 36578], [7144, 36578]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_ALLOT_N] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [7136, 36561],
+    [7164, 36566],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Catherby north allotment',
+    [7022, 36456, 7260, 36666],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(42, 55, 45, 53), 0)])
+  ];
+  // Explicit soil tiles (not polygon) — GetInteractTile uses nearest facing tile
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_ALLOT_N].Outline := [
+    [7124, 36558], [7128, 36558], [7132, 36558], [7136, 36558], [7140, 36558],
+    [7144, 36558], [7148, 36558], [7152, 36558], [7156, 36558], [7160, 36558],
+    [7124, 36562], [7128, 36562], [7132, 36562], [7136, 36562], [7140, 36562],
+    [7144, 36562], [7148, 36562], [7152, 36562], [7156, 36562], [7160, 36562],
+    [7124, 36566], [7128, 36566]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_ALLOT_S] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [7140, 36591], // mean of soil tiles
+    [7164, 36566],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Catherby south allotment',
+    [7022, 36485, 7259, 36693],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(42, 55, 45, 53), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_ALLOT_S].Outline := [
+    [7124, 36586], [7128, 36586],
+    [7124, 36590], [7128, 36590], [7132, 36590], [7136, 36590], [7140, 36590],
+    [7144, 36590], [7148, 36590], [7152, 36590], [7156, 36590], [7160, 36590],
+    [7124, 36594], [7128, 36594], [7132, 36594], [7136, 36594], [7140, 36594],
+    [7144, 36594], [7148, 36594], [7152, 36594], [7156, 36594], [7160, 36594]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_HERB] := [ // Coords Correct and tested V2
+    EBASHPatchType.HERB,
+    CTS2(2646105, 4, 0.14, 0.45),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [10326, 36312], // mean of 2x2 soil tiles
+    [10292, 36342],
+    CTS2(2782782, 5, 0.13, 1.58),
+    'Port Phasmatys herb',
+    [10224, 36210, 10428, 36446],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(55, 58, 57, 54), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_HERB].Outline := [
+    [10324, 36310], [10328, 36310], [10324, 36314], [10328, 36314]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_FLOWER] := [ // Coords Correct and tested V2
+    EBASHPatchType.FLOWER,
+    CTS2(2646105, 4, 0.14, 0.45),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [10310, 36328], // mean of 2x2 soil tiles
+    [10292, 36342],
+    CTS2(2782782, 5, 0.13, 1.58),
+    'Port Phasmatys flower',
+    [10224, 36210, 10428, 36446],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(55, 58, 57, 54), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_FLOWER].Outline := [
+    [10308, 36326], [10312, 36326], [10308, 36330], [10312, 36330]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_ALLOT_N] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(2646105, 4, 0.14, 0.45),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [10298, 36318], // mean of NW soil tiles
+    [10292, 36342],
+    CTS2(2782782, 5, 0.13, 1.58),
+    'Port Phasmatys NW allotment',
+    [10224, 36210, 10428, 36446],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(55, 58, 57, 54), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_ALLOT_N].Outline := [
+    [10292, 36310], [10296, 36310], [10300, 36310], [10304, 36310], [10308, 36310],
+    [10292, 36314], [10296, 36314], [10300, 36314], [10304, 36314], [10308, 36314],
+    [10292, 36318], [10296, 36318],
+    [10292, 36322], [10296, 36322],
+    [10292, 36326], [10296, 36326],
+    [10292, 36330], [10296, 36330]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_ALLOT_S] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(2646105, 4, 0.14, 0.45),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [10322, 36338], // mean of SE soil tiles
+    [10292, 36342],
+    CTS2(2782782, 5, 0.13, 1.58),
+    'Port Phasmatys SE allotment',
+    [10224, 36210, 10428, 36446],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(55, 58, 57, 54), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_ALLOT_S].Outline := [
+    [10324, 36326], [10328, 36326],
+    [10324, 36330], [10328, 36330],
+    [10324, 36334], [10328, 36334],
+    [10324, 36338], [10328, 36338],
+    [10312, 36342], [10316, 36342], [10320, 36342], [10324, 36342], [10328, 36342],
+    [10312, 36346], [10316, 36346], [10320, 36346], [10324, 36346], [10328, 36346]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_HERB].CompostBinCoords := [10343, 36341];
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_FLOWER].CompostBinCoords := [10343, 36341];
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_ALLOT_N].CompostBinCoords := [10343, 36341];
+  BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_ALLOT_S].CompostBinCoords := [10343, 36341];
+
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_HERB] := [ // Coords Correct and tested V2 
+    EBASHPatchType.HERB,
+    CTS2(6127499, 6, 0.10, 0.71),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [2858, 36228], // mean of 2x2 soil tiles
+    [2868, 36222],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Hosidius herb',
+    [2755, 36125, 2960, 36329],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(26, 56, 29, 53), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_HERB].Outline := [
+    [2856, 36226], [2860, 36226], [2856, 36230], [2860, 36230]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_FLOWER] := [ // Coords Correct and tested V2
+    EBASHPatchType.FLOWER,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [2842, 36212], // mean of 2x2 soil tiles
+    [2868, 36222],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Hosidius flower',
+    [2739, 36109, 2943, 36313],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(26, 56, 29, 53), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_FLOWER].Outline := [
+    [2840, 36210], [2844, 36210], [2840, 36214], [2844, 36214]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_ALLOT_N] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [2848, 36200], // mean of soil tiles
+    [2868, 36222],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Hosidius north allotment',
+    [2734, 36092, 2960, 36314],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(26, 56, 29, 53), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_ALLOT_N].Outline := [
+    [2836, 36194], [2840, 36194], [2844, 36194], [2848, 36194], [2852, 36194], [2856, 36194], [2860, 36194],
+    [2836, 36198], [2840, 36198], [2844, 36198], [2848, 36198], [2852, 36198], [2856, 36198], [2860, 36198],
+    [2856, 36202], [2860, 36202],
+    [2856, 36206], [2860, 36206],
+    [2856, 36210], [2860, 36210],
+    [2856, 36214], [2860, 36214]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_ALLOT_S] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [2832, 36222], // mean of soil tiles
+    [2868, 36222],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Hosidius south allotment',
+    [2723, 36108, 2944, 36330],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(26, 56, 29, 53), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_ALLOT_S].Outline := [
+    [2824, 36210], [2828, 36210],
+    [2824, 36214], [2828, 36214],
+    [2824, 36218], [2828, 36218],
+    [2824, 36222], [2828, 36222],
+    [2824, 36226], [2828, 36226], [2832, 36226], [2836, 36226], [2840, 36226], [2844, 36226],
+    [2824, 36230], [2828, 36230], [2832, 36230], [2836, 36230], [2840, 36230], [2844, 36230]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_HERB].CompostBinCoords := [2824, 36197];  // Coords Correct and tested
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_FLOWER].CompostBinCoords := [2824, 36197];  // Coords Correct and tested
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_ALLOT_N].CompostBinCoords := [2824, 36197];  // Coords Correct and tested
+  BASHFarmPatchData[EBASHFarmPatch.HOSIDIUS_ALLOT_S].CompostBinCoords := [2824, 36197];  // Coords Correct and tested
+
+  // Shared Ardougne compost bin
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_HERB].CompostBinCoords := [6547, 36929];
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_FLOWER].CompostBinCoords := [6547, 36929];
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_ALLOT_N].CompostBinCoords := [6547, 36929];
+  BASHFarmPatchData[EBASHFarmPatch.ARDOUGNE_ALLOT_S].CompostBinCoords := [6547, 36929];
+
+  // Shared Falador compost bin
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_HERB].CompostBinCoords := [8127, 37181];
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_FLOWER].CompostBinCoords := [8127, 37181];
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_ALLOT_N].CompostBinCoords := [8127, 37181];
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_ALLOT_S].CompostBinCoords := [8127, 37181];
+
+  // Shared Catherby compost bin
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_HERB].CompostBinCoords := [7119, 36573];
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_FLOWER].CompostBinCoords := [7119, 36573];
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_ALLOT_N].CompostBinCoords := [7119, 36573];
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_ALLOT_S].CompostBinCoords := [7119, 36573];
+
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_HERB] := [ // Coords Correct and tested V2
+    EBASHPatchType.HERB,
+    CTS2(6319989, 9, 0.10, 0.09),
+    CTS2(3762031, 9, 0.08, 0.16),
+    [858, 35524], // mean of 2x2 soil tiles
+    BASH_GUILD_LEP_SW,
+    CTS2(2782782, 5, 0.13, 1.58),
+    'Farming guild herb',
+    [700, 35350, 1200, 35750],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_HERB].Outline := [
+    [856, 35522], [860, 35522], [856, 35526], [860, 35526]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_FLOWER] := [ // Coords Correct and tested V2
+    EBASHPatchType.FLOWER,
+    CTS2(6319989, 9, 0.10, 0.09),
+    CTS2(3762031, 9, 0.08, 0.16),
+    [946, 35528], // mean of 2x2 soil tiles
+    BASH_GUILD_LEP_SE,
+    CTS2(2782782, 5, 0.13, 1.58),
+    'Farming guild flower',
+    [700, 35350, 1200, 35750],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_FLOWER].Outline := [
+    [944, 35526], [948, 35526], [944, 35530], [948, 35530]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_ALLOT_N] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(6319989, 9, 0.10, 0.09),
+    CTS2(3762031, 9, 0.08, 0.16),
+    [980, 35498], // mean of L soil tiles
+    BASH_GUILD_LEP_SE,
+    CTS2(2782782, 5, 0.13, 1.58),
+    'Farming guild north allotment',
+    [700, 35350, 1200, 35750],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_ALLOT_N].Outline := [
+    [972, 35486], [976, 35486],
+    [972, 35490], [976, 35490],
+    [972, 35494], [976, 35494],
+    [972, 35498], [976, 35498], [980, 35498], [984, 35498], [988, 35498], [992, 35498],
+    [972, 35502], [976, 35502], [980, 35502], [984, 35502], [988, 35502], [992, 35502]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_ALLOT_S] := [ // Coords Correct and tested V2
+    EBASHPatchType.ALLOTMENT,
+    CTS2(6319989, 9, 0.10, 0.09),
+    CTS2(3762031, 9, 0.08, 0.16),
+    [980, 35527], // mean of L soil tiles
+    BASH_GUILD_LEP_SE,
+    CTS2(2782782, 5, 0.13, 1.58),
+    'Farming guild south allotment',
+    [700, 35350, 1200, 35750],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_ALLOT_S].Outline := [
+    [972, 35522], [976, 35522], [980, 35522], [984, 35522], [988, 35522], [992, 35522],
+    [972, 35526], [976, 35526], [980, 35526], [984, 35526], [988, 35526], [992, 35526],
+    [972, 35530], [976, 35530],
+    [972, 35534], [976, 35534],
+    [972, 35538], [976, 35538]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_BUSH] := [ // Coords Correct and tested V2
+    EBASHPatchType.BUSH,
+    CTS2(6319989, 9, 0.10, 0.09),
+    CTS2(3762031, 9, 0.08, 0.16),
+    [946, 35496], // mean of 2x2 soil tiles
+    BASH_GUILD_LEP_SE,
+    CTS2(2782782, 5, 0.13, 1.58),
+    'Farming guild bush',
+    [700, 35350, 1200, 35750],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_BUSH].Outline := [
+    [944, 35494], [948, 35494], [944, 35498], [948, 35498]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_CACTUS] := [ // Coords Correct and tested V2
+    EBASHPatchType.CACTUS,
+    CTS2(6319989, 9, 0.10, 0.09),
+    CTS2(3762031, 9, 0.08, 0.16),
+    [962, 35440], // mean of 2x2 soil tiles
+    BASH_GUILD_LEP_NE,
+    CTS2(2782782, 5, 0.13, 1.58),
+    'Farming guild cactus',
+    [700, 35350, 1200, 35750],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_CACTUS].Outline := [
+    [960, 35438], [964, 35438], [960, 35442], [964, 35442]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_ANIMA] := [ // Coords Correct and tested V2
+    EBASHPatchType.ANIMA,
+    CTS2(6319989, 9, 0.10, 0.09),
+    CTS2(3762031, 9, 0.08, 0.16),
+    [832, 35538], // mean of 3x3 soil tiles
+    BASH_GUILD_LEP_SW,
+    CTS2(2782782, 5, 0.13, 1.58),
+    'Farming guild anima',
+    [700, 35350, 1200, 35750],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_ANIMA].Outline := [
+    [828, 35534], [832, 35534], [836, 35534],
+    [828, 35538], [832, 35538], [836, 35538],
+    [828, 35542], [832, 35542], [836, 35542]
+  ];
+
+  // Shared Farming Guild compost bin
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_HERB].CompostBinCoords := BASH_GUILD_COMPOST_BIN;
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_FLOWER].CompostBinCoords := BASH_GUILD_COMPOST_BIN;
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_ALLOT_N].CompostBinCoords := BASH_GUILD_COMPOST_BIN;
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_ALLOT_S].CompostBinCoords := BASH_GUILD_COMPOST_BIN;
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_BUSH].CompostBinCoords := BASH_GUILD_COMPOST_BIN;
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_CACTUS].CompostBinCoords := BASH_GUILD_COMPOST_BIN;
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_ANIMA].CompostBinCoords := BASH_GUILD_COMPOST_BIN;
+
+  BASHFarmPatchData[EBASHFarmPatch.HARMONY_ISLAND_HERB] := [ // NOT DONE COME BACK TO THIS MAYBE>!?!?!?
+    EBASHPatchType.HERB,
+    CTS2(5927804, 9, 0.05, 0.11),
+    CTS2(2970201, 11, 0.05, 0.25),
+    [9600, 37350],
+    [9630, 37350],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Harmony island herb',
+    [9400, 37150, 9800, 37550],
+    '',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(56, 54, 58, 52), 0)])
+  ];
+
+  // --- Trees ---
+  BASHFarmPatchData[EBASHFarmPatch.LUMBRIDGE_TREE] := [ // Coords Correct and tested V2
+    EBASHPatchType.TREE,
+    CTS2(3761516, 1, 0.01, 0.01),
+    CTS2(3761516, 1, 0.01, 0.01),
+    [8676, 37506],
+    [8660,37494],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Lumbridge tree',
+    [8500, 37150, 8900, 37550],
+    'Fayeth',
+    CTS2(3490379, 9, 0.15, 0.25),
+    _BASHChunks([Chunk(Box(49, 51, 51, 49), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.LUMBRIDGE_TREE].Outline := [
+    [8672, 37502], [8676, 37502], [8680, 37502],
+    [8672, 37506], [8676, 37506], [8680, 37506],
+    [8672, 37510], [8676, 37510], [8680, 37510]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.VARROCK_TREE] := [ // Coords Correct and tested V2
+    EBASHPatchType.TREE,
+    CTS2(6456465, 7, 0.05, 0.61),
+    CTS2(2967639, 2, 0.41, 0.78),
+    [8820, 36594], // mean of 3x3 soil tiles
+    [8820, 36610],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Varrock tree',
+    [8600, 36400, 9000, 36800],
+    'Treznor',
+    CTS2(5266786, 13, 0.21, 0.62),
+    _BASHChunks([Chunk(Box(48, 55, 51, 53), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.VARROCK_TREE].Outline := [
+    [8816, 36590], [8820, 36590], [8824, 36590],
+    [8816, 36594], [8820, 36594], [8824, 36594],
+    [8816, 36598], [8820, 36598], [8824, 36598]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_TREE] := [ // Coords Correct and tested V2
+    EBASHPatchType.TREE,
+    CTS2(3761516, 1, 0.01, 0.01),
+    CTS2(3761516, 1, 0.01, 0.01),
+    [7920, 36938], // mean of 3x3 soil tiles
+    [7924, 36950],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Falador tree',
+    [7700, 36750, 8100, 37150],
+    'Heskel',
+    CTS2(5270146, 5, 0.22, 2.33),
+    _BASHChunks([Chunk(Box(45, 53, 47, 51), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.FALADOR_TREE].Outline := [
+    [7916, 36934], [7920, 36934], [7924, 36934],
+    [7916, 36938], [7920, 36938], [7924, 36938],
+    [7916, 36942], [7920, 36942], [7924, 36942]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.TAVERLEY_TREE] := [ // Coords Correct and tested V2
+    EBASHPatchType.TREE,
+    CTS2(6389127, 6, 0.07, 0.09),
+    CTS2(3761516, 1, 0.01, 0.01),
+    [7648, 36678], // mean of 3x3 soil tiles
+    [7640, 36662],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Taverley tree',
+    [7450, 36450, 7850, 36850],
+    'Alain',
+    CTS2(11448247, 22, 0.09, 0.15),
+    _BASHChunks([Chunk(Box(44, 54, 47, 51), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.TAVERLEY_TREE].Outline := [
+    [7644, 36674], [7648, 36674], [7652, 36674],
+    [7644, 36678], [7648, 36678], [7652, 36678],
+    [7644, 36682], [7648, 36682], [7652, 36682]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GNOME_TREE] := [ // Coords Correct and tested V2
+    EBASHPatchType.TREE,
+    CTS2(3761516, 1, 0.01, 0.01),
+    CTS2(3761516, 1, 0.01, 0.01),
+    [5648, 36770], // mean of 3x3 soil tiles
+    [5656, 36754],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Gnome stronghold tree',
+    [5450, 36550, 5850, 36950],
+    'Prissy Scilla',
+    CTS2(548973, 9, 0.03, 1.86), // UPDATED AND WORKING
+    _BASHChunks([Chunk(Box(37, 55, 39, 52), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GNOME_TREE].Outline := [
+    [5644, 36766], [5648, 36766], [5652, 36766],
+    [5644, 36770], [5648, 36770], [5652, 36770],
+    [5644, 36774], [5648, 36774], [5652, 36774]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_TREE] := [
+    EBASHPatchType.TREE,
+    CTS2(3761516, 1, 0.01, 0.01),
+    CTS2(3761516, 1, 0.01, 0.01),
+    [832, 35486], // mean of 3x3 soil tiles
+    BASH_GUILD_LEP_SW,
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Guild tree',
+    [700, 35350, 1200, 35750],
+    'Rosie',
+    CTS2(2776687, 6, 0.38, 5.12),
+    _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_TREE].Outline := [
+    [828, 35482], [832, 35482], [836, 35482],
+    [828, 35486], [832, 35486], [836, 35486],
+    [828, 35490], [832, 35490], [836, 35490]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_REDWOOD] := [
+    EBASHPatchType.TREE,
+    CTS2(3761516, 1, 0.01, 0.01),
+    CTS2(3761516, 1, 0.01, 0.01),
+    [818, 35412], // mean of 8x8 soil tiles
+    BASH_GUILD_LEP_NE,
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Guild redwood',
+    [700, 35350, 1200, 35750],
+    'Rosie',
+    CTS2(2776687, 6, 0.38, 5.12),
+    _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_REDWOOD].Outline := [
+    [804, 35398], [808, 35398], [812, 35398], [816, 35398], [820, 35398], [824, 35398], [828, 35398], [832, 35398],
+    [804, 35402], [808, 35402], [812, 35402], [816, 35402], [820, 35402], [824, 35402], [828, 35402], [832, 35402],
+    [804, 35406], [808, 35406], [812, 35406], [816, 35406], [820, 35406], [824, 35406], [828, 35406], [832, 35406],
+    [804, 35410], [808, 35410], [812, 35410], [816, 35410], [820, 35410], [824, 35410], [828, 35410], [832, 35410],
+    [804, 35414], [808, 35414], [812, 35414], [816, 35414], [820, 35414], [824, 35414], [828, 35414], [832, 35414],
+    [804, 35418], [808, 35418], [812, 35418], [816, 35418], [820, 35418], [824, 35418], [828, 35418], [832, 35418],
+    [804, 35422], [808, 35422], [812, 35422], [816, 35422], [820, 35422], [824, 35422], [828, 35422], [832, 35422],
+    [804, 35426], [808, 35426], [812, 35426], [816, 35426], [820, 35426], [824, 35426], [828, 35426], [832, 35426]
+  ];
+
+  // --- Fruit ---
+  BASHFarmPatchData[EBASHFarmPatch.GNOME_STRONGHOLD_FRUIT] := [ // Coords Correct and tested V2
+    EBASHPatchType.FRUIT,
+    CTS2(3761516, 1, 0.01, 0.01),
+    CTS2(3761516, 1, 0.01, 0.01),
+    [5806, 36648], // mean of 2x2 soil tiles
+    [5804, 36634],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Gnome stronghold fruit',
+    [5600, 36450, 6000, 36850],
+    'Bolongo',
+    CTS2(1206902, 5, 0.04, 0.38), // Updated and working
+    _BASHChunks([Chunk(Box(37, 55, 39, 52), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GNOME_STRONGHOLD_FRUIT].Outline := [
+    [5804, 36646], [5808, 36646], [5804, 36650], [5808, 36650]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_FRUIT] := [ // Coords Correct and tested V2
+    EBASHPatchType.FRUIT,
+    CTS2(3761516, 1, 0.01, 0.01),
+    CTS2(3761516, 1, 0.01, 0.01),
+    [7346, 36696], // mean of 2x2 soil tiles
+    [7328, 36690],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Catherby fruit',
+    [7150, 36500, 7550, 36900],
+    'Ellena',
+    CTS2(5535370, 16, 0.16, 0.59),
+    _BASHChunks([Chunk(Box(41, 55, 45, 52), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.CATHERBY_FRUIT].Outline := [
+    [7344, 36694], [7348, 36694], [7344, 36698], [7348, 36698]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GNOME_VILLAGE_FRUIT] := [ // Coords Correct and tested V2
+    EBASHPatchType.FRUIT,
+    CTS2(5730425, 8, 0.07, 0.07),
+    CTS2(3299936, 9, 0.11, 0.22),
+    [5862, 37712], // mean of 2x2 soil tiles
+    [5852, 37698],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Gnome village fruit',
+    [5650, 37500, 6050, 37900],
+    'Gileth',
+    CTS2(3890214, 8, 0.05, 0.25),
+    _BASHChunks([Chunk(Box(37, 50, 40, 47), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GNOME_VILLAGE_FRUIT].Outline := [
+    [5860, 37710], [5864, 37710], [5860, 37714], [5864, 37714]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.BRIMHAVEN_FRUIT] := [ // Coords Correct and tested V2
+    EBASHPatchType.FRUIT,
+    CTS2(7448763, 8, 0.04, 1.46),
+    CTS2(3761516, 1, 0.01, 0.01),
+    [6962, 37580], // mean of 2x2 soil tiles
+    [6980, 37574],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Brimhaven fruit',
+    [6750, 37350, 7150, 37750],
+    'Garth',
+    CTS2(3027056, 19, 0.20, 0.59),
+    _BASHChunks([Chunk(Box(42, 51, 44, 49), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.BRIMHAVEN_FRUIT].Outline := [
+    [6960, 37578], [6964, 37578], [6960, 37582], [6964, 37582]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.LLETYA_FRUIT] := [ // Coords Correct and tested V2
+    EBASHPatchType.FRUIT,
+    CTS2(6196894, 6, 0.04, 0.53),
+    CTS2(3761516, 1, 0.01, 0.01),
+    [5290, 37784], // mean of 2x2 soil tiles
+    [5288, 37774],
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Lletya fruit',
+    [5100, 37550, 5500, 37950],
+    'Liliwen',
+    CTS2(3496796, 10, 0.05, 0.51),
+    _BASHChunks([Chunk(Box(35, 50, 37, 48), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.LLETYA_FRUIT].Outline := [
+    [5288, 37782], [5292, 37782], [5288, 37786], [5292, 37786]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_FRUIT] := [ // Coords Correct and tested V2
+    EBASHPatchType.FRUIT,
+    CTS2(6846333, 5, 0.17, 0.06),
+    CTS2(3761516, 1, 0.01, 0.01),
+    [874, 35396], // mean of 2x2 soil tiles
+    BASH_GUILD_LEP_NE,
+    CTS2(3108159, 13, 0.08, 1.39),
+    'Guild fruit',
+    [700, 35350, 1200, 35750],
+    'Nikkie',
+    CTS2(7841920, 12, 0.49, 1.11),
+    _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_FRUIT].Outline := [
+    [872, 35394], [876, 35394], [872, 35398], [876, 35398]
+  ];
+
+  // =========================================================================
+  // Stubs — game-complete patch list; coords / colors / outlines TBD.
+  // Not exposed in GUI yet.
+  // =========================================================================
+
+  // Allotment / flower / herb
+  _BASHStub(EBASHFarmPatch.HARMONY_ISLAND_ALLOT, EBASHPatchType.ALLOTMENT, 'Harmony island allotment', '');
+  _BASHStub(EBASHFarmPatch.PRIF_FLOWER, EBASHPatchType.FLOWER, 'Prifddinas flower', 'Oswallt');
+  _BASHStub(EBASHFarmPatch.PRIF_ALLOT_N, EBASHPatchType.ALLOTMENT, 'Prifddinas north allotment', 'Oswallt');
+  _BASHStub(EBASHFarmPatch.PRIF_ALLOT_S, EBASHPatchType.ALLOTMENT, 'Prifddinas south allotment', 'Oswallt');
+  _BASHStub(EBASHFarmPatch.KASTORI_FLOWER, EBASHPatchType.FLOWER, 'Kastori flower', '');
+
+  // Ortus Farm (Civitas illa Fortis) — coords correct V2
+  BASHFarmPatchData[EBASHFarmPatch.ORTUS_HERB] := [
+    EBASHPatchType.HERB,
+    CTS2(3497831, 6, 0.08, 0.22),
+    CTS2(2970201, 11, 0.05, 0.25),
+    BASH_ORTUS_HERB,
+    BASH_ORTUS_LEP,
+    CTS2(2188082, 10, 0.10, 1.20),
+    'Ortus Farm herb',
+    BASH_ORTUS_MAP,
+    'Harminia',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(23, 50, 27, 46), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.ORTUS_HERB].Outline := [
+    [2228, 38050], [2232, 38050], [2228, 38054], [2232, 38054]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.ORTUS_FLOWER] := [
+    EBASHPatchType.FLOWER,
+    CTS2(3497831, 6, 0.08, 0.22),
+    CTS2(2970201, 11, 0.05, 0.25),
+    BASH_ORTUS_FLOWER,
+    BASH_ORTUS_LEP,
+    CTS2(2188082, 10, 0.10, 1.20),
+    'Ortus Farm flower',
+    BASH_ORTUS_MAP,
+    'Harminia',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(23, 50, 27, 46), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.ORTUS_FLOWER].Outline := [
+    [2244, 38034], [2248, 38034], [2244, 38038], [2248, 38038]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.ORTUS_ALLOT_N] := [
+    EBASHPatchType.ALLOTMENT,
+    CTS2(3497831, 6, 0.08, 0.22),
+    CTS2(2970201, 11, 0.05, 0.25),
+    BASH_ORTUS_ALLOT_N,
+    BASH_ORTUS_LEP,
+    CTS2(2188082, 10, 0.10, 1.20),
+    'Ortus Farm north allotment',
+    BASH_ORTUS_MAP,
+    'Harminia',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(23, 50, 27, 46), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.ORTUS_ALLOT_N].Outline := [
+    [2228, 38018], [2232, 38018], [2236, 38018], [2240, 38018], [2244, 38018],
+    [2228, 38022], [2232, 38022], [2236, 38022], [2240, 38022], [2244, 38022],
+    [2228, 38026], [2232, 38026],
+    [2228, 38030], [2232, 38030],
+    [2228, 38034], [2232, 38034],
+    [2228, 38038], [2232, 38038]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.ORTUS_ALLOT_S] := [
+    EBASHPatchType.ALLOTMENT,
+    CTS2(3497831, 6, 0.08, 0.22),
+    CTS2(2970201, 11, 0.05, 0.25),
+    BASH_ORTUS_ALLOT_S,
+    BASH_ORTUS_LEP,
+    CTS2(2188082, 10, 0.10, 1.20),
+    'Ortus Farm south allotment',
+    BASH_ORTUS_MAP,
+    'Harminia',
+    CTS2(0, 0, 0, 0),
+    _BASHChunks([Chunk(Box(23, 50, 27, 46), 0)])
+  ];
+  BASHFarmPatchData[EBASHFarmPatch.ORTUS_ALLOT_S].Outline := [
+    [2260, 38038], [2264, 38038],
+    [2260, 38042], [2264, 38042],
+    [2260, 38046], [2264, 38046],
+    [2244, 38050], [2248, 38050], [2252, 38050], [2256, 38050], [2260, 38050], [2264, 38050],
+    [2244, 38054], [2248, 38054], [2252, 38054], [2256, 38054], [2260, 38054], [2264, 38054]
+  ];
+
+  // Trees / fruit
+  _BASHStub(EBASHFarmPatch.NEMUS_TREE, EBASHPatchType.TREE, 'Nemus Retreat tree', 'Aub');
+  _BASHStub(EBASHFarmPatch.KASTORI_FRUIT, EBASHPatchType.FRUIT, 'Kastori fruit', 'Ehecatl');
+
+  // Hops
+  _BASHStub(EBASHFarmPatch.LUMBRIDGE_HOPS, EBASHPatchType.HOPS, 'Lumbridge hops', 'Vasquen');
+  _BASHStub(EBASHFarmPatch.MCGRUBORS_HOPS, EBASHPatchType.HOPS, 'McGrubor hops', 'Rhonen');
+  _BASHStub(EBASHFarmPatch.YANILLE_HOPS, EBASHPatchType.HOPS, 'Yanille hops', 'Selena');
+  _BASHStub(EBASHFarmPatch.ENTRANA_HOPS, EBASHPatchType.HOPS, 'Entrana hops', 'Francis');
+  _BASHStub(EBASHFarmPatch.ALDARIN_HOPS, EBASHPatchType.HOPS, 'Aldarin hops', 'Ercos');
+
+  // Bush
+  _BASHStub(EBASHFarmPatch.CHAMPIONS_BUSH, EBASHPatchType.BUSH, 'Champions Guild bush', 'Dreven');
+  _BASHStub(EBASHFarmPatch.RIMMINGTON_BUSH, EBASHPatchType.BUSH, 'Rimmington bush', 'Taria');
+  _BASHStub(EBASHFarmPatch.ARDOUGNE_BUSH, EBASHPatchType.BUSH, 'Ardougne bush', 'Torrell');
+  _BASHStub(EBASHFarmPatch.ETCETERIA_BUSH, EBASHPatchType.BUSH, 'Etceteria bush', 'Rhazien');
+
+  // Cactus
+  _BASHStub(EBASHFarmPatch.AL_KHARID_CACTUS, EBASHPatchType.CACTUS, 'Al Kharid cactus', 'Ayesha');
+
+  // Special patches
+  _BASHStub(EBASHFarmPatch.UNDERWATER_SEAWEED_1, EBASHPatchType.SEAWEED, 'Underwater seaweed 1', 'Mernia');
+  _BASHStub(EBASHFarmPatch.UNDERWATER_SEAWEED_2, EBASHPatchType.SEAWEED, 'Underwater seaweed 2', 'Mernia');
+  _BASHStub(EBASHFarmPatch.CORAL_NURSERY_1, EBASHPatchType.CORAL, 'Coral nursery 1', '');
+  _BASHStub(EBASHFarmPatch.CORAL_NURSERY_2, EBASHPatchType.CORAL, 'Coral nursery 2', '');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_1, EBASHPatchType.GRAPE, 'Hosidius grape 1', 'Gallow');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_2, EBASHPatchType.GRAPE, 'Hosidius grape 2', 'Gallow');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_3, EBASHPatchType.GRAPE, 'Hosidius grape 3', 'Gallow');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_4, EBASHPatchType.GRAPE, 'Hosidius grape 4', 'Gallow');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_5, EBASHPatchType.GRAPE, 'Hosidius grape 5', 'Gallow');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_6, EBASHPatchType.GRAPE, 'Hosidius grape 6', 'Gallow');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_7, EBASHPatchType.GRAPE, 'Hosidius grape 7', 'Gallow');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_8, EBASHPatchType.GRAPE, 'Hosidius grape 8', 'Gallow');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_9, EBASHPatchType.GRAPE, 'Hosidius grape 9', 'Gallow');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_10, EBASHPatchType.GRAPE, 'Hosidius grape 10', 'Gallow');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_11, EBASHPatchType.GRAPE, 'Hosidius grape 11', 'Gallow');
+  _BASHStub(EBASHFarmPatch.HOSIDIUS_GRAPE_12, EBASHPatchType.GRAPE, 'Hosidius grape 12', 'Gallow');
+  _BASHStub(EBASHFarmPatch.CANIFIS_MUSHROOM, EBASHPatchType.MUSHROOM, 'Canifis mushroom', '');
+  _BASHStub(EBASHFarmPatch.DRAYNOR_BELLADONNA, EBASHPatchType.BELLADONNA, 'Draynor Manor belladonna', '');
+  _BASHStub(EBASHFarmPatch.AUBURNVALE_BELLADONNA, EBASHPatchType.BELLADONNA, 'Auburnvale belladonna', '');
+
+  // Special trees
+  _BASHStub(EBASHFarmPatch.TAI_BWO_CALQUAT, EBASHPatchType.CALQUAT, 'Tai Bwo Wannai calquat', 'Imiago');
+  _BASHStub(EBASHFarmPatch.SUMMER_SHORE_CALQUAT, EBASHPatchType.CALQUAT, 'Summer Shore calquat', 'Guppa');
+  _BASHStub(EBASHFarmPatch.KASTORI_CALQUAT, EBASHPatchType.CALQUAT, 'Kastori calquat', 'Tziuhtla');
+  _BASHStub(EBASHFarmPatch.PRIF_CRYSTAL, EBASHPatchType.CRYSTAL, 'Prifddinas crystal tree', 'Pennant');
+  _BASHStub(EBASHFarmPatch.GUILD_CELASTRUS, EBASHPatchType.CELASTRUS, 'Farming guild celastrus', 'Taylor');
+end;
+
+var
+  BASHFarmPatchDataReady: Boolean = False;
+
+procedure EnsureBASHFarmPatchData();
+begin
+  if BASHFarmPatchDataReady then
+    Exit;
+  _InitBASHFarmPatchData();
+  BASHFarmPatchDataReady := True;
+end;

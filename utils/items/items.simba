@@ -4,7 +4,7 @@ This file contains useful methods to extend the **TRSItem** and allow things lik
 *)
 {$DEFINE WL_ITEMS_EX_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 function TRSItem.IsNull(): Boolean;

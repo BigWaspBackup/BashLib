@@ -1,0 +1,193 @@
+(*!
+  Persistent planting journal for BASHFarmRunner.
+  Survives script restarts so tree growth / contracts stay coherent.
+*)
+
+function TBASHFarmJournal.GetPath(): String;
+begin
+  if Self.Path = '' then
+    Self.Path := AppPath + 'Configs/BASHFarmJournal.ini';
+  Result := Self.Path;
+end;
+
+function TBASHFarmJournal.FindIndex(patchId: EBASHFarmPatch): Int32;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Entries) do
+    if Self.Entries[i].PatchId = patchId then
+      Exit(i);
+  Result := -1;
+end;
+
+function TBASHFarmJournal.GetGrowthMs(seed: String; patchType: EBASHPatchType): Int64;
+var
+  s: String;
+begin
+  s := LowerCase(seed);
+
+  case patchType of
+    EBASHPatchType.HERB, EBASHPatchType.FLOWER:
+      Exit(80 * ONE_MINUTE);
+    EBASHPatchType.ALLOTMENT:
+      Exit(40 * ONE_MINUTE);
+    EBASHPatchType.TREE:
+      begin
+        if 'redwood' in s then Exit(640 * ONE_MINUTE);
+        if 'magic' in s then Exit(480 * ONE_MINUTE);
+        if 'yew' in s then Exit(400 * ONE_MINUTE);
+        if 'maple' in s then Exit(320 * ONE_MINUTE);
+        if 'willow' in s then Exit(240 * ONE_MINUTE);
+        if 'oak' in s then Exit(160 * ONE_MINUTE);
+        Exit(200 * ONE_MINUTE);
+      end;
+    EBASHPatchType.FRUIT:
+      begin
+        if 'dragon' in s then Exit(160 * ONE_MINUTE);
+        if 'palm' in s then Exit(160 * ONE_MINUTE);
+        if 'papaya' in s then Exit(160 * ONE_MINUTE);
+        Exit(160 * ONE_MINUTE);
+      end;
+  end;
+
+  Result := 80 * ONE_MINUTE;
+end;
+
+procedure TBASHFarmJournal.EnsureEntry(patchId: EBASHFarmPatch; patchType: EBASHPatchType);
+var
+  idx: Int32;
+  entry: TBASHJournalEntry;
+begin
+  idx := Self.FindIndex(patchId);
+  if idx >= 0 then
+    Exit;
+
+  entry.PatchId := patchId;
+  entry.PatchType := patchType;
+  entry.PlantedItem := '';
+  entry.PlantedAt := 0;
+  entry.ExpectedReadyAt := 0;
+  entry.LastObservedState := EBASHJournalState.UNKNOWN;
+  entry.ContractTag := '';
+  Self.Entries += entry;
+end;
+
+procedure TBASHFarmJournal.RecordPlant(patchId: EBASHFarmPatch; patchType: EBASHPatchType; seed: String);
+var
+  idx: Int32;
+begin
+  Self.EnsureEntry(patchId, patchType);
+  idx := Self.FindIndex(patchId);
+
+  Self.Entries[idx].PlantedItem := seed;
+  Self.Entries[idx].PlantedAt := Trunc(DateTimeToUnix(Now(), False));
+  Self.Entries[idx].ExpectedReadyAt := Self.Entries[idx].PlantedAt + (Self.GetGrowthMs(seed, patchType) div 1000);
+  Self.Entries[idx].LastObservedState := EBASHJournalState.GROWING;
+  Self.Save();
+end;
+
+procedure TBASHFarmJournal.RecordState(patchId: EBASHFarmPatch; patchType: EBASHPatchType; state: EBASHJournalState);
+var
+  idx: Int32;
+begin
+  Self.EnsureEntry(patchId, patchType);
+  idx := Self.FindIndex(patchId);
+  Self.Entries[idx].LastObservedState := state;
+
+  if state in [EBASHJournalState.EMPTY, EBASHJournalState.DEAD] then
+  begin
+    Self.Entries[idx].PlantedItem := '';
+    Self.Entries[idx].PlantedAt := 0;
+    Self.Entries[idx].ExpectedReadyAt := 0;
+    Self.Entries[idx].ContractTag := '';
+  end;
+
+  Self.Save();
+end;
+
+function TBASHFarmJournal.IsLikelyGrowing(patchId: EBASHFarmPatch): Boolean;
+var
+  idx: Int32;
+begin
+  idx := Self.FindIndex(patchId);
+  if idx < 0 then
+    Exit(False);
+
+  if Self.Entries[idx].LastObservedState <> EBASHJournalState.GROWING then
+    Exit(False);
+
+  if Self.Entries[idx].ExpectedReadyAt <= 0 then
+    Exit(True);
+
+  Result := Trunc(DateTimeToUnix(Now(), False)) < Self.Entries[idx].ExpectedReadyAt;
+end;
+
+function TBASHFarmJournal.GetPlantedItem(patchId: EBASHFarmPatch): String;
+var
+  idx: Int32;
+begin
+  idx := Self.FindIndex(patchId);
+  if idx < 0 then
+    Exit('');
+  Result := Self.Entries[idx].PlantedItem;
+end;
+
+procedure TBASHFarmJournal.SetContractTag(patchId: EBASHFarmPatch; patchType: EBASHPatchType; tag: String);
+var
+  idx: Int32;
+begin
+  Self.EnsureEntry(patchId, patchType);
+  idx := Self.FindIndex(patchId);
+  Self.Entries[idx].ContractTag := tag;
+  Self.Save();
+end;
+
+procedure TBASHFarmJournal.Load();
+var
+  path, section: String;
+  idOrd, i, count: Int32;
+  entry: TBASHJournalEntry;
+begin
+  path := Self.GetPath();
+  SetLength(Self.Entries, 0);
+
+  count := StrToIntDef(ReadINI('Meta', 'Count', path), 0);
+  for i := 0 to count - 1 do
+  begin
+    section := 'Patch' + ToStr(i);
+    idOrd := StrToIntDef(ReadINI(section, 'Id', path), -1);
+    if (idOrd < Ord(Low(EBASHFarmPatch))) or (idOrd > Ord(High(EBASHFarmPatch))) then
+      Continue;
+
+    entry.PatchId := EBASHFarmPatch(idOrd);
+    entry.PatchType := EBASHPatchType(StrToIntDef(ReadINI(section, 'Type', path), 0));
+    entry.PlantedItem := ReadINI(section, 'Item', path);
+    entry.PlantedAt := StrToIntDef(ReadINI(section, 'PlantedAt', path), 0);
+    entry.ExpectedReadyAt := StrToIntDef(ReadINI(section, 'ReadyAt', path), 0);
+    entry.LastObservedState := EBASHJournalState(StrToIntDef(ReadINI(section, 'State', path), 0));
+    entry.ContractTag := ReadINI(section, 'Contract', path);
+    Self.Entries += entry;
+  end;
+end;
+
+procedure TBASHFarmJournal.Save();
+var
+  path, section: String;
+  i: Int32;
+begin
+  path := Self.GetPath();
+  ForceDirectories(ExtractFilePath(path));
+
+  WriteINI('Meta', 'Count', ToStr(Length(Self.Entries)), path);
+  for i := 0 to High(Self.Entries) do
+  begin
+    section := 'Patch' + ToStr(i);
+    WriteINI(section, 'Id', ToStr(Ord(Self.Entries[i].PatchId)), path);
+    WriteINI(section, 'Type', ToStr(Ord(Self.Entries[i].PatchType)), path);
+    WriteINI(section, 'Item', Self.Entries[i].PlantedItem, path);
+    WriteINI(section, 'PlantedAt', ToStr(Self.Entries[i].PlantedAt), path);
+    WriteINI(section, 'ReadyAt', ToStr(Self.Entries[i].ExpectedReadyAt), path);
+    WriteINI(section, 'State', ToStr(Ord(Self.Entries[i].LastObservedState)), path);
+    WriteINI(section, 'Contract', Self.Entries[i].ContractTag, path);
+  end;
+end;

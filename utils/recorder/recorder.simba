@@ -7,13 +7,13 @@ This was modified to:
 - Add frame filters to hide Username/XPBar.
 
 Things to keep in mind when using recorder:
-- It spawns another simba thread, which means it will count towards the WaspLib maximum thread limit.
+- It spawns another simba thread, which means it will count towards the BashLib maximum thread limit.
 
 This can be used to record the last few seconds of a script shutting down/crashing.
 *)
 {$DEFINE WL_RECORDER_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 (*

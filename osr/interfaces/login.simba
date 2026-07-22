@@ -5,5 +5,5 @@ Overrides to SRL TRSLogin.
 
 {$DEFINE WL_LOGIN_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}

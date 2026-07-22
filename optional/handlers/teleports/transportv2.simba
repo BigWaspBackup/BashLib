@@ -1,20 +1,20 @@
 {$DEFINE SKUNK_UNIVERSAL_TRANSPORTV2}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 {$SCOPEDENUMS ON}
 {$IFNDEF WL_FAIRYRING_INCLUDED}
-  {$I WaspLib/optional/interfaces/mainscreen/fairyring.simba}
+  {$I BashLib/optional/interfaces/mainscreen/fairyring.simba}
 {$ENDIF}
 {$IFNDEF SKUNK_TELEPORTSV2}
-  {$I WaspLib/optional/handlers/teleports/rsteleportsv2.simba}
+  {$I BashLib/optional/handlers/teleports/rsteleportsv2.simba}
 {$ENDIF}
 {$IFNDEF WL_GROUPING_INCLUDED}
-  {$I WaspLib/optional/interfaces/gametabs/grouping.simba}
+  {$I BashLib/optional/interfaces/gametabs/grouping.simba}
 {$ENDIF}
 {$IFNDEF WL_POH_HANDLER_INCLUDED}
-  {$I WaspLib/optional/handlers/poh.simba}
+  {$I BashLib/optional/handlers/poh.simba}
 {$ENDIF}
 
 type
@@ -172,11 +172,16 @@ end;
 
 function TUniversalTransportV2.handleDiaryTeleport(constref teleportLocation: TTeleportLocation; TransportMap : TRSMap = Map): Boolean;
 var
-  numberedItems: TRSItemArray := getNumberedDiaryItems(teleportLocation.item);
-  numberedDiaryItem: TRSItem;
+  rangeItems, numberedItems: TRSItemArray;
+  rangeItem, numberedDiaryItem: TRSItem;
   didTeleport: Boolean;
   startPosition: TPoint := TransportMap.position;// ScriptWalker^.GetMyPos();ScriptWalker^.GetMyPos();
 begin
+  // Range ("cloak 4..1") is one bank/find search; ClickItem needs concrete names
+  rangeItems := getNumberedDiaryItems(teleportLocation.item);
+  for rangeItem in rangeItems do
+    numberedItems += rangeItem.GetArray();
+
   for numberedDiaryItem in numberedItems do
   begin
     WriteLn("Searching for ", numberedDiaryItem, " in inventory");
@@ -218,7 +223,11 @@ var
   chargedJewellery: TRSItem;
   chargedVariants: TRSItemArray;
   teleportTabName: String;
+  teleportItem: TRSItem;
+  numberedItems: TRSItemArray;
+  i: Int32;
 begin
+  Result := False;
   Self.DebugLn('Trying to withdraw');
   if not Bank.IsOpen(2000, 200) then Exit(False);
   Self.DebugLn('bank is open');
@@ -228,7 +237,11 @@ begin
       chargedVariants := getChargedJewelleryNames(teleportLocation.item);
       for chargedJewellery in chargedVariants do
       begin
-        Self.DebugLn('Withdrawing', chargedJewellery);
+        // Invent only — Equipment.ContainsItem closes an open bank
+        if Inventory.ContainsItem(chargedJewellery) then
+          Exit(True);
+
+        Self.DebugLn('Withdrawing ' + ToStr(chargedJewellery));
         bankItem := bankItem.Setup(chargedJewellery, 1, False);
         if Bank.WithdrawItem(bankItem, False)
           and WaitUntil(Inventory.ContainsItem(chargedJewellery), 200, 2200) then
@@ -241,13 +254,61 @@ begin
     ETeleportType.NORMAL_MAGIC:
     begin
       teleportTabName := teleportLocation.destination.Lower() + " teleport";
+      if Inventory.ContainsItem(teleportTabName) then
+        Exit(True);
+
       Self.DebugLn('Withdrawing: ' + teleportTabName);
       bankItem := bankItem.Setup(teleportTabName);
       if Bank.WithdrawItem(bankItem, False) then
         Exit(True);
-      //The following shouldn't be required. The lines above already kinda do this.
-      //if WaitUntil(Inventory.ContainsItem(teleportTabName), 200, 10000) then
-      //  Exit(True);
+    end;
+    ETeleportType.OTHER, ETeleportType.SCROLL:
+    begin
+      for i := 0 to High(teleportLocation.items) do
+      begin
+        teleportItem := teleportLocation.items[i];
+        if teleportItem = '' then
+          Continue;
+
+        // Invent only — Equipment.ContainsItem closes an open bank
+        if Inventory.ContainsItem(teleportItem) then
+          Exit(True);
+
+        Self.DebugLn('Withdrawing OTHER/SCROLL: ' + ToStr(teleportItem));
+        bankItem := bankItem.Setup(teleportItem, 1, False);
+        if Bank.WithdrawItem(bankItem, False)
+          and WaitUntil(Inventory.ContainsItem(teleportItem), 200, 3000) then
+            Exit(True);
+      end;
+
+      if teleportLocation.item <> '' then
+      begin
+        if Inventory.ContainsItem(teleportLocation.item) then
+          Exit(True);
+
+        Self.DebugLn('Withdrawing OTHER item: ' + ToStr(teleportLocation.item));
+        bankItem := bankItem.Setup(teleportLocation.item, 1, False);
+        if Bank.WithdrawItem(bankItem, False)
+          and WaitUntil(Inventory.ContainsItem(teleportLocation.item), 200, 3000) then
+          Exit(True);
+      end;
+    end;
+    ETeleportType.DIARY_ITEM:
+    begin
+      // Single "explorer's ring 4..1" (etc.) — Bank.FindItem expands via GetArray in one search
+      numberedItems := getNumberedDiaryItems(teleportLocation.item);
+      if Length(numberedItems) = 0 then
+        Exit(False);
+
+      teleportItem := numberedItems[0];
+      if Inventory.ContainsItem(teleportItem) then
+        Exit(True);
+
+      Self.DebugLn('Withdrawing diary: ' + ToStr(teleportItem));
+      bankItem := bankItem.Setup(teleportItem, 1, False);
+      if Bank.WithdrawItem(bankItem, False)
+        and WaitUntil(Inventory.ContainsItem(teleportItem), 200, 2200) then
+          Exit(True);
     end;
   end;
 end;

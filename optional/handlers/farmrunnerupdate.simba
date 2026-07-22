@@ -1,8 +1,8 @@
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 {$IFNDEF SKUNK_UNIVERSAL_TRANSPORT}
-  {$I Includes\WaspLib\optional\handlers\teleports\transport.simba}
+  {$I Includes\BashLib\optional\handlers\teleports\transport.simba}
 {$ENDIF}
 
 type
@@ -3732,7 +3732,15 @@ var
   KBPatch, GSPatch, ClHerbs, Runinit, BarbDibber, MSecat: TCheckBox;
   runes_in_pouch: TEdit;
 begin
+  // Host may include farmrunnerupdate but use BASH Farm GUI (or disable the old tab).
+  // Without these controls, GetChild returns nil and .getText AV's.
   HSType := Self.Form.GetChild('lcb_herbseed_combobox');
+  if HSType = nil then
+  begin
+    inherited;
+    Exit;
+  end;
+
   FarmRunner.HerbSeedType := HSType.getText();
   FarmConfig.herbseedint := HSType.getItemIndex();
 

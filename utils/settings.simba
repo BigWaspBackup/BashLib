@@ -6,14 +6,14 @@ This file contains types, contants and variables that need to be pre-loaded for 
 
 {$DEFINE WL_SETTINGS_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 type
 (*
 ## type EWLBankLocation
 
-EWLBankLocation is a enumerator that contains all bank locations supported by WaspLib.
+EWLBankLocation is a enumerator that contains all bank locations supported by BashLib.
 *)
   EWLBankLocation = (
     AL_KHARID_BANK,

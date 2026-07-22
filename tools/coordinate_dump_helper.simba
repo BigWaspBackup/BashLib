@@ -1,6 +1,6 @@
 {$DEFINE SRL_DISABLE_REMOTEINPUT}
-{$I SRL-T/osr.simba}
-{$I WaspLib/osr.simba}
+{$I SRL-B/osr.simba}
+{$I BashLib/osr.simba}
 
 const
   OBJECT_NAMES: TStringArray = [
@@ -85,8 +85,8 @@ end.
 
 (*
 //Validate a coordinate if you want to be sure it's within a printed array:
-{$I SRL-T/osr.simba}
-{$I WaspLib/osr.simba}
+{$I SRL-B/osr.simba}
+{$I BashLib/osr.simba}
 
 var
   tpa: TPointArray = [];

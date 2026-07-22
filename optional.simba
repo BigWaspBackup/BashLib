@@ -1,8 +1,8 @@
 (*
 # Optional Files
-To include all optional files add the following to your script after WaspLib:
+To include all optional files add the following to your script after BashLib:
 ```pascal
-{$I WaspLib/optional.simba}
+{$I BashLib/optional.simba}
 ```
 :::{note}
 :class: dropdown
@@ -11,7 +11,7 @@ However, this is not really recommended. You should include only the files you r
 *)
 
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 {$SCOPEDENUMS ON}
@@ -21,7 +21,7 @@ However, this is not really recommended. You should include only the files you r
   {$HINTS OFF}
 {$ENDIF}
 
-// The following allows individual include files to compile on their own with just having {$I SRL-T/osr.simba}
+// The following allows individual include files to compile on their own with just having {$I SRL-B/osr.simba}
 // Summary: It includes this file until the current file is reached.
 
 {$IFNDEF WL_ANVIL_INCLUDED}             {$I optional/interfaces/mainscreen/anvil.simba}
@@ -31,6 +31,7 @@ However, this is not really recommended. You should include only the files you r
 {$IFNDEF WL_FURNITUREBUILDER_INCLUDED}  {$I optional/interfaces/mainscreen/furniturebuilder.simba}
 {$IFNDEF ANDREW_MUSHTREE_INCLUDED}      {$I optional/interfaces/mainscreen/mushtree.simba}
 {$IFNDEF WL_FAIRYRING_INCLUDED}         {$I optional/interfaces/mainscreen/fairyring.simba}
+{$IFNDEF WL_QUETZAL_INCLUDED}           {$I optional/interfaces/mainscreen/quetzal.simba}
 
 {$IFNDEF WL_FISHING_HANDLER_INCLUDED}   {$I optional/handlers/rsfishinghandler.simba}
 {$IFNDEF WL_ALCH_HANDLER_INCLUDED}      {$I optional/handlers/alchhandler.simba}
@@ -52,8 +53,11 @@ However, this is not really recommended. You should include only the files you r
 {$IFNDEF SKUNK_UNIVERSAL_TRANSPORTV2}   {$I optional/handlers/teleports/transportv2.simba}
 {$IFNDEF XJ_STUDENT_FARM_RUNNER}        {$I optional/handlers/farmrunnerupdate.simba}
 {$IFNDEF CJ_BIRDHOUSE_RUNNER}           {$I optional/handlers/birdhouserunner.simba}
+{$IFNDEF BASH_FARM_RUNNER}              {$I optional/handlers/bashfarm/bashfarmrunner.simba}
 
 
+{$ELSE}{$ENDIF}
+{$ELSE}{$ENDIF}
 {$ELSE}{$ENDIF}
 {$ELSE}{$ENDIF}
 {$ELSE}{$ENDIF}

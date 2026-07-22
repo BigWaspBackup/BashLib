@@ -1,6 +1,6 @@
 {$DEFINE WL_TARGET_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 function WriteFileContents(const fileName: String; const text: String): Boolean; overload;

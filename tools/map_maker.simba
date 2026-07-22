@@ -1,11 +1,11 @@
 (*
 # Tool Map Maker
-Simple tool to make TBoxes for SRL's RSWalkerRegions or WaspLib's RSRegions.
+Simple tool to make TBoxes for SRL's RSWalkerRegions or BashLib's RSRegions.
 *)
 
 {$DEFINE SRL_DISABLE_REMOTEINPUT}
-{$I SRL-T/osr.simba}
-{$I WaspLib/osr.simba}
+{$I SRL-B/osr.simba}
+{$I BashLib/osr.simba}
 {$H-}
 
 const
@@ -360,7 +360,7 @@ function TRSMapMaker.GetDirectivesString(): String;
 begin
   Result := '{$DEFINE WL_RSREGIONS_INCLUDED}' + LINEENDING;
   Result += '{$IFNDEF WL_UTILS}' + LINEENDING;
-  Result += '  {$I WaspLib/utils.simba}' + LINEENDING;
+  Result += '  {$I BashLib/utils.simba}' + LINEENDING;
   Result += '{$ENDIF}' + LINEENDING;
 end;
 
@@ -527,7 +527,7 @@ begin
   str += GetSetupString();
   str += 'end;';
 
-  path := INCLUDEPATH + 'WaspLib' + DIRECTORYSEPARATOR + 'utils' + DIRECTORYSEPARATOR +
+  path := INCLUDEPATH + 'BashLib' + DIRECTORYSEPARATOR + 'utils' + DIRECTORYSEPARATOR +
           'rsregions' + DIRECTORYSEPARATOR + 'rsregions.simba';
 
   WriteFileContents(path, str, False);

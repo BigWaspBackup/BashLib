@@ -5,7 +5,7 @@ Methods to interact with the XP Drops.
 
 {$DEFINE WL_XPDROP_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 (*

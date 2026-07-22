@@ -7,7 +7,7 @@ This file was developed with help from data available through the RuneLite camer
 
 {$DEFINE WL_MOUSEZOOM_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 (*

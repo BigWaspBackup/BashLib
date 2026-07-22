@@ -1,0 +1,357 @@
+(*!
+  Region travel choices for BASHFarmRunner → RSTeleportsV2.
+*)
+
+const
+  BASH_TRAVEL_WEISS: TStringArray = [
+    'Icy basalt',
+    'Nexus Weiss'
+  ];
+  BASH_TRAVEL_STRONGHOLD: TStringArray = [
+    'Stony basalt',
+    'Nexus Troll Stronghold'
+  ];
+  BASH_TRAVEL_ARDOUGNE: TStringArray = [
+    'Ardougne Cloak (Farm)',
+    'Ardougne Spell',
+    'Ardougne Tablet',
+    'Nexus Ardougne'
+  ];
+  BASH_TRAVEL_FALADOR: TStringArray = [
+    'Explorers Ring (Farm)',
+    'Falador Spell',
+    'Falador Tablet',
+    'Nexus Falador'
+  ];
+  BASH_TRAVEL_CATHERBY: TStringArray = [
+    'Lunar Catherby',
+    'Camelot Spell',
+    'Camelot Tablet',
+    'Catherby Tablet',
+    'Nexus Catherby',
+    'Nexus Camelot'
+  ];
+  BASH_TRAVEL_PHASMATYS: TStringArray = [
+    'Ectophial'
+  ];
+  BASH_TRAVEL_HOSIDIUS: TStringArray = [
+    'Kharedst Lunch (Hosidius)',
+    'Hosidius Tablet',
+    'House Spell',
+    'House Tablet'
+  ];
+  BASH_TRAVEL_ORTUS: TStringArray = [
+    'Hunter Guild (Hunters Cape)',
+    'Quetzal Whistle',
+    'Civitas Tablet',
+    'Civitas Teleport'
+  ];
+  BASH_TRAVEL_GUILD: TStringArray = [
+    'Skills Necklace',
+    'Farming Cape',
+    'Fairy CIR (Ardy Cloak)'
+  ];
+  BASH_TRAVEL_LUMBRIDGE_TREE: TStringArray = [
+    'Lumbridge Spell',
+    'Nexus Lumbridge'
+  ];
+  BASH_TRAVEL_VARROCK_TREE: TStringArray = [
+    'Varrock Spell',
+    'Nexus Varrock'
+  ];
+  BASH_TRAVEL_FALADOR_TREE: TStringArray = [
+    'Ring of Wealth (Falador Park)',
+    'Falador Spell',
+    'Falador Tablet',
+    'Nexus Falador'
+  ];
+  BASH_TRAVEL_TAVERLEY_TREE: TStringArray = [
+    'Taverley Tablet'
+  ];
+  BASH_TRAVEL_GNOME_TREE: TStringArray = [
+    'Fairy CIQ (Yanille)',
+    'Slayer Ring (Stronghold Cave)'
+  ];
+  BASH_TRAVEL_GNOME_FRUIT: TStringArray = [
+    'Fairy CIQ (Yanille)',
+    'Slayer Ring (Stronghold Cave)'
+  ];
+  BASH_TRAVEL_GNOME_VILLAGE_FRUIT: TStringArray = [
+    'Fairy CIQ (Yanille)'
+  ];
+  BASH_TRAVEL_BRIMHAVEN_FRUIT: TStringArray = [
+    'Brimhaven Tablet',
+    'Fairy CKR (Tai Bwo Wannai)'
+  ];
+  BASH_TRAVEL_LLETYA_FRUIT: TStringArray = [
+    'Teleport Crystal'
+  ];
+  BASH_TRAVEL_CATHERBY_FRUIT: TStringArray = [
+    'Lunar Catherby',
+    'Camelot Spell',
+    'Camelot Tablet',
+    'Catherby Tablet',
+    'Nexus Catherby',
+    'Nexus Camelot'
+  ];
+
+function BASHFarmTravelClamp(idx: Int32; options: TStringArray): Int32;
+begin
+  if Length(options) = 0 then
+    Exit(0);
+  if idx < 0 then
+    Exit(0);
+  if idx > High(options) then
+    Exit(High(options));
+  Result := idx;
+end;
+
+function BASHFarmTravel_Weiss(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_WEISS) of
+    1: Exit(RSTeleportsV2.NEXUS_WEISS);
+  end;
+  Result := RSTeleportsV2.WEISS;
+end;
+
+function BASHFarmTravel_Stronghold(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_STRONGHOLD) of
+    1: Exit(RSTeleportsV2.NEXUS_TROLL_STRONGHOLD);
+  end;
+  Result := RSTeleportsV2.TROLL_STRONGHOLD;
+end;
+
+function BASHFarmTravel_Ardougne(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_ARDOUGNE) of
+    1: Exit(RSTeleportsV2.ARDOUGNE); // cast spell (runes)
+    2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Ardougne teleport'], 'Break', [6565, 37207])); // tablet
+    3: Exit(RSTeleportsV2.NEXUS_ARDOUGNE);
+  end;
+  Result := RSTeleportsV2.ARDOUGNE_FARM_PATCH;
+end;
+
+function BASHFarmTravel_Falador(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_FALADOR) of
+    1: Exit(RSTeleportsV2.FALADOR); // cast spell (runes)
+    2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Falador teleport'], 'Break', [7769, 37211])); // tablet
+    3: Exit(RSTeleportsV2.NEXUS_FALADOR);
+  end;
+  Result := RSTeleportsV2.FALADOR_FARM_PATCH;
+end;
+
+function BASHFarmTravel_Catherby(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_CATHERBY) of
+    1: Exit(RSTeleportsV2.CAMELOT); // normal spell (runes)
+    2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Camelot teleport'], 'Break', [6933, 37963]));
+    3: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Catherby teleport'], 'Break', [7164, 36566]));
+    4: Exit(RSTeleportsV2.NEXUS_CATHERBY);
+    5: Exit(RSTeleportsV2.NEXUS_CAMELOT);
+  end;
+  Result := RSTeleportsV2.CATHERBY; // Lunar spell (runes)
+end;
+
+function BASHFarmTravel_Phasmatys(idx: Int32): TTeleportLocation;
+begin
+  Result := RSTeleportsV2.ECTOFUNTUS; // Ectophial only
+end;
+
+function BASHFarmTravel_Hosidius(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_HOSIDIUS) of
+    1: Exit(RSTeleportsV2.HOSIDIUS_PORTAL);
+    2: Exit(RSTeleportsV2.HOUSE); // Teleport to House spell — TeleportTo uses Outside
+    3: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Teleport to house'], 'Outside', [2868, 36222])); // house tablet → Outside
+  end;
+  // Book of the dead / Kharedst's — Reminisce → Lunch by the Lancalliums
+  Result := RSTeleportsV2.LUNCH_BY_THE_LANCALLIUMS_HOSIDIUS;
+end;
+
+function BASHFarmTravel_Ortus(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_ORTUS) of
+    1:
+      // Quetzal whistle → Hunter Guild → run north
+      Exit(setupTeleportLocation(
+        ETeleportType.OTHER,
+        [
+          'Perfected quetzal whistle(i)',
+          'Perfected quetzal whistle',
+          'Enhanced quetzal whistle',
+          'Basic quetzal whistle'
+        ],
+        'Ortus Quetzal Whistle',
+        BASH_ORTUS_HUNTER_LANDING
+      ));
+    2:
+      // Civitas tablet → Renu Quetzal → Hunter Guild → run north
+      Exit(setupTeleportLocation(
+        ETeleportType.OTHER,
+        ['Civitas illa fortis teleport'],
+        'Ortus Civitas Tablet',
+        BASH_ORTUS_HUNTER_LANDING
+      ));
+    3:
+      // Civitas spell (1 fire, 1 earth, 2 law) → Renu → Guild → north
+      Exit(setupTeleportLocation(
+        ETeleportType.NORMAL_MAGIC,
+        'Ortus Civitas Spell',
+        0,
+        BASH_ORTUS_HUNTER_LANDING
+      ));
+  end;
+
+  // Hunter cape → Hunter Guild → run north
+  Result := setupTeleportLocation(
+    ETeleportType.OTHER,
+    ['Hunter cape(t)', 'Hunter cape'],
+    'Ortus Hunter Cape',
+    BASH_ORTUS_HUNTER_LANDING
+  );
+end;
+
+function BASHFarmTravel_Guild(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_GUILD) of
+    1: Exit(RSTeleportsV2.FARMING_GUILD_CAPE);
+    2: Exit(setupTeleportLocation(
+         ETeleportType.OTHER,
+         [],
+         'BASH Guild Fairy CIR',
+         RSTeleportsV2.FARMING_GUILD.worldPoint
+       ));
+  end;
+  // Skills necklace — Farming Guild (45+ Farming lands inside)
+  Result := RSTeleportsV2.FARMING_GUILD;
+end;
+
+function BASHFarmTravel_LumbridgeTree(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_LUMBRIDGE_TREE) of
+    1: Exit(RSTeleportsV2.NEXUS_LUMBRIDGE);
+  end;
+  Result := RSTeleportsV2.LUMBRIDGE;
+end;
+
+function BASHFarmTravel_VarrockTree(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_VARROCK_TREE) of
+    1: Exit(RSTeleportsV2.NEXUS_VARROCK);
+  end;
+  Result := RSTeleportsV2.VARROCK;
+end;
+
+function BASHFarmTravel_FaladorTree(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_FALADOR_TREE) of
+    1: Exit(RSTeleportsV2.FALADOR); // cast spell (runes)
+    2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Falador teleport'], 'Break', [7769, 37211])); // tablet
+    3: Exit(RSTeleportsV2.NEXUS_FALADOR);
+  end;
+  Result := RSTeleportsV2.FALADOR_PARK;
+end;
+
+function BASHFarmTravel_TaverleyTree(idx: Int32): TTeleportLocation;
+begin
+  Result := RSTeleportsV2.TAVERLEY_PORTAL;
+end;
+
+function BASHFarmTravel_GnomeTree(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_GNOME_TREE) of
+    1: Exit(RSTeleportsV2.STRONGHOLD_SLAYER_CAVE);
+  end;
+  Result := RSTeleportsV2.CIQ_NORTHWEST_OF_YANILLE;
+end;
+
+function BASHFarmTravel_GnomeFruit(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_GNOME_FRUIT) of
+    1: Exit(RSTeleportsV2.STRONGHOLD_SLAYER_CAVE);
+  end;
+  Result := RSTeleportsV2.CIQ_NORTHWEST_OF_YANILLE;
+end;
+
+function BASHFarmTravel_GnomeVillageFruit(idx: Int32): TTeleportLocation;
+begin
+  Result := RSTeleportsV2.CIQ_NORTHWEST_OF_YANILLE;
+end;
+
+function BASHFarmTravel_BrimhavenFruit(idx: Int32): TTeleportLocation;
+begin
+  case BASHFarmTravelClamp(idx, BASH_TRAVEL_BRIMHAVEN_FRUIT) of
+    1: Exit(RSTeleportsV2.CKR_SOUTH_OF_TAI_BWO_WANNAI_VILLAGE);
+  end;
+  Result := RSTeleportsV2.BRIMHAVEN_PORTAL;
+end;
+
+function BASHFarmTravel_LletyaFruit(idx: Int32): TTeleportLocation;
+begin
+  Result := RSTeleportsV2.LLETYA;
+end;
+
+function BASHFarmTravel_CatherbyFruit(idx: Int32): TTeleportLocation;
+begin
+  Result := BASHFarmTravel_Catherby(idx);
+end;
+
+function BASHFarmTravelForPatch(patchId: EBASHFarmPatch; cfg: TBASHFarmConfig): TTeleportLocation;
+begin
+  case patchId of
+    EBASHFarmPatch.WEISS_HERB:
+      Exit(BASHFarmTravel_Weiss(cfg.WeissTP));
+    EBASHFarmPatch.STRONGHOLD_HERB:
+      Exit(BASHFarmTravel_Stronghold(cfg.StrongholdTP));
+    EBASHFarmPatch.ARDOUGNE_HERB, EBASHFarmPatch.ARDOUGNE_FLOWER,
+    EBASHFarmPatch.ARDOUGNE_ALLOT_N, EBASHFarmPatch.ARDOUGNE_ALLOT_S:
+      Exit(BASHFarmTravel_Ardougne(cfg.ArdougneTP));
+    EBASHFarmPatch.FALADOR_HERB, EBASHFarmPatch.FALADOR_FLOWER,
+    EBASHFarmPatch.FALADOR_ALLOT_N, EBASHFarmPatch.FALADOR_ALLOT_S:
+      Exit(BASHFarmTravel_Falador(cfg.FaladorTP));
+    EBASHFarmPatch.CATHERBY_HERB, EBASHFarmPatch.CATHERBY_FLOWER,
+    EBASHFarmPatch.CATHERBY_ALLOT_N, EBASHFarmPatch.CATHERBY_ALLOT_S:
+      Exit(BASHFarmTravel_Catherby(cfg.CatherbyTP));
+    EBASHFarmPatch.PHASMATYS_HERB, EBASHFarmPatch.PHASMATYS_FLOWER,
+    EBASHFarmPatch.PHASMATYS_ALLOT_N, EBASHFarmPatch.PHASMATYS_ALLOT_S:
+      Exit(BASHFarmTravel_Phasmatys(cfg.PhasmatysTP));
+    EBASHFarmPatch.HOSIDIUS_HERB, EBASHFarmPatch.HOSIDIUS_FLOWER,
+    EBASHFarmPatch.HOSIDIUS_ALLOT_N, EBASHFarmPatch.HOSIDIUS_ALLOT_S:
+      Exit(BASHFarmTravel_Hosidius(cfg.HosidiusTP));
+    EBASHFarmPatch.ORTUS_HERB, EBASHFarmPatch.ORTUS_FLOWER,
+    EBASHFarmPatch.ORTUS_ALLOT_N, EBASHFarmPatch.ORTUS_ALLOT_S:
+      Exit(BASHFarmTravel_Ortus(cfg.OrtusTP));
+    EBASHFarmPatch.GUILD_HERB, EBASHFarmPatch.GUILD_FLOWER,
+    EBASHFarmPatch.GUILD_ALLOT_N, EBASHFarmPatch.GUILD_ALLOT_S,
+    EBASHFarmPatch.GUILD_BUSH, EBASHFarmPatch.GUILD_CACTUS,
+    EBASHFarmPatch.GUILD_ANIMA, EBASHFarmPatch.GUILD_TREE,
+    EBASHFarmPatch.GUILD_REDWOOD, EBASHFarmPatch.GUILD_FRUIT,
+    EBASHFarmPatch.GUILD_CELASTRUS:
+      Exit(BASHFarmTravel_Guild(cfg.GuildTP));
+    EBASHFarmPatch.LUMBRIDGE_TREE:
+      Exit(BASHFarmTravel_LumbridgeTree(cfg.LumbridgeTreeTP));
+    EBASHFarmPatch.VARROCK_TREE:
+      Exit(BASHFarmTravel_VarrockTree(cfg.VarrockTreeTP));
+    EBASHFarmPatch.FALADOR_TREE:
+      Exit(BASHFarmTravel_FaladorTree(cfg.FaladorTreeTP));
+    EBASHFarmPatch.TAVERLEY_TREE:
+      Exit(BASHFarmTravel_TaverleyTree(cfg.TaverleyTreeTP));
+    EBASHFarmPatch.GNOME_TREE:
+      Exit(BASHFarmTravel_GnomeTree(cfg.GnomeTreeTP));
+    EBASHFarmPatch.GNOME_STRONGHOLD_FRUIT:
+      Exit(BASHFarmTravel_GnomeFruit(cfg.GnomeFruitTP));
+    EBASHFarmPatch.GNOME_VILLAGE_FRUIT:
+      Exit(BASHFarmTravel_GnomeVillageFruit(cfg.GnomeVillageFruitTP));
+    EBASHFarmPatch.CATHERBY_FRUIT:
+      Exit(BASHFarmTravel_CatherbyFruit(cfg.CatherbyFruitTP));
+    EBASHFarmPatch.BRIMHAVEN_FRUIT:
+      Exit(BASHFarmTravel_BrimhavenFruit(cfg.BrimhavenFruitTP));
+    EBASHFarmPatch.LLETYA_FRUIT:
+      Exit(BASHFarmTravel_LletyaFruit(cfg.LletyaFruitTP));
+  end;
+
+  // Harmony / unknown — fall back to guild
+  Result := RSTeleportsV2.FARMING_GUILD;
+end;

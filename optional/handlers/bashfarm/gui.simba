@@ -1,0 +1,881 @@
+(*!
+  BASH Farm dashboard GUI — Tesla-style shell:
+    left nav | right content panels | bottom status bar
+
+  Hosts:
+    var Form: TBASHFarmGUI;
+    Form.Run(); // builds shell; Start! applies settings
+*)
+
+const
+  BASH_GUI_NAV       = $F0EBE4; // warm stone sidebar column
+  BASH_GUI_BG        = $FFFFFF; // main canvas
+  BASH_GUI_STATUS    = $F7F4F1; // start bar (main side only)
+  BASH_GUI_DIVIDER   = $D4C9BC; // seams around nav / status
+  BASH_GUI_CARD      = $F7F4F1; // warm soft card
+  BASH_GUI_ACCENT    = $E0C9AE; // selected chip
+  BASH_GUI_NAV_IDLE  = $E7DED4; // idle chip on stone nav
+  BASH_GUI_START     = $C9B094; // start chip
+  BASH_GUI_TEXT      = $1C1C1E;
+  BASH_GUI_MUTED     = $6B6B70;
+  BASH_GUI_W         = 1120;
+  BASH_GUI_H         = 700;
+  BASH_GUI_NAV_W     = 190;
+  BASH_GUI_STATUS_H  = 56;
+  BASH_GUI_CONTENT_W = BASH_GUI_W - BASH_GUI_NAV_W - 2; // fill main pane to form edge
+  BASH_GUI_CONTENT_H = 580;
+  BASH_GUI_BTN_H     = 42;
+  BASH_GUI_COMBO_W   = 260; // ~30% larger than ~200 default
+  BASH_GUI_COMBO_H   = 58;
+  BASH_GUI_COMBO_FONT = 10;
+  BASH_GUI_COMBO_COL2 = 308;
+  BASH_GUI_COMBO_COL3 = 592;
+  BASH_GUI_COMBO_ROW2 = 190;
+  BASH_GUI_COMBO_ROW3 = 270;
+  BASH_GUI_COMBO_ROW4 = 350;
+  BASH_GUI_BOTTOM_INSET = 34; // keep start bar on-screen (half of prior 130)
+
+
+type
+  TBASHFarmGUI = record(TScriptForm)
+    NavPanel, ContentPanel, StatusPanel, DividerPanel, StatusDivider, StatusPad: TPanel;
+    BrandLabel: TLabel;
+    PatchesNav, TravelNav, TreesNav: TImage;
+    StartChip: TImage;
+    ActiveNav: TImage;
+    PatchesSection, TravelSection, TreesSection: TPanel;
+  end;
+
+var
+  BASHFarmGUI: TBASHFarmGUI;
+
+// --- helpers (no `with` — Caption/Name shadowing) ---
+
+function TBASHFarmGUI.MakePanel(
+  parent: TWinControl;
+  left, top, width, height, color: Int32
+): TPanel;
+begin
+  Result.Create(parent);
+  Result.SetLeft(TControl.AdjustToDPI(left));
+  Result.SetTop(TControl.AdjustToDPI(top));
+  Result.SetWidth(TControl.AdjustToDPI(width));
+  Result.SetHeight(TControl.AdjustToDPI(height));
+  Result.SetColor(color);
+  Result.SetBevelOuter(bvNone);
+end;
+
+procedure TBASHFarmGUI.PaintRoundChip(
+  img: TImage;
+  labelText: String;
+  fill, parentBg: Int32;
+  selected: Boolean = False;
+  centered: Boolean = False
+);
+var
+  bmp: TBitmap;
+  c: TCanvas;
+  w, h, r, tw, th, tx: Int32;
+begin
+  w := img.GetWidth();
+  h := img.GetHeight();
+  if (w <= 0) or (h <= 0) then
+    Exit;
+
+  r := TControl.AdjustToDPI(6); // slight corner radius, mostly square
+  if r * 2 > h then
+    r := h div 2;
+  if r * 2 > w then
+    r := w div 2;
+
+  bmp := img.GetPicture().GetBitmap();
+  bmp.SetWidth(w);
+  bmp.SetHeight(h);
+  c := bmp.GetCanvas();
+
+  // Parent fill so corners read as transparent round edges
+  c.GetBrush().SetColor(parentBg);
+  c.GetPen().SetColor(parentBg);
+  c.FillRect(0, 0, w, h);
+
+  c.GetBrush().SetColor(fill);
+  c.GetPen().SetColor(fill);
+  c.RoundRect(0, 0, w - 1, h - 1, r * 2, r * 2);
+
+  c.GetBrush().SetColor(fill);
+  c.GetFont().SetColor(BASH_GUI_TEXT);
+  c.GetFont().SetSize(11);
+  if selected then
+    c.GetFont().SetStyle([fsBold])
+  else
+    c.GetFont().SetStyle([]);
+
+  tw := c.TextWidth(labelText);
+  th := c.TextHeight(labelText);
+  if centered then
+    tx := (w - tw) div 2
+  else
+    tx := TControl.AdjustToDPI(16);
+  c.TextOut(tx, (h - th) div 2, labelText);
+
+  img.SetHint(labelText);
+  img.SetShowHint(False);
+  img.Invalidate();
+end;
+
+function TBASHFarmGUI.MakeNavItem(
+  parent: TWinControl;
+  labelText: String;
+  left, top: Int32;
+  selected: Boolean = False
+): TImage;
+var
+  fill: Int32;
+begin
+  Result.Create(parent);
+  Result.SetLeft(TControl.AdjustToDPI(left));
+  Result.SetTop(TControl.AdjustToDPI(top));
+  Result.SetWidth(TControl.AdjustToDPI(BASH_GUI_NAV_W - 28));
+  Result.SetHeight(TControl.AdjustToDPI(BASH_GUI_BTN_H));
+  Result.SetCursor(crHandPoint);
+
+  if selected then
+    fill := BASH_GUI_ACCENT
+  else
+    fill := BASH_GUI_NAV_IDLE;
+
+  Self.PaintRoundChip(Result, labelText, fill, BASH_GUI_NAV, selected);
+end;
+
+function TBASHFarmGUI.MakeLabel(
+  parent: TWinControl;
+  labelText: String;
+  left, top, fontSize, fontColor: Int32;
+  bold: Boolean = False
+): TLabel;
+begin
+  Result.Create(parent);
+  Result.SetLeft(TControl.AdjustToDPI(left));
+  Result.SetTop(TControl.AdjustToDPI(top));
+  Result.SetCaption(labelText);
+  Result.GetFont().SetSize(fontSize);
+  Result.GetFont().SetColor(fontColor);
+  if bold then
+    Result.GetFont().SetStyle([fsBold]);
+end;
+
+procedure TBASHFarmGUI.AddCombo(
+  parent: TWinControl;
+  var box: TLabeledComboBox;
+  ctrlName, labelText: String;
+  left, top: Int32;
+  items: TStringArray;
+  itemIndex: Int32
+);
+begin
+  box.Create(parent);
+  box.SetLeft(TControl.AdjustToDPI(left));
+  box.SetTop(TControl.AdjustToDPI(top));
+  box.SetWidth(TControl.AdjustToDPI(BASH_GUI_COMBO_W));
+  box.SetHeight(TControl.AdjustToDPI(BASH_GUI_COMBO_H));
+  box.SetName(ctrlName);
+  box.SetCaption(labelText);
+  box.AddItemArray(items);
+  if (itemIndex >= 0) and (itemIndex <= High(items)) then
+    box.SetItemIndex(itemIndex)
+  else
+    box.SetItemIndex(0);
+  box.SetFontColor(BASH_GUI_TEXT);
+  box.SetStyle(csDropDownList);
+  box.SetFontSize(BASH_GUI_COMBO_FONT);
+  box.ComboBox.SetFontColor(BASH_GUI_TEXT);
+  box.ComboBox.GetFont().SetSize(BASH_GUI_COMBO_FONT);
+end;
+
+procedure TBASHFarmGUI.AddCheck(
+  parent: TWinControl;
+  var box: TLabeledCheckBox;
+  ctrlName, labelText: String;
+  left, top: Int32;
+  checked: Boolean
+);
+begin
+  box.Create(parent);
+  box.SetLeft(TControl.AdjustToDPI(left));
+  box.SetTop(TControl.AdjustToDPI(top));
+  box.SetName(ctrlName);
+  box.SetFontColor(BASH_GUI_TEXT);
+  box.SetCaption(labelText);
+  if checked then
+    box.CheckBox.SetChecked(True);
+end;
+
+procedure TBASHFarmGUI.AddHeader(parent: TPanel; titleText, subtitleText: String);
+var
+  header: TPanel;
+  headerW: Int32;
+begin
+  headerW := parent.GetWidth();
+  if headerW <= 0 then
+    headerW := TControl.AdjustToDPI(BASH_GUI_CONTENT_W);
+
+  header := Self.MakePanel(parent, 0, 0, 1, 88, BASH_GUI_CARD);
+  header.SetWidth(headerW);
+  header.SetHeight(TControl.AdjustToDPI(88));
+  Self.MakeLabel(header, titleText, 24, 18, 18, BASH_GUI_TEXT, True);
+  Self.MakeLabel(header, subtitleText, 24, 52, 10, BASH_GUI_MUTED, False);
+end;
+
+function TBASHFarmGUI.ReadCheck(ctrlName: String): Boolean;
+var
+  cb: TCheckBox;
+begin
+  cb := Self.Form.GetChild(ctrlName + '_checkbox');
+  Result := (cb.GetState() = cbChecked);
+end;
+
+function TBASHFarmGUI.ReadComboIdx(ctrlName: String): Int32;
+var
+  combo: TComboBox;
+begin
+  combo := Self.Form.GetChild(ctrlName + '_combobox');
+  Result := combo.GetItemIndex();
+end;
+
+procedure TBASHFarmGUI.StyleNav(selected: TImage);
+begin
+  Self.ActiveNav := selected;
+
+  Self.PaintRoundChip(Self.PatchesNav, Self.PatchesNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  Self.PaintRoundChip(Self.TreesNav, Self.TreesNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  Self.PaintRoundChip(Self.TravelNav, Self.TravelNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  Self.PaintRoundChip(selected, selected.GetHint(), BASH_GUI_ACCENT, BASH_GUI_NAV, True);
+end;
+
+procedure TBASHFarmGUI.ShowSection(section: TPanel; selected: TImage);
+begin
+  Self.PatchesSection.SetVisible(False);
+  Self.TreesSection.SetVisible(False);
+  Self.TravelSection.SetVisible(False);
+
+  section.SetVisible(True);
+  Self.StyleNav(selected);
+end;
+
+procedure TBASHFarmGUI.ShowPatches({$H-}sender: TObject); {$H+}
+begin
+  Self.RefreshPatchesEnabled();
+  Self.ShowSection(Self.PatchesSection, Self.PatchesNav);
+end;
+
+procedure TBASHFarmGUI.ShowTrees({$H-}sender: TObject); {$H+}
+begin
+  Self.RefreshTreesEnabled();
+  Self.ShowSection(Self.TreesSection, Self.TreesNav);
+end;
+
+procedure TBASHFarmGUI.ShowTravel({$H-}sender: TObject); {$H+}
+begin
+  Self.RefreshTravelEnabled();
+  Self.ShowSection(Self.TravelSection, Self.TravelNav);
+end;
+
+procedure TBASHFarmGUI.OnSeedComboChange({$H-}sender: TObject); {$H+}
+begin
+  Self.RefreshPatchesEnabled();
+  Self.RefreshTreesEnabled();
+  Self.RefreshTravelEnabled();
+end;
+
+function TBASHFarmGUI.HasSeedSelected(comboName: String): Boolean;
+begin
+  Result := Self.ReadComboIdx(comboName) > 0;
+end;
+
+procedure TBASHFarmGUI.SetCheckEnabled(ctrlName: String; enabled: Boolean);
+var
+  cb: TCheckBox;
+  caption: TLabel;
+  panel: TPanel;
+begin
+  panel := Self.Form.GetChild(ctrlName + '_panel');
+  caption := Self.Form.GetChild(ctrlName + '_caption');
+  cb := Self.Form.GetChild(ctrlName + '_checkbox');
+
+  if panel <> nil then
+    panel.SetEnabled(enabled);
+  if caption <> nil then
+    caption.SetEnabled(enabled);
+  if cb <> nil then
+    cb.SetEnabled(enabled);
+end;
+
+procedure TBASHFarmGUI.SetCheckVisible(ctrlName: String; visible: Boolean);
+var
+  cb: TCheckBox;
+  caption: TLabel;
+  panel: TPanel;
+begin
+  panel := Self.Form.GetChild(ctrlName + '_panel');
+  caption := Self.Form.GetChild(ctrlName + '_caption');
+  cb := Self.Form.GetChild(ctrlName + '_checkbox');
+
+  if panel <> nil then
+    panel.SetVisible(visible);
+  if caption <> nil then
+    caption.SetVisible(visible);
+  if cb <> nil then
+    cb.SetVisible(visible);
+end;
+
+procedure TBASHFarmGUI.RefreshPatchesEnabled();
+var
+  herb, flower, allot, bush, cactus: Boolean;
+begin
+  herb := Self.HasSeedSelected('lcb_bash_herbseed');
+  flower := Self.HasSeedSelected('lcb_bash_flowerseed');
+  allot := Self.HasSeedSelected('lcb_bash_allotseed');
+  bush := Self.HasSeedSelected('lcb_bash_bushseed');
+  cactus := Self.HasSeedSelected('lcb_bash_cactusseed');
+
+  Self.SetCheckEnabled('cb_bash_weiss_herb', herb);
+  Self.SetCheckEnabled('cb_bash_stronghold_herb', herb);
+
+  Self.SetCheckEnabled('cb_bash_ardy_herb', herb);
+  Self.SetCheckEnabled('cb_bash_ardy_flower', flower);
+  Self.SetCheckEnabled('cb_bash_ardy_allot', allot);
+
+  Self.SetCheckEnabled('cb_bash_fally_herb', herb);
+  Self.SetCheckEnabled('cb_bash_fally_flower', flower);
+  Self.SetCheckEnabled('cb_bash_fally_allot', allot);
+
+  Self.SetCheckEnabled('cb_bash_cath_herb', herb);
+  Self.SetCheckEnabled('cb_bash_cath_flower', flower);
+  Self.SetCheckEnabled('cb_bash_cath_allot', allot);
+
+  Self.SetCheckEnabled('cb_bash_phas_herb', herb);
+  Self.SetCheckEnabled('cb_bash_phas_flower', flower);
+  Self.SetCheckEnabled('cb_bash_phas_allot', allot);
+
+  Self.SetCheckEnabled('cb_bash_hosi_herb', herb);
+  Self.SetCheckEnabled('cb_bash_hosi_flower', flower);
+  Self.SetCheckEnabled('cb_bash_hosi_allot', allot);
+
+  Self.SetCheckEnabled('cb_bash_ortus_herb', herb);
+  Self.SetCheckEnabled('cb_bash_ortus_flower', flower);
+  Self.SetCheckEnabled('cb_bash_ortus_allot', allot);
+
+  Self.SetCheckEnabled('cb_bash_guild_herb', herb);
+  Self.SetCheckEnabled('cb_bash_guild_flower', flower);
+  Self.SetCheckEnabled('cb_bash_guild_allot', allot);
+  Self.SetCheckEnabled('cb_bash_guild_bush', bush);
+  Self.SetCheckEnabled('cb_bash_guild_cactus', cactus);
+end;
+
+procedure TBASHFarmGUI.RefreshTreesEnabled();
+var
+  treeSap, fruitSap: Boolean;
+begin
+  treeSap := Self.HasSeedSelected('lcb_bash_treesapling');
+  fruitSap := Self.HasSeedSelected('lcb_bash_fruitsapling');
+
+  Self.SetCheckEnabled('cb_bash_lum_tree', treeSap);
+  Self.SetCheckEnabled('cb_bash_var_tree', treeSap);
+  Self.SetCheckEnabled('cb_bash_fally_tree', treeSap);
+  Self.SetCheckEnabled('cb_bash_tav_tree', treeSap);
+  Self.SetCheckEnabled('cb_bash_gnome_tree', treeSap);
+  Self.SetCheckEnabled('cb_bash_guild_tree', treeSap);
+  Self.SetCheckEnabled('cb_bash_guild_redwood', treeSap);
+
+  Self.SetCheckEnabled('cb_bash_gnome_fruit', fruitSap);
+  Self.SetCheckEnabled('cb_bash_cath_fruit', fruitSap);
+  Self.SetCheckEnabled('cb_bash_gnome_village_fruit', fruitSap);
+  Self.SetCheckEnabled('cb_bash_brim_fruit', fruitSap);
+  Self.SetCheckEnabled('cb_bash_lletya_fruit', fruitSap);
+  Self.SetCheckEnabled('cb_bash_guild_fruit', fruitSap);
+end;
+
+procedure TBASHFarmGUI.SetTravelComboEnabled(ctrlName: String; enabled: Boolean);
+var
+  combo: TComboBox;
+  caption: TLabel;
+begin
+  combo := Self.Form.GetChild(ctrlName + '_combobox');
+  if combo <> nil then
+    combo.SetEnabled(enabled);
+
+  caption := Self.Form.GetChild(ctrlName + '_caption');
+  if caption <> nil then
+    caption.SetEnabled(enabled);
+end;
+
+procedure TBASHFarmGUI.RefreshTravelEnabled();
+var
+  herb, flower, allot, bush, cactus, treeSap, fruitSap: Boolean;
+  weiss, stronghold, ardy, fally, cath, hosi, ortus, guild: Boolean;
+begin
+  herb := Self.HasSeedSelected('lcb_bash_herbseed');
+  flower := Self.HasSeedSelected('lcb_bash_flowerseed');
+  allot := Self.HasSeedSelected('lcb_bash_allotseed');
+  bush := Self.HasSeedSelected('lcb_bash_bushseed');
+  cactus := Self.HasSeedSelected('lcb_bash_cactusseed');
+  treeSap := Self.HasSeedSelected('lcb_bash_treesapling');
+  fruitSap := Self.HasSeedSelected('lcb_bash_fruitsapling');
+
+  weiss := Self.ReadCheck('cb_bash_weiss_herb') and herb;
+  stronghold := Self.ReadCheck('cb_bash_stronghold_herb') and herb;
+
+  ardy := (Self.ReadCheck('cb_bash_ardy_herb') and herb)
+    or (Self.ReadCheck('cb_bash_ardy_flower') and flower)
+    or (Self.ReadCheck('cb_bash_ardy_allot') and allot);
+
+  fally := (Self.ReadCheck('cb_bash_fally_herb') and herb)
+    or (Self.ReadCheck('cb_bash_fally_flower') and flower)
+    or (Self.ReadCheck('cb_bash_fally_allot') and allot);
+
+  cath := (Self.ReadCheck('cb_bash_cath_herb') and herb)
+    or (Self.ReadCheck('cb_bash_cath_flower') and flower)
+    or (Self.ReadCheck('cb_bash_cath_allot') and allot);
+
+  hosi := (Self.ReadCheck('cb_bash_hosi_herb') and herb)
+    or (Self.ReadCheck('cb_bash_hosi_flower') and flower)
+    or (Self.ReadCheck('cb_bash_hosi_allot') and allot);
+
+  ortus := (Self.ReadCheck('cb_bash_ortus_herb') and herb)
+    or (Self.ReadCheck('cb_bash_ortus_flower') and flower)
+    or (Self.ReadCheck('cb_bash_ortus_allot') and allot);
+
+
+  guild := (Self.ReadCheck('cb_bash_guild_herb') and herb)
+    or (Self.ReadCheck('cb_bash_guild_flower') and flower)
+    or (Self.ReadCheck('cb_bash_guild_allot') and allot)
+    or (Self.ReadCheck('cb_bash_guild_bush') and bush)
+    or (Self.ReadCheck('cb_bash_guild_cactus') and cactus)
+    or (Self.ReadCheck('cb_bash_guild_tree') and treeSap)
+    or (Self.ReadCheck('cb_bash_guild_redwood') and treeSap)
+    or (Self.ReadCheck('cb_bash_guild_fruit') and fruitSap);
+
+  Self.SetTravelComboEnabled('lcb_bash_weiss_tp', weiss);
+  Self.SetTravelComboEnabled('lcb_bash_stronghold_tp', stronghold);
+  Self.SetTravelComboEnabled('lcb_bash_ardougne_tp', ardy);
+  Self.SetTravelComboEnabled('lcb_bash_falador_tp', fally);
+  Self.SetTravelComboEnabled('lcb_bash_catherby_tp', cath);
+  Self.SetTravelComboEnabled('lcb_bash_hosidius_tp', hosi);
+  Self.SetTravelComboEnabled('lcb_bash_ortus_tp', ortus);
+  Self.SetTravelComboEnabled('lcb_bash_guild_tp', guild);
+  // Lumby elite only relevant for Fairy CIR (index 2)
+  Self.SetCheckVisible('cb_bash_lumby_elite', guild and (Self.ReadComboIdx('lcb_bash_guild_tp') = 2));
+
+  Self.SetTravelComboEnabled('lcb_bash_lum_tree_tp', Self.ReadCheck('cb_bash_lum_tree') and treeSap);
+  Self.SetTravelComboEnabled('lcb_bash_var_tree_tp', Self.ReadCheck('cb_bash_var_tree') and treeSap);
+  Self.SetTravelComboEnabled('lcb_bash_fally_tree_tp', Self.ReadCheck('cb_bash_fally_tree') and treeSap);
+  Self.SetTravelComboEnabled('lcb_bash_tav_tree_tp', Self.ReadCheck('cb_bash_tav_tree') and treeSap);
+  Self.SetTravelComboEnabled('lcb_bash_gnome_tree_tp', Self.ReadCheck('cb_bash_gnome_tree') and treeSap);
+
+  Self.SetTravelComboEnabled('lcb_bash_gnome_fruit_tp', Self.ReadCheck('cb_bash_gnome_fruit') and fruitSap);
+  Self.SetTravelComboEnabled('lcb_bash_gnome_village_tp', Self.ReadCheck('cb_bash_gnome_village_fruit') and fruitSap);
+  Self.SetTravelComboEnabled('lcb_bash_cath_fruit_tp', Self.ReadCheck('cb_bash_cath_fruit') and fruitSap);
+  Self.SetTravelComboEnabled('lcb_bash_brim_fruit_tp', Self.ReadCheck('cb_bash_brim_fruit') and fruitSap);
+  Self.SetTravelComboEnabled('lcb_bash_lletya_fruit_tp', Self.ReadCheck('cb_bash_lletya_fruit') and fruitSap);
+end;
+
+procedure TBASHFarmGUI.BuildPatchesSection();
+var
+  lcb: TLabeledComboBox;
+  cb: TLabeledCheckBox;
+  y: Int32;
+begin
+  Self.AddHeader(Self.PatchesSection, 'Patches', 'Seeds, compost, tools, and which patches to run. Harmony is unavailable.');
+
+  Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_herbseed', 'Herb seed', 24, 100, BASH_FARM_HERB_SEEDS, BASHFarmConfig.HerbSeedIdx);
+  lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
+  Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_flowerseed', 'Flower seed', BASH_GUI_COMBO_COL2, 100, BASH_FARM_FLOWER_SEEDS, BASHFarmConfig.FlowerSeedIdx);
+  lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
+  Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_allotseed', 'Allotment seed', BASH_GUI_COMBO_COL3, 100, BASH_FARM_ALLOT_SEEDS, BASHFarmConfig.AllotmentSeedIdx);
+  lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
+
+  Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_bushseed', 'Bush seed', 24, 175, BASH_FARM_BUSH_SEEDS, BASHFarmConfig.BushSeedIdx);
+  lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
+  Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_cactusseed', 'Cactus seed', BASH_GUI_COMBO_COL2, 175, BASH_FARM_CACTUS_SEEDS, BASHFarmConfig.CactusSeedIdx);
+  lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
+  Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_compost', 'Compost', BASH_GUI_COMBO_COL3, 175, BASH_FARM_COMPOST, BASHFarmConfig.CompostIdx);
+
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_barbdibber', 'Barbarian dibber', 24, 250, BASHFarmConfig.BarbDibber);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_runnow', 'Run farm now', 200, 250, BASHFarmConfig.RunNow);
+
+  Self.MakeLabel(Self.PatchesSection, 'Location', 24, 295, 10, BASH_GUI_MUTED, True);
+  Self.MakeLabel(Self.PatchesSection, 'Herb', 140, 295, 10, BASH_GUI_MUTED, True);
+  Self.MakeLabel(Self.PatchesSection, 'Flower', 230, 295, 10, BASH_GUI_MUTED, True);
+  Self.MakeLabel(Self.PatchesSection, 'Allotments', 340, 295, 10, BASH_GUI_MUTED, True);
+
+  y := 325;
+  Self.MakeLabel(Self.PatchesSection, 'Weiss', 24, y, 10, BASH_GUI_TEXT, False);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_weiss_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.WEISS_HERB]);
+
+  y := 355;
+  Self.MakeLabel(Self.PatchesSection, 'Stronghold', 24, y, 10, BASH_GUI_TEXT, False);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_stronghold_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.STRONGHOLD_HERB]);
+
+  y := 385;
+  Self.MakeLabel(Self.PatchesSection, 'Ardougne', 24, y, 10, BASH_GUI_TEXT, False);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ardy_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_HERB]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ardy_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_FLOWER]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ardy_allot', 'Allotments', 340, y,
+    BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_ALLOT_S]);
+
+  y := 415;
+  Self.MakeLabel(Self.PatchesSection, 'Falador', 24, y, 10, BASH_GUI_TEXT, False);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_fally_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_HERB]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_fally_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_FLOWER]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_fally_allot', 'Allotments', 340, y,
+    BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_ALLOT_S]);
+
+  y := 445;
+  Self.MakeLabel(Self.PatchesSection, 'Catherby', 24, y, 10, BASH_GUI_TEXT, False);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_cath_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_HERB]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_cath_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_FLOWER]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_cath_allot', 'Allotments', 340, y,
+    BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_ALLOT_S]);
+
+  y := 475;
+  Self.MakeLabel(Self.PatchesSection, 'Phasmatys', 24, y, 10, BASH_GUI_TEXT, False);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_phas_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_HERB]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_phas_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_FLOWER]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_phas_allot', 'Allotments', 340, y,
+    BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_ALLOT_S]);
+
+  y := 505;
+  Self.MakeLabel(Self.PatchesSection, 'Hosidius', 24, y, 10, BASH_GUI_TEXT, False);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_hosi_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_HERB]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_hosi_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_FLOWER]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_hosi_allot', 'Allotments', 340, y,
+    BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_ALLOT_S]);
+
+  y := 535;
+  Self.MakeLabel(Self.PatchesSection, 'Civitas illa Fortis', 24, y, 10, BASH_GUI_TEXT, False);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ortus_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_HERB]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ortus_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_FLOWER]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ortus_allot', 'Allotments', 340, y,
+    BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_ALLOT_S]);
+
+  y := 565;
+  Self.MakeLabel(Self.PatchesSection, 'Guild', 24, y, 10, BASH_GUI_TEXT, False);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_guild_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_HERB]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_guild_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_FLOWER]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_guild_allot', 'Allotments', 340, y,
+    BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_ALLOT_S]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_guild_bush', 'Bush', 470, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_BUSH]);
+  Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_guild_cactus', 'Cactus', 550, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_CACTUS]);
+
+  Self.RefreshPatchesEnabled();
+end;
+
+procedure TBASHFarmGUI.BuildTravelSection();
+var
+  lcb: TLabeledComboBox;
+  cb: TLabeledCheckBox;
+begin
+  Self.AddHeader(Self.TravelSection, 'Travel', 'Teleports for enabled patches with a seed or sapling selected. Unused options are greyed out.');
+
+  Self.MakeLabel(Self.TravelSection, 'Herb / flower / allotment', 24, 96, 11, BASH_GUI_TEXT, True);
+
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_weiss_tp', 'Weiss', 24, 116, BASH_TRAVEL_WEISS, BASHFarmConfig.WeissTP);
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_stronghold_tp', 'Stronghold', BASH_GUI_COMBO_COL2, 116, BASH_TRAVEL_STRONGHOLD, BASHFarmConfig.StrongholdTP);
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_ardougne_tp', 'Ardougne', BASH_GUI_COMBO_COL3, 116, BASH_TRAVEL_ARDOUGNE, BASHFarmConfig.ArdougneTP);
+
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_falador_tp', 'Falador', 24, 178, BASH_TRAVEL_FALADOR, BASHFarmConfig.FaladorTP);
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_catherby_tp', 'Catherby', BASH_GUI_COMBO_COL2, 178, BASH_TRAVEL_CATHERBY, BASHFarmConfig.CatherbyTP);
+  // Phasmatys / Mory: Ectophial only — no travel combo
+
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_hosidius_tp', 'Hosidius', BASH_GUI_COMBO_COL3, 178, BASH_TRAVEL_HOSIDIUS, BASHFarmConfig.HosidiusTP);
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_ortus_tp', 'Civitas illa Fortis', 24, 240, BASH_TRAVEL_ORTUS, BASHFarmConfig.OrtusTP);
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_guild_tp', 'Farming Guild', BASH_GUI_COMBO_COL2, 240, BASH_TRAVEL_GUILD, BASHFarmConfig.GuildTP);
+  lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
+  // Directly under Farming Guild dropdown — only shown for Fairy CIR
+  Self.AddCheck(Self.TravelSection, cb, 'cb_bash_lumby_elite', 'Lumby elite (no Dramen)', BASH_GUI_COMBO_COL2, 302, BASHFarmConfig.LumbyElite);
+
+  Self.MakeLabel(Self.TravelSection, 'Trees', 24, 336, 11, BASH_GUI_TEXT, True);
+
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_lum_tree_tp', 'Lumbridge tree', 24, 356, BASH_TRAVEL_LUMBRIDGE_TREE, BASHFarmConfig.LumbridgeTreeTP);
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_var_tree_tp', 'Varrock tree', BASH_GUI_COMBO_COL2, 356, BASH_TRAVEL_VARROCK_TREE, BASHFarmConfig.VarrockTreeTP);
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_fally_tree_tp', 'Falador tree', BASH_GUI_COMBO_COL3, 356, BASH_TRAVEL_FALADOR_TREE, BASHFarmConfig.FaladorTreeTP);
+
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_tav_tree_tp', 'Taverley tree', 24, 418, BASH_TRAVEL_TAVERLEY_TREE, BASHFarmConfig.TaverleyTreeTP);
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_tree_tp', 'Gnome tree', BASH_GUI_COMBO_COL2, 418, BASH_TRAVEL_GNOME_TREE, BASHFarmConfig.GnomeTreeTP);
+
+  Self.MakeLabel(Self.TravelSection, 'Fruit trees', 24, 484, 11, BASH_GUI_TEXT, True);
+
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_fruit_tp', 'Gnome fruit', 24, 504, BASH_TRAVEL_GNOME_FRUIT, BASHFarmConfig.GnomeFruitTP);
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_village_tp', 'Gnome village fruit', BASH_GUI_COMBO_COL2, 504, BASH_TRAVEL_GNOME_VILLAGE_FRUIT, BASHFarmConfig.GnomeVillageFruitTP);
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_cath_fruit_tp', 'Catherby fruit', BASH_GUI_COMBO_COL3, 504, BASH_TRAVEL_CATHERBY_FRUIT, BASHFarmConfig.CatherbyFruitTP);
+
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_brim_fruit_tp', 'Brimhaven fruit', 24, 566, BASH_TRAVEL_BRIMHAVEN_FRUIT, BASHFarmConfig.BrimhavenFruitTP);
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_lletya_fruit_tp', 'Lletya fruit', BASH_GUI_COMBO_COL2, 566, BASH_TRAVEL_LLETYA_FRUIT, BASHFarmConfig.LletyaFruitTP);
+
+  Self.RefreshTravelEnabled();
+end;
+
+procedure TBASHFarmGUI.BuildTreesSection();
+var
+  lcb: TLabeledComboBox;
+  cb: TLabeledCheckBox;
+  y: Int32;
+begin
+  Self.AddHeader(Self.TreesSection, 'Trees', 'Saplings and which tree / fruit patches to run.');
+
+  Self.AddCombo(Self.TreesSection, lcb, 'lcb_bash_treesapling', 'Tree sapling', 24, 100, BASH_FARM_TREE_SAPLINGS, BASHFarmConfig.TreeSaplingIdx);
+  lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
+  Self.AddCombo(Self.TreesSection, lcb, 'lcb_bash_fruitsapling', 'Fruit sapling', BASH_GUI_COMBO_COL2, 100, BASH_FARM_FRUIT_SAPLINGS, BASHFarmConfig.FruitSaplingIdx);
+  lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
+
+  Self.MakeLabel(Self.TreesSection, 'Trees', 24, 175, 11, BASH_GUI_TEXT, True);
+  y := 205;
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_lum_tree', 'Lumbridge', 24, y, BASHFarmConfig.Enabled[EBASHFarmPatch.LUMBRIDGE_TREE]);
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_var_tree', 'Varrock', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.VARROCK_TREE]);
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_fally_tree', 'Falador', 250, y, BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_TREE]);
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_tav_tree', 'Taverley', 360, y, BASHFarmConfig.Enabled[EBASHFarmPatch.TAVERLEY_TREE]);
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_gnome_tree', 'Gnome', 470, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_TREE]);
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_guild_tree', 'Guild', 570, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_TREE]);
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_guild_redwood', 'Redwood', 660, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_REDWOOD]);
+
+  Self.MakeLabel(Self.TreesSection, 'Fruit trees', 24, 250, 11, BASH_GUI_TEXT, True);
+  y := 280;
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_gnome_fruit', 'Gnome stronghold', 24, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_STRONGHOLD_FRUIT]);
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_cath_fruit', 'Catherby', 200, y, BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_FRUIT]);
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_gnome_village_fruit', 'Gnome village', 320, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_VILLAGE_FRUIT]);
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_brim_fruit', 'Brimhaven', 470, y, BASHFarmConfig.Enabled[EBASHFarmPatch.BRIMHAVEN_FRUIT]);
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_lletya_fruit', 'Lletya', 590, y, BASHFarmConfig.Enabled[EBASHFarmPatch.LLETYA_FRUIT]);
+  Self.AddCheck(Self.TreesSection, cb, 'cb_bash_guild_fruit', 'Guild', 690, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_FRUIT]);
+
+  Self.RefreshTreesEnabled();
+end;
+
+procedure TBASHFarmGUI.BuildShell(tab: TTabSheet);
+var
+  contentH, startW, startH, shellW, shellH, statusTop, statusH, mainLeft, mainW, navW, bottomInset: Int32;
+begin
+  // Stock Start is alBottom on the form and reserves a strip even when hidden —
+  // collapse it so the page/tab can fill the window edge-to-edge.
+  Self.Start.SetAlign(alNone);
+  Self.Start.SetVisible(False);
+  Self.Start.SetHeight(0);
+  Self.Start.SetWidth(0);
+
+  // Self.Size is already DPI-adjusted by Setup — use it for pixel layout (no second AdjustToDPI).
+  bottomInset := TControl.AdjustToDPI(BASH_GUI_BOTTOM_INSET);
+  navW := TControl.AdjustToDPI(BASH_GUI_NAV_W);
+  statusH := TControl.AdjustToDPI(BASH_GUI_STATUS_H);
+  shellW := Self.Size.X;
+  shellH := Self.Size.Y;
+  mainLeft := navW + TControl.AdjustToDPI(2);
+  mainW := shellW - mainLeft;
+  // Raise start bar into the visible client (tab/form chrome clips the true bottom)
+  statusTop := shellH - statusH - bottomInset;
+  contentH := statusTop;
+  startW := TControl.AdjustToDPI(132);
+  startH := TControl.AdjustToDPI(BASH_GUI_BTN_H);
+
+  Self.NavPanel.Create(tab);
+  Self.NavPanel.SetLeft(0);
+  Self.NavPanel.SetTop(0);
+  Self.NavPanel.SetWidth(navW);
+  Self.NavPanel.SetHeight(shellH);
+  Self.NavPanel.SetColor(BASH_GUI_NAV);
+  Self.NavPanel.SetBevelOuter(bvNone);
+
+  Self.DividerPanel.Create(tab);
+  Self.DividerPanel.SetLeft(navW);
+  Self.DividerPanel.SetTop(0);
+  Self.DividerPanel.SetWidth(TControl.AdjustToDPI(2));
+  Self.DividerPanel.SetHeight(shellH);
+  Self.DividerPanel.SetColor(BASH_GUI_DIVIDER);
+  Self.DividerPanel.SetBevelOuter(bvNone);
+
+  Self.ContentPanel.Create(tab);
+  Self.ContentPanel.SetLeft(mainLeft);
+  Self.ContentPanel.SetTop(0);
+  Self.ContentPanel.SetWidth(mainW);
+  Self.ContentPanel.SetHeight(contentH);
+  Self.ContentPanel.SetColor(BASH_GUI_BG);
+  Self.ContentPanel.SetBevelOuter(bvNone);
+
+  Self.StatusDivider.Create(tab);
+  Self.StatusDivider.SetLeft(mainLeft);
+  Self.StatusDivider.SetTop(statusTop);
+  Self.StatusDivider.SetWidth(mainW);
+  Self.StatusDivider.SetHeight(TControl.AdjustToDPI(2));
+  Self.StatusDivider.SetColor(BASH_GUI_DIVIDER);
+  Self.StatusDivider.SetBevelOuter(bvNone);
+
+  Self.StatusPanel.Create(tab);
+  Self.StatusPanel.SetLeft(mainLeft);
+  Self.StatusPanel.SetTop(statusTop + Self.StatusDivider.GetHeight());
+  Self.StatusPanel.SetWidth(mainW);
+  Self.StatusPanel.SetHeight(statusH - Self.StatusDivider.GetHeight());
+  Self.StatusPanel.SetColor(BASH_GUI_STATUS);
+  Self.StatusPanel.SetBevelOuter(bvNone);
+
+  Self.StatusPad.Create(tab);
+  Self.StatusPad.SetLeft(mainLeft);
+  Self.StatusPad.SetTop(Self.StatusPanel.GetTop() + Self.StatusPanel.GetHeight());
+  Self.StatusPad.SetWidth(mainW);
+  Self.StatusPad.SetHeight(shellH - Self.StatusPad.GetTop());
+  Self.StatusPad.SetColor(BASH_GUI_STATUS);
+  Self.StatusPad.SetBevelOuter(bvNone);
+
+  Self.BrandLabel := Self.MakeLabel(Self.NavPanel, 'BASH Farm', 16, 28, 16, BASH_GUI_TEXT, True);
+  Self.MakeLabel(Self.NavPanel, 'WalkerV2 runner', 16, 54, 9, BASH_GUI_MUTED, False);
+
+  Self.PatchesNav := Self.MakeNavItem(Self.NavPanel, 'Patches', 12, 100, True);
+  Self.TreesNav := Self.MakeNavItem(Self.NavPanel, 'Trees', 12, 152);
+  Self.TravelNav := Self.MakeNavItem(Self.NavPanel, 'Travel', 12, 204);
+
+  Self.PatchesSection := Self.MakePanel(Self.ContentPanel, 0, 0, 100, 100, BASH_GUI_BG);
+  Self.TreesSection := Self.MakePanel(Self.ContentPanel, 0, 0, 100, 100, BASH_GUI_BG);
+  Self.TravelSection := Self.MakePanel(Self.ContentPanel, 0, 0, 100, 100, BASH_GUI_BG);
+
+  Self.PatchesSection.SetWidth(mainW);
+  Self.PatchesSection.SetHeight(contentH);
+  Self.TreesSection.SetWidth(mainW);
+  Self.TreesSection.SetHeight(contentH);
+  Self.TravelSection.SetWidth(mainW);
+  Self.TravelSection.SetHeight(contentH);
+
+  Self.BuildPatchesSection();
+  Self.BuildTreesSection();
+  Self.BuildTravelSection();
+
+  Self.PatchesNav.SetOnClick(@Self.ShowPatches);
+  Self.TreesNav.SetOnClick(@Self.ShowTrees);
+  Self.TravelNav.SetOnClick(@Self.ShowTravel);
+
+  Self.StartChip.Create(Self.StatusPanel);
+  Self.StartChip.SetLeft(mainW - startW - TControl.AdjustToDPI(24));
+  Self.StartChip.SetTop((Self.StatusPanel.GetHeight() - startH) div 2 + 2);
+  Self.StartChip.SetWidth(startW);
+  Self.StartChip.SetHeight(startH);
+  Self.StartChip.SetCursor(crHandPoint);
+  Self.PaintRoundChip(Self.StartChip, 'Start', BASH_GUI_START, BASH_GUI_STATUS, True, True);
+  Self.StartChip.SetOnClick(@Self.StartScript);
+
+  Self.ShowPatches(Self.PatchesNav);
+end;
+
+procedure TBASHFarmGUI.ApplySettings();
+begin
+  BASHFarmConfig.HerbSeedIdx := Self.ReadComboIdx('lcb_bash_herbseed');
+  BASHFarmConfig.FlowerSeedIdx := Self.ReadComboIdx('lcb_bash_flowerseed');
+  BASHFarmConfig.AllotmentSeedIdx := Self.ReadComboIdx('lcb_bash_allotseed');
+  BASHFarmConfig.BushSeedIdx := Self.ReadComboIdx('lcb_bash_bushseed');
+  BASHFarmConfig.CactusSeedIdx := Self.ReadComboIdx('lcb_bash_cactusseed');
+  BASHFarmConfig.CompostIdx := Self.ReadComboIdx('lcb_bash_compost');
+
+  BASHFarmConfig.WeissTP := Self.ReadComboIdx('lcb_bash_weiss_tp');
+  BASHFarmConfig.StrongholdTP := Self.ReadComboIdx('lcb_bash_stronghold_tp');
+  BASHFarmConfig.ArdougneTP := Self.ReadComboIdx('lcb_bash_ardougne_tp');
+  BASHFarmConfig.FaladorTP := Self.ReadComboIdx('lcb_bash_falador_tp');
+  BASHFarmConfig.CatherbyTP := Self.ReadComboIdx('lcb_bash_catherby_tp');
+  BASHFarmConfig.PhasmatysTP := 0; // Ectophial only
+  BASHFarmConfig.HosidiusTP := Self.ReadComboIdx('lcb_bash_hosidius_tp');
+  BASHFarmConfig.OrtusTP := Self.ReadComboIdx('lcb_bash_ortus_tp');
+  BASHFarmConfig.GuildTP := Self.ReadComboIdx('lcb_bash_guild_tp');
+
+  BASHFarmConfig.TreeSaplingIdx := Self.ReadComboIdx('lcb_bash_treesapling');
+  BASHFarmConfig.FruitSaplingIdx := Self.ReadComboIdx('lcb_bash_fruitsapling');
+  BASHFarmConfig.LumbridgeTreeTP := Self.ReadComboIdx('lcb_bash_lum_tree_tp');
+  BASHFarmConfig.VarrockTreeTP := Self.ReadComboIdx('lcb_bash_var_tree_tp');
+  BASHFarmConfig.FaladorTreeTP := Self.ReadComboIdx('lcb_bash_fally_tree_tp');
+  BASHFarmConfig.TaverleyTreeTP := Self.ReadComboIdx('lcb_bash_tav_tree_tp');
+  BASHFarmConfig.GnomeTreeTP := Self.ReadComboIdx('lcb_bash_gnome_tree_tp');
+  BASHFarmConfig.GnomeFruitTP := Self.ReadComboIdx('lcb_bash_gnome_fruit_tp');
+  BASHFarmConfig.GnomeVillageFruitTP := Self.ReadComboIdx('lcb_bash_gnome_village_tp');
+  BASHFarmConfig.CatherbyFruitTP := Self.ReadComboIdx('lcb_bash_cath_fruit_tp');
+  BASHFarmConfig.BrimhavenFruitTP := Self.ReadComboIdx('lcb_bash_brim_fruit_tp');
+  BASHFarmConfig.LletyaFruitTP := Self.ReadComboIdx('lcb_bash_lletya_fruit_tp');
+
+  BASHFarmConfig.BarbDibber := Self.ReadCheck('cb_bash_barbdibber');
+  BASHFarmConfig.LumbyElite := Self.ReadCheck('cb_bash_lumby_elite');
+  BASHFarmConfig.MagicSecateurs := False;
+  BASHFarmConfig.RunNow := Self.ReadCheck('cb_bash_runnow');
+
+  BASHFarmConfig.Enabled[EBASHFarmPatch.WEISS_HERB] := Self.ReadCheck('cb_bash_weiss_herb');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.STRONGHOLD_HERB] := Self.ReadCheck('cb_bash_stronghold_herb');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_HERB] := Self.ReadCheck('cb_bash_ardy_herb');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_FLOWER] := Self.ReadCheck('cb_bash_ardy_flower');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_ALLOT_N] := Self.ReadCheck('cb_bash_ardy_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_ALLOT_S] := Self.ReadCheck('cb_bash_ardy_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_HERB] := Self.ReadCheck('cb_bash_fally_herb');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_FLOWER] := Self.ReadCheck('cb_bash_fally_flower');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_ALLOT_N] := Self.ReadCheck('cb_bash_fally_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_ALLOT_S] := Self.ReadCheck('cb_bash_fally_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_HERB] := Self.ReadCheck('cb_bash_cath_herb');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_FLOWER] := Self.ReadCheck('cb_bash_cath_flower');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_ALLOT_N] := Self.ReadCheck('cb_bash_cath_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_ALLOT_S] := Self.ReadCheck('cb_bash_cath_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_HERB] := Self.ReadCheck('cb_bash_phas_herb');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_FLOWER] := Self.ReadCheck('cb_bash_phas_flower');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_ALLOT_N] := Self.ReadCheck('cb_bash_phas_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_ALLOT_S] := Self.ReadCheck('cb_bash_phas_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_HERB] := Self.ReadCheck('cb_bash_hosi_herb');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_FLOWER] := Self.ReadCheck('cb_bash_hosi_flower');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_ALLOT_N] := Self.ReadCheck('cb_bash_hosi_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_ALLOT_S] := Self.ReadCheck('cb_bash_hosi_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_HERB] := Self.ReadCheck('cb_bash_ortus_herb');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_FLOWER] := Self.ReadCheck('cb_bash_ortus_flower');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_ALLOT_N] := Self.ReadCheck('cb_bash_ortus_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_ALLOT_S] := Self.ReadCheck('cb_bash_ortus_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_HERB] := Self.ReadCheck('cb_bash_guild_herb');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_FLOWER] := Self.ReadCheck('cb_bash_guild_flower');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_ALLOT_N] := Self.ReadCheck('cb_bash_guild_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_ALLOT_S] := Self.ReadCheck('cb_bash_guild_allot');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_BUSH] := Self.ReadCheck('cb_bash_guild_bush');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_CACTUS] := Self.ReadCheck('cb_bash_guild_cactus');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_ANIMA] := False;
+
+  BASHFarmConfig.Enabled[EBASHFarmPatch.LUMBRIDGE_TREE] := Self.ReadCheck('cb_bash_lum_tree');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.VARROCK_TREE] := Self.ReadCheck('cb_bash_var_tree');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_TREE] := Self.ReadCheck('cb_bash_fally_tree');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.TAVERLEY_TREE] := Self.ReadCheck('cb_bash_tav_tree');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_TREE] := Self.ReadCheck('cb_bash_gnome_tree');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_TREE] := Self.ReadCheck('cb_bash_guild_tree');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_REDWOOD] := Self.ReadCheck('cb_bash_guild_redwood');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_STRONGHOLD_FRUIT] := Self.ReadCheck('cb_bash_gnome_fruit');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_FRUIT] := Self.ReadCheck('cb_bash_cath_fruit');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_VILLAGE_FRUIT] := Self.ReadCheck('cb_bash_gnome_village_fruit');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.BRIMHAVEN_FRUIT] := Self.ReadCheck('cb_bash_brim_fruit');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.LLETYA_FRUIT] := Self.ReadCheck('cb_bash_lletya_fruit');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_FRUIT] := Self.ReadCheck('cb_bash_guild_fruit');
+  BASHFarmConfig.Enabled[EBASHFarmPatch.HARMONY_ISLAND_HERB] := False;
+
+  BASHFarmConfig.Write();
+  BASHFarmRunner.BuildFromConfig(BASHFarmConfig);
+end;
+
+procedure TBASHFarmGUI.StartScript(sender: TObject); override;
+begin
+  Self.ApplySettings();
+  BASHFarmRunner.Init();
+  WriteLn('[BASHFarm] Loaded ', Length(BASHFarmRunner.Patches), ' patches from GUI');
+
+  // Close like base TScriptForm.StartScript — do NOT `inherited` when a host
+  // still includes farmrunnerupdate (that overrides TScriptForm.StartScript and
+  // reads old farm-tab controls that BASH Farm never creates).
+  try
+    Self._WarmBuildCache();
+  except
+  end;
+  Self.Form.SetOnClose(nil);
+  Self.Form.Close();
+end;
+
+procedure TBASHFarmGUI.Run(); override;
+var
+  tab: TTabSheet;
+begin
+  BASHFarmConfig.Read();
+  Self.Setup('BASH Farm', [BASH_GUI_W, BASH_GUI_H], False);
+  Self.AddTab('BASH Farm');
+  tab := Self.Tabs[High(Self.Tabs)];
+  Self.BuildShell(tab); // reparents/styles Start after Setup creates it
+  inherited;
+end;

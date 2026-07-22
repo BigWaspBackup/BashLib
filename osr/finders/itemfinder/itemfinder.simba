@@ -8,7 +8,7 @@ Some handy item wrappers were added for all cakes, pies and pizzas
 
 {$DEFINE WL_ITEMFINDER_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 
@@ -112,7 +112,7 @@ end;
 
 (*
 ## ItemFinder Wrappers
-The following wrappers are set by WaspLib for more consistent usage of itemfinder.
+The following wrappers are set by BashLib for more consistent usage of itemfinder.
 
 Example:
 ```pascal

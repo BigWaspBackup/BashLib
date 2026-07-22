@@ -1,4 +1,4 @@
-{$loadlib Includes/WaspLib/plugins/libSound}
+{$loadlib Includes/BashLib/plugins/libSound}
 
 var
   reader: TSoundReader;

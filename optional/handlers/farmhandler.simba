@@ -2,11 +2,11 @@
 
 
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 {$IFNDEF ANDREW_MUSHTREE_INCLUDED}
-  {$I WaspLib/optional/interfaces/mainscreen/mushtree.simba}
+  {$I BashLib/optional/interfaces/mainscreen/mushtree.simba}
 {$ENDIF}
 
 type

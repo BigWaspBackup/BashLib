@@ -1,6 +1,6 @@
 {$DEFINE WL_GEAR_HANDLER_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 type
@@ -467,7 +467,7 @@ begin
 
   tmp.Init();
   tmp.LoadFromFile(
-    IncludePath + 'WaspLib' + DirectorySeparator + 'utils' +
+    IncludePath + 'BashLib' + DirectorySeparator + 'utils' +
     DirectorySeparator + 'assets' + DirectorySeparator + 'slot.png'
   );
   item := ItemFinder.GetItemImages(id)[0];
@@ -562,7 +562,7 @@ begin
   Result.setHeight(Self.Size.Y - TControl.AdjustToDPI(120));
   Result.setTop((Self.Size.Y - Result.getHeight()) div 2 - TControl.AdjustToDPI(10));
   Result.LoadFromFile(
-    IncludePath + 'WaspLib' + DirectorySeparator + 'utils' +
+    IncludePath + 'BashLib' + DirectorySeparator + 'utils' +
     DirectorySeparator + 'assets' + DirectorySeparator + 'equipment.png'
   );
 

@@ -1,10 +1,10 @@
 {$DEFINE SKUNK_TELEPORTS}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 {$IFNDEF SKUNK_TELEPORT_UTILS}
-  {$I WaspLib/optional/handlers/teleports/rsteleportutils.simba}
+  {$I BashLib/optional/handlers/teleports/rsteleportutils.simba}
 {$ENDIF}
 
 type RSTeleports = record(TSRLBaseRecord) class var

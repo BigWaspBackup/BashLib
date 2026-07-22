@@ -1,12 +1,12 @@
 (*
 # ConsumableHandlers
-ConsumableHandlers are responsible for handle all kinds of consumables in WaspLib.
+ConsumableHandlers are responsible for handle all kinds of consumables in BashLib.
 For a list of the consumable types check `ERSConsumable`, there's a TConsumableHandler for each one.
 *)
 
 {$DEFINE WL_CONSUMABLEHANDLER_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 type
@@ -21,7 +21,7 @@ type
     IsSetup: Boolean;
   end;
 ```
-Consumable handler is the record responsible to handle `TRSConsumables <https://torwent.github.io/WaspLib/consumables.html>`_.
+Consumable handler is the record responsible to handle `TRSConsumables <https://torwent.github.io/BashLib/consumables.html>`_.
 This will handle caching all found consumables to this point, bank withdraw amounts, timer if the last consumable had a timer, etc.
 *)
   TConsumableHandler = record(TSRLBaseRecord)

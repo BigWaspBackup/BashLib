@@ -9,11 +9,11 @@ knowing any info about it's setup in advance.
 The POH Handler is optional and has to be explicitly included.
 You can include it by either including all optional files which is not recommended:
   ```pascal
-  {$I WaspLib/optional.simba}
+  {$I BashLib/optional.simba}
   ```
 Or include just the POHHandler file which is the recommended way to include it:
   ```pascal
-  {$I WaspLib/optional/handlers/poh.simba}
+  {$I BashLib/optional/handlers/poh.simba}
   ```
 :::
 
@@ -30,15 +30,15 @@ e.g., Nexus room, Combat Hall and Quest Hall are all identical.
 
 {$DEFINE WL_POH_HANDLER_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 {$IFNDEF WL_POHMAP_INCLUDED}
-  {$I WaspLib/optional/handlers/pohmap.simba}
+  {$I BashLib/optional/handlers/pohmap.simba}
 {$ENDIF}
 
 {$IFNDEF WL_HOUSEOBJECTS_INCLUDED}
-  {$I WaspLib/optional/handlers/houseobjects.simba}
+  {$I BashLib/optional/handlers/houseobjects.simba}
 {$ENDIF}
 
 type
@@ -458,7 +458,7 @@ Debugs the current player position on the `POH.Map`.
 
 Example:
 ```pascal
-{$I WaspLib/optional/handlers/poh.simba}
+{$I BashLib/optional/handlers/poh.simba}
 begin
   POH.Setup(); //call from the northwest tile of your exit portal.
   while True do

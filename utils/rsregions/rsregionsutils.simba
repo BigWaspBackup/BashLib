@@ -1,6 +1,6 @@
 {$DEFINE WL_RSREGIONS_UTILS_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 type

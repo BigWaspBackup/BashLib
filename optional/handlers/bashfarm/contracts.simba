@@ -1,0 +1,61 @@
+(*!
+  Farming contracts (Phase 2 stubs).
+  Wired into seed selection so Phase 2 can land without API changes.
+
+  Flow (future):
+    1. Talk to Guildmaster Jane at the Farming Guild
+    2. Parse contract text (e.g. plant one Magic tree)
+    3. If journal already has matching crop growing/grown at guild → wait / turn in
+    4. Else override next plant seed for the matching guild patch
+*)
+
+function TBASHFarmContract.GetContract(): Boolean;
+begin
+  // Phase 2: open Guildmaster Jane dialogue and parse contract text.
+  Result := Self.Active and (Self.RequiredSeed <> '');
+end;
+
+function TBASHFarmContract.ApplyContractOverride(patchId: EBASHFarmPatch; defaultSeed: TRSItem): TRSItem;
+begin
+  Result := defaultSeed;
+
+  if not Self.Active then
+    Exit;
+
+  if Self.Satisfied then
+    Exit;
+
+  if Self.AssignedPatch <> patchId then
+    Exit;
+
+  if Self.RequiredSeed = '' then
+    Exit;
+
+  Result := Self.RequiredSeed;
+end;
+
+function TBASHFarmContract.TryTurnIn(): Boolean;
+begin
+  // Phase 2: hand in completed contract to Guildmaster Jane.
+  Result := False;
+end;
+
+procedure TBASHFarmContract.Clear();
+begin
+  Self.Active := False;
+  Self.RawText := '';
+  Self.RequiredSeed := '';
+  Self.RequiredPatchType := EBASHPatchType.HERB;
+  Self.AssignedPatch := EBASHFarmPatch.GUILD_HERB;
+  Self.Satisfied := False;
+end;
+
+procedure TBASHFarmContract.Assign(patchId: EBASHFarmPatch; seed: TRSItem; patchType: EBASHPatchType; raw: String);
+begin
+  Self.Active := True;
+  Self.AssignedPatch := patchId;
+  Self.RequiredSeed := seed;
+  Self.RequiredPatchType := patchType;
+  Self.RawText := raw;
+  Self.Satisfied := False;
+end;

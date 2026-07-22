@@ -6,7 +6,7 @@ This file has methods to fetch information about items, monsters and weapons.
 
 {$DEFINE WL_DATA_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 type

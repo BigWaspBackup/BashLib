@@ -7,7 +7,7 @@ This extends SRL's TRSInventory and related methods.
 
 {$DEFINE WL_INVENTORY_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 const

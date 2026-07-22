@@ -4,8 +4,8 @@ Simple tool to make polygons for TRSWalker.
 *)
 
 {$DEFINE SRL_DISABLE_REMOTEINPUT}
-{$I SRL-T/osr.simba}
-{$I WaspLib/osr.simba}
+{$I SRL-B/osr.simba}
+{$I BashLib/osr.simba}
 {$H-}
 
 const

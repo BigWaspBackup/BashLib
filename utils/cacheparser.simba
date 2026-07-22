@@ -12,7 +12,7 @@ For more information check this file: https://github.com/open-osrs/runelite/blob
 
 {$DEFINE WL_CACHEPARSER_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 (*
@@ -41,7 +41,7 @@ type
 ```pascal
 procedure TRSCacheParser.Setup();
 ```
-Internal method called automatically simply by including WaspLib.
+Internal method called automatically simply by including BashLib.
 *)
 procedure TRSCacheParser.Setup();
 var

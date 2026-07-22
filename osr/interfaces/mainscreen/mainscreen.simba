@@ -5,7 +5,7 @@ Methods to interact with the MainScreen.
 
 {$DEFINE WL_MAINSCREEN_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 (*

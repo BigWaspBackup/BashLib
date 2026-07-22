@@ -5,7 +5,7 @@ Wrapper type with methods to interace with built in Simba http features.
 
 {$DEFINE WL_HTTP_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 (*

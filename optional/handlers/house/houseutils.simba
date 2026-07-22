@@ -5,7 +5,7 @@ The HouseMap is what's responsible for mapping a user's POH (Player owned house)
 
 {$DEFINE WL_HOUSEUTILS_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 type

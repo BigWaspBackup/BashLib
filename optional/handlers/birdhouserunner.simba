@@ -1,12 +1,12 @@
 {$DEFINE CJ_BIRDHOUSE_RUNNER}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 {$IFNDEF ANDREW_MUSHTREE_INCLUDED}
-  {$I WaspLib/optional/interfaces/mainscreen/mushtree.simba}
+  {$I BashLib/optional/interfaces/mainscreen/mushtree.simba}
 {$ENDIF}
 {$IFNDEF SKUNK_UNIVERSAL_TRANSPORT}
-  {$I Includes\WaspLib\optional\handlers\teleports\transport.simba}
+  {$I Includes\BashLib\optional\handlers\teleports\transport.simba}
 {$ENDIF}
 
 {$SCOPEDENUMS ON}
@@ -66,7 +66,7 @@ var
   BHIncludeGUISeed : TRSItem := 'Potato seed';
   BHIncludeGUIRunIntervalMinutes : Int32 := 51;
   BHIncludeGUIUseBestLog : Boolean := false;
-  BHIncludeGUICraftWhileNav : Boolean := false;
+  BHIncludeGUICraftWhileNav : Boolean := false; // unused; kept for script INI compatibility
 
 function TMushroom.GetMushButton() : ERSMushTreeButton;
 begin
@@ -139,10 +139,6 @@ begin
   Result += TRSBankItem.Setup("Chisel", 1, false);
   Result += TRSBankItem.Setup("Hammer", 1, false);
   Result += TRSBankItem.Setup(Self.GetLogString(Self.LogType), 4, false);
-
-  if Self.NeedClockworks then
-    Result += TRSBankItem.Setup("Clockwork", 1, false);
-
   Result += TRSBankItem.Setup(Self.Seed, 40, false);
 end;
 
@@ -180,8 +176,8 @@ var
   i : Int32;
 begin
 
-  if (Inventory.ContainsItem(Self.GetBirdhouseItem(Self.LogType)))
-  or (not Self.NeedClockworks and Inventory.ContainsItem(Self.GetLogString(Self.LogType))) then
+  if Inventory.ContainsItem(Self.GetBirdhouseItem(Self.LogType))
+  or Inventory.ContainsItem(Self.GetLogString(Self.LogType)) then
     Exit(true);
 
   //Can't count seeds while the slot is selected.
@@ -190,10 +186,9 @@ begin
 
   tools := ['Chisel', 'Hammer'];
 
-  if (not Inventory.ContainsItem(Self.GetLogString(Self.LogType))
-  or not Inventory.ContainsItem('Clockwork')) then
+  if not Inventory.ContainsItem(Self.GetLogString(Self.LogType)) then
   begin
-    Self.DebugLn("Missing birdhouse, log, or clockwork");
+    Self.DebugLn("Missing birdhouse or log");
     Exit(false);
   end;
 
@@ -311,25 +306,6 @@ begin
   end;
 end;
 
-procedure OnWalkEvent(Sender: PRSWalker; Position: TPoint; Destination: TPoint);
-begin
-
-  if Sender <> @BirdhouseRunner.RSW then
-    Exit;
-
-  if BirdHouseRunner.HasRunFinished then
-    Exit;
-
-  if not (Inventory.ContainsItem(BirdHouseRunner.GetBirdhouseItem(BirdHouseRunner.LogType)))
-    and (Inventory.ContainsItem("Clockwork")) then
-  begin
-    BirdHouseRunner.BuildBirdHouseItem();
-  end;
-
-  Position := [];
-  Destination := [];
-end;
-
 procedure TBirdHouseInclude.Init();
 var
   VerdValleyShroom, MushMeadowShroom, HouseHillShroom : TMushroom;
@@ -342,7 +318,6 @@ begin
   Self.RSW.SetupRegions([RSRegions.FOSSIL_ISLAND, Self.GetHouseOnHillRegion()]);
   Self.RSW.AdaptiveWalk := true;
   RSW_ADAPTIVE_SCREEN_TOGGLE_DISTANCES := Point(Random(6, 12), Random(6, 12));
-  Self.RSW.OnWalkingEvent := @OnWalkEvent;
   //HideMyInfo();
 
   with HouseHillShroom.Mushroom do
@@ -393,7 +368,6 @@ begin
   Self.DebugLn("Log: " + ToStr(Self.LogType));
   Self.DebugLn("Seed: " + ToStr(Self.Seed));
   Self.DebugLn("UseBestLog? : " + ToStr(Self.AlwaysUseBestLog));
-  Self.DebugLn("Need Clockworks : " + ToStr(Self.NeedClockworks));
   Self.DebugLn("Interval: " + SRL.MsToTime(Self.TaskInterval, TTimeFormat.Time_Formal));
 
   Self.NestsLooted := 0;
@@ -442,6 +416,7 @@ var
   birdhouseATPA : T2DPointArray;
   dismantleTimeout, xpTimeout : TCountDown;
   chatTitle : string;
+  birdHouseItem : TRSItem;
 begin
 
   Self.DebugLn("Moving");
@@ -451,12 +426,8 @@ begin
   WaitUntil(not Minimap.IsPlayerMoving(), 50, 5000);
   Self.DebugLn("Done Moving");
 
-  if Self.NeedClockworks then
-    if not Inventory.ContainsItem(Self.GetBirdhouseItem(Self.LogType)) then
-    begin
-      Self.BuildBirdHouseItem();
-    end;
-
+  // Reset auto-crafts from the returned clockwork + a log, then places the birdhouse.
+  birdHouseItem := Self.GetBirdhouseItem(Self.LogType);
   dismantleTimeout.Init(6000);
 
   while not dismantleTimeout.IsFinished() do
@@ -481,12 +452,12 @@ begin
     end;
 
     Mouse.Click(MOUSE_RIGHT);
-    Self.DebugLn("Dismantling birdhouse");
+    Self.DebugLn("Resetting birdhouse");
 
     if not WaitUntil(ChooseOption.IsOpen, 100, 1200) then
       continue;
 
-    if not ChooseOption.Select(['mpty'], MOUSE_LEFT, false, true) then
+    if not ChooseOption.Select(['eset'], MOUSE_LEFT, false, true) then
       continue;
 
     xpTimeout.Init(8000);
@@ -522,16 +493,21 @@ begin
       Wait(120);
     end;
 
-    Result := WaitUntil(Length(Self.GetBirdHouseSpace()) > 1, 200, 2000);
+    if not WaitUntil(Inventory.ContainsItem(birdHouseItem), 100, 4000) then
+    begin
+      Self.DebugLn("Birdhouse was not crafted after reset");
+      continue;
+    end;
+
+    Result := WaitUntil(not Inventory.ContainsItem(birdHouseItem), 100, 5000);
     if Result then
     begin
-      Self.DebugLn("Cleared this birdhouse");
+      Self.DebugLn("Reset and placed this birdhouse");
       Exit(Result);
     end;
   end;
 end;
 
-//At this point we should have a birdhouse in the inventory that we can use.
 function TBirdHouseInclude.InteractWithBirdHouseSpace() : Boolean;
 var
   birdhouseATPA : T2DPointArray;
@@ -574,7 +550,6 @@ begin
   if BirdSpaceTimeout.IsFinished() then
     Exit(false);
 
-  //If we click the space so we need to make sure we're not moving and we've found our current birdhouse.
   if WaitUntil(not Minimap.IsPlayerMoving()
       and ((Mainscreen.IsUpText(['eeds', 'mpty'])) or (Self.CurrentBirdHouse^.BirdhouseObject.Find(birdhouseATPA))), 75, 8000) then
     Result := true;
@@ -685,23 +660,12 @@ end;
 function TBirdHouseInclude.HandleBirdHouse() : Boolean;
 var
   shouldSkip : Boolean;
+  resetDone : Boolean;
 begin
-  //There's already a birdhouse there and should be ready for dismantling
-  //Find our current birdhouse and interact with it.
-  //Dismantle and return once there's a space.
+  resetDone := Self.DismantleBirdhouse(shouldSkip);
 
-  if Self.DismantleBirdhouse(shouldSkip) then
-  begin
-    Self.DebugLn("Dismantled our current birdhouse " + ToStr(Self.CurrentBirdHouse^.BirdhouseObject));
-    WaitUntil(Length(Self.GetBirdHouseSpace()) > 1, 200, 4000);
-    if not Self.NeedClockworks
-    and WaitUntil(Inventory.ContainsItem("Clockwork"), 10, 2000) then
-    begin
-      Wait(Random(150, 241)); //Prevent 1 ticking the build and the space click
-      if not Self.BuildBirdHouseItem() then
-        Exit;
-    end;
-  end;
+  if resetDone then
+    Self.DebugLn("Reset our current birdhouse " + ToStr(Self.CurrentBirdHouse^.BirdhouseObject));
 
   if shouldSkip then
   begin
@@ -713,10 +677,10 @@ begin
 
   Wait(Random(313, 523));
 
-  //Check for a space and build a birdhouse there.
-  if Self.InteractWithBirdHouseSpace() then
+  if not resetDone then
   begin
-    Self.DebugLn("Built new birdhouse " + ToStr(Self.CurrentBirdHouse^.BirdhouseObject));
+    if Self.InteractWithBirdHouseSpace() then
+      Self.DebugLn("Built new birdhouse " + ToStr(Self.CurrentBirdHouse^.BirdhouseObject));
   end;
 
   Wait(Random(241, 456));
@@ -1294,14 +1258,13 @@ end;
 
 //If you don't use the GUI's TScriptForm.CreateBirdhouseRunSettings
 //Use this to set the values directly.
-procedure TBirdHouseInclude.Setup(log : ERSLogType; seedItem : TRSItem; useBestLog : Boolean = false; interval : UInt32 = (50 * ONE_MINUTE); needClockwork : Boolean = true);
+procedure TBirdHouseInclude.Setup(log : ERSLogType; seedItem : TRSItem; useBestLog : Boolean = false; interval : UInt32 = (50 * ONE_MINUTE));
 begin
   with Self do
   begin
     LogType := log;
     Seed := seedItem;
     AlwaysUseBestLog := useBestLog;
-    NeedClockworks := needClockwork;
     TaskInterval := interval;
   end;
 
@@ -1329,7 +1292,6 @@ function TScriptForm.CreateBirdhouseRunSettings(): TTabSheet;
     checkBox := sender;
     isChecked := checkBox.IsChecked();
     case checkBox.getName() of
-      'bh_extraclockworkcb_checkbox' : BirdHouseRunner.NeedClockworks := isChecked;
       'bh_bestlogcb_checkbox': BirdHouseRunner.AlwaysUseBestLog := isChecked;
     end;
   end;
@@ -1364,7 +1326,7 @@ function TScriptForm.CreateBirdhouseRunSettings(): TTabSheet;
 const
   H_SPACING : Int32 := 50;
 var
-  bestLogCheckBox, needClockworks : TLabeledCheckBox;
+  bestLogCheckBox : TLabeledCheckBox;
   logTypeCombo : TLabeledCombobox;
   nowRadio, laterRadio: TRadioButton;
   intervalLabel : TLabel;
@@ -1410,17 +1372,6 @@ begin
     SetText(ToStr(BirdHouseRunner.Seed));
   end;
 
-  with needClockworks do
-  begin
-    Create(Result);
-    SetName('bh_extraclockworkcb');
-    SetCaption(#13#10 + "Craft birdhouses while navigating?" + #13#10 + "(Requires a clockwork in bank)");
-    SetHeight(needClockworks.GetHeight() + TControl.AdjustToDPI(30));
-    BirdHouseRunner.NeedClockworks := BHIncludeGUICraftWhileNav;
-    SetChecked(BirdHouseRunner.NeedClockworks);
-    CheckBox.setOnChange(@Self._OnCheckBoxChanged);
-  end;
-
   with bestLogCheckBox do
   begin
     Create(Result);
@@ -1432,15 +1383,6 @@ begin
     BirdHouseRunner.AlwaysUseBestLog := BHIncludeGUIUseBestLog;
     SetChecked(BirdHouseRunner.AlwaysUseBestLog);
     CheckBox.setOnChange(@Self._OnCheckBoxChanged);
-  end;
-
-  //The need clockwords requires a larger panel size for the newlines.
-  //So we create it first and lower than the logCheckbox so that we can
-  //draw into the area. If we draw the needClockworks first you can see the panel.
-  with needClockworks do
-  begin
-    SetLeft(bestLogCheckBox.GetLeft());
-    SetTop(bestLogCheckBox.GetBottom() - TControl.AdjustToDPI(9));
   end;
 
   with intervalLabel do

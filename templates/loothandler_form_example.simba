@@ -1,6 +1,6 @@
 {$DEFINE SCRIPT_GUI}
-{$I SRL-T/osr.simba}
-{$I WaspLib/optional.simba}
+{$I SRL-B/osr.simba}
+{$I BashLib/optional.simba}
 
 {$IFDEF SCRIPT_GUI}
 

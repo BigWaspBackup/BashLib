@@ -6,7 +6,7 @@ displays a warning if the subscription is inactive.
 
 {$DEFINE WL_AUTH_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 type TWarningForm = record(TScriptForm)

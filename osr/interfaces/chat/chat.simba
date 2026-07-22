@@ -4,7 +4,7 @@ Extensions to SRL's {ref}`Chat` interface.
 *)
 {$DEFINE WL_CHAT_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 function TRSChat.HasContinue(): Boolean;

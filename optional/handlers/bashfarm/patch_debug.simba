@@ -1,0 +1,375 @@
+(*!
+  BASHFarm patch debugger.
+
+  Stand at/near the patch, set PATCH_ID + action flags below, then run.
+  Toggle the booleans and re-run as needed (no keyboard input required).
+*)
+
+{$I BashLib/osr.simba}
+{$I BashLib/optional/handlers/teleports/transportv2.simba}
+{$I BashLib/optional/handlers/bashfarm/types.simba}
+{$I BashLib/optional/handlers/bashfarm/patchdata.simba}
+{$I BashLib/optional/handlers/bashfarm/journal.simba}
+{$I BashLib/optional/handlers/bashfarm/contracts.simba}
+{$I BashLib/optional/handlers/bashfarm/patch.simba}
+
+const
+  // Change this to the patch you are standing at:
+  PATCH_ID: EBASHFarmPatch = EBASHFarmPatch.HOSIDIUS_ALLOT_S;
+
+  // Toggle what to run this execution:
+  DO_PRINT_POS: Boolean = True;
+  DO_FIND: Boolean = True;
+  DO_WALK_FIND: Boolean = False;
+  DO_HOVER: Boolean = True;
+  DO_FIND_LEP: Boolean = True;
+  DO_HOVER_LEP: Boolean = True;
+  DO_INSPECT: Boolean = False;
+
+  // How many times to repeat enabled actions (1 = once)
+  REPEAT_COUNT: Int32 = 1;
+
+  // Keep overlay drawn at the end (script stays alive until you stop it)
+  KEEP_ALIVE: Boolean = True;
+
+var
+  Patch: TBASHFarmPatch;
+
+procedure SetupPatch();
+var
+  i: Int32;
+begin
+  MM2MS.SetupZoom();
+  WriteLn('MM2MS.ZoomLevel=', MM2MS.ZoomLevel, '  Options zoom=', Options.GetZoomLevel());
+
+  EnsureBASHFarmPatchData();
+
+  Patch.Reset();
+  Patch.Id := PATCH_ID;
+  Patch.Data := BASHFarmPatchData[PATCH_ID];
+
+  case Patch.Data.PatchType of
+    EBASHPatchType.HERB:
+      begin
+        Patch.EmptyUpText := 'Herb';
+        Patch.PlantedUpText := 'Herb';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.FLOWER:
+      begin
+        Patch.EmptyUpText := 'Flower';
+        Patch.PlantedUpText := 'Flower';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.ALLOTMENT:
+      begin
+        Patch.EmptyUpText := 'Allotment';
+        Patch.PlantedUpText := 'Allotment';
+        Patch.HarvestUpText := 'arves';
+      end;
+    EBASHPatchType.TREE:
+      begin
+        Patch.EmptyUpText := 'Tree';
+        Patch.PlantedUpText := 'Tree';
+        Patch.HarvestUpText := 'heck';
+      end;
+    EBASHPatchType.FRUIT:
+      begin
+        Patch.EmptyUpText := 'Fruit';
+        Patch.PlantedUpText := 'Fruit';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.BUSH:
+      begin
+        Patch.EmptyUpText := 'Bush';
+        Patch.PlantedUpText := 'Bush';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.CACTUS:
+      begin
+        Patch.EmptyUpText := 'Cactus';
+        Patch.PlantedUpText := 'Cactus';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.ANIMA:
+      begin
+        Patch.EmptyUpText := 'Anima';
+        Patch.PlantedUpText := 'Anima';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.HOPS:
+      begin
+        Patch.EmptyUpText := 'Hops';
+        Patch.PlantedUpText := 'Hops';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.SEAWEED:
+      begin
+        Patch.EmptyUpText := 'Seaweed';
+        Patch.PlantedUpText := 'Seaweed';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.CORAL:
+      begin
+        Patch.EmptyUpText := 'Coral';
+        Patch.PlantedUpText := 'Coral';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.GRAPE:
+      begin
+        Patch.EmptyUpText := 'Grape';
+        Patch.PlantedUpText := 'Grape';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.MUSHROOM:
+      begin
+        Patch.EmptyUpText := 'Mushroom';
+        Patch.PlantedUpText := 'Mushroom';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.BELLADONNA:
+      begin
+        Patch.EmptyUpText := 'Belladonna';
+        Patch.PlantedUpText := 'Belladonna';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.CALQUAT:
+      begin
+        Patch.EmptyUpText := 'Calquat';
+        Patch.PlantedUpText := 'Calquat';
+        Patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.CRYSTAL:
+      begin
+        Patch.EmptyUpText := 'Crystal';
+        Patch.PlantedUpText := 'Crystal';
+        Patch.HarvestUpText := 'heck';
+      end;
+    EBASHPatchType.CELASTRUS:
+      begin
+        Patch.EmptyUpText := 'Celastrus';
+        Patch.PlantedUpText := 'Celastrus';
+        Patch.HarvestUpText := 'ick';
+      end;
+  end;
+
+  if Length(Patch.Data.Chunks) > 0 then
+    Map.SetupChunks(Patch.Data.Chunks, 8);
+
+  Map.Walker.AdaptiveWalk := True;
+
+  WriteLn('=== BASHFarm patch debug ===');
+  WriteLn('Patch: ', Patch.Data.Name, ' (', ToStr(PATCH_ID), ')');
+  WriteLn('Type:  ', ToStr(Patch.Data.PatchType));
+  WriteLn('Coords:', Patch.Data.Coords);
+  WriteLn('Lep:   ', Patch.Data.LeprechaunCoords);
+  WriteLn('Bin:   ', Patch.Data.CompostBinCoords);
+  WriteLn('Box:   ', Patch.Data.MapCoords);
+  WriteLn('Chunks:', Length(Patch.Data.Chunks));
+  for i := 0 to High(Patch.Data.Chunks) do
+    WriteLn('  chunk[', i, ']=', Patch.Data.Chunks[i].Chunk);
+
+  WriteLn('Flags: POS=', DO_PRINT_POS,
+          ' FIND=', DO_FIND,
+          ' WALK=', DO_WALK_FIND,
+          ' HOVER=', DO_HOVER,
+          ' FIND_LEP=', DO_FIND_LEP,
+          ' HOVER_LEP=', DO_HOVER_LEP,
+          ' INSPECT=', DO_INSPECT);
+end;
+
+procedure PrintPos();
+var
+  me, filterPt, interact: TPoint;
+  tiles: TPointArray;
+begin
+  me := Map.Position();
+  interact := Patch.GetInteractTile();
+  filterPt := Map.GetTileMS(interact).Mean;
+  tiles := Patch.GetOutlineMapTiles();
+
+  WriteLn('--- position ---');
+  WriteLn('Zoom: MM2MS=', MM2MS.ZoomLevel, ' Options=', Options.GetZoomLevel());
+  WriteLn('Map.Position: ', me);
+  WriteLn('In MapCoords: ', me.InBox(Patch.Data.MapCoords));
+  WriteLn('Dist to Coords: ', me.DistanceTo(Patch.Data.Coords));
+  WriteLn('Outline interior tiles: ', Length(tiles));
+  WriteLn('InteractTile (nearest): ', interact, '  dist=', me.DistanceTo(interact));
+  WriteLn('  delta XY from me: ', interact.X - me.X, ', ', interact.Y - me.Y);
+  WriteLn('Tile on MS: ', filterPt, '  onScreen=', filterPt in MainScreen.Bounds);
+  WriteLn('Walker InRange(25): ', Map.Walker.InRange(interact, 25));
+end;
+
+procedure DoFind();
+var
+  t: Double;
+  ok: Boolean;
+begin
+  t := PerformanceTimer;
+  ok := Patch.Find();
+  WriteLn('Find=', ok, '  ms=', Round(PerformanceTimer - t));
+  WriteLn('  SearchBox=', Patch.SearchBox, '  TPA=', Length(Patch.TPA));
+  Patch.DebugDraw();
+end;
+
+procedure DoWalkFind();
+var
+  t: Double;
+  ok: Boolean;
+begin
+  t := PerformanceTimer;
+  ok := Patch.WalkFind();
+  WriteLn('WalkFind=', ok, '  ms=', Round(PerformanceTimer - t));
+  WriteLn('  SearchBox=', Patch.SearchBox, '  TPA=', Length(Patch.TPA));
+  Patch.DebugDraw();
+end;
+
+procedure DoHover();
+var
+  t: Double;
+  ok: Boolean;
+  me, interact, mousePt, aimMS: TPoint;
+begin
+  me := Map.Position();
+  interact := Patch.GetInteractTile();
+  aimMS := Map.GetTileMS(interact).Mean;
+
+  WriteLn('--- hover ---');
+  WriteLn('  before: InteractTile=', interact, '  aimMS=', aimMS);
+
+  t := PerformanceTimer;
+  ok := Patch.Hover();
+  mousePt := Mouse.Position();
+
+  WriteLn('Hover=', ok, '  ms=', Round(PerformanceTimer - t));
+  WriteLn('  UpText="', MainScreen.GetUpText(), '"');
+  WriteLn('  mouseMS=', mousePt, '  dist to aimMS=', mousePt.DistanceTo(aimMS));
+  WriteLn('  mouse vs me map: Interact still=', Patch.GetInteractTile(),
+          '  dist=', me.DistanceTo(Patch.GetInteractTile()));
+  Patch.DebugDraw();
+end;
+
+procedure DoInspect();
+var
+  t: Double;
+  state: EBASHPatchState;
+begin
+  t := PerformanceTimer;
+  state := Patch.Inspect();
+  WriteLn('Inspect=', ToStr(state), '  ms=', Round(PerformanceTimer - t));
+  WriteLn('  UpText="', MainScreen.GetUpText(), '"');
+  Patch.DebugDraw();
+end;
+
+procedure DoFindLep();
+var
+  t: Double;
+  ok: Boolean;
+  lepPoints: TPointArray;
+  me, lepMS: TPoint;
+  i: Int32;
+begin
+  me := Map.Position();
+  lepMS := Map.GetTileMS(Patch.Data.LeprechaunCoords).Mean;
+
+  WriteLn('--- find lep ---');
+  WriteLn('  LepCoords=', Patch.Data.LeprechaunCoords,
+          '  dist=', me.DistanceTo(Patch.Data.LeprechaunCoords));
+  WriteLn('  lepMS=', lepMS, '  onScreen=', lepMS in MainScreen.Bounds);
+  WriteLn('  InRange(25)=', Map.Walker.InRange(Patch.Data.LeprechaunCoords, 25));
+
+  t := PerformanceTimer;
+  ok := Patch.FindLeprechaun(lepPoints);
+  WriteLn('FindLeprechaun=', ok, '  ms=', Round(PerformanceTimer - t));
+  if ok then
+  begin
+    WriteLn('  lepPoints=', Length(lepPoints));
+    for i := 0 to High(lepPoints) do
+      WriteLn('    [', i, ']=', lepPoints[i],
+              '  dist to lepMS=', lepPoints[i].DistanceTo(lepMS));
+  end;
+  Patch.DebugDraw();
+end;
+
+procedure DoHoverLep();
+var
+  t: Double;
+  ok: Boolean;
+  me, lepMS, mousePt, found: TPoint;
+  lepPoints: TPointArray;
+begin
+  me := Map.Position();
+  lepMS := Map.GetTileMS(Patch.Data.LeprechaunCoords).Mean;
+
+  WriteLn('--- hover lep ---');
+  WriteLn('  before: LepCoords=', Patch.Data.LeprechaunCoords, '  lepMS=', lepMS);
+
+  // Resolve aim point first for logging
+  if Patch.FindLeprechaun(lepPoints) and (Length(lepPoints) > 0) then
+    found := lepPoints[0]
+  else
+    found := lepMS;
+
+  t := PerformanceTimer;
+  ok := Patch.HoverLeprechaun();
+  mousePt := Mouse.Position();
+
+  WriteLn('HoverLeprechaun=', ok, '  ms=', Round(PerformanceTimer - t));
+  WriteLn('  UpText="', MainScreen.GetUpText(), '"');
+  WriteLn('  foundMS=', found, '  mouseMS=', mousePt,
+          '  dist=', mousePt.DistanceTo(found));
+  WriteLn('  IsUpText(Lepr)=', MainScreen.IsUpText('Lepr'));
+  Patch.DebugDraw();
+end;
+
+procedure RunActions();
+begin
+  if DO_PRINT_POS then
+    PrintPos();
+
+  if DO_FIND then
+    DoFind();
+
+  if DO_WALK_FIND then
+    DoWalkFind();
+
+  if DO_HOVER then
+    DoHover();
+
+  if DO_FIND_LEP then
+    DoFindLep();
+
+  if DO_HOVER_LEP then
+    DoHoverLep();
+
+  if DO_INSPECT then
+    DoInspect();
+end;
+
+var
+  i: Int32;
+
+begin
+  ClearDebug();
+  SetupPatch();
+
+  for i := 1 to Max(1, REPEAT_COUNT) do
+  begin
+    if REPEAT_COUNT > 1 then
+      WriteLn('--- pass ', i, '/', REPEAT_COUNT, ' ---');
+    RunActions();
+    if i < REPEAT_COUNT then
+      WaitUntil(not Minimap.IsPlayerMoving(), 35, 500);
+  end;
+
+  if KEEP_ALIVE then
+  begin
+    WriteLn('Done. KEEP_ALIVE=True — overlay held. Stop the script when finished.');
+    while True do
+      WaitUntil(not RSClient.IsLoggedIn(), 35, 500);
+  end
+  else
+  begin
+    WriteLn('Done.');
+  end;
+end.

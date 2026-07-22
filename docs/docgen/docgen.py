@@ -8,7 +8,7 @@
 import re
 import os, sys
 
-DOCNAME         = 'WaspLib'
+DOCNAME         = 'BashLib'
 IGNORE_FOLDERS  = ['.git', '.github', 'docgen']
 FILE_EXTENSIONS = ['.simba']
 

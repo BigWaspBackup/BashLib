@@ -5,7 +5,7 @@ Extends SRL's TRSMagic.
 
 {$DEFINE WL_MAGIC_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 (*
@@ -28,7 +28,7 @@ function TRSMagic.CastSpell(spell: ERSSpell): Boolean; override;
 ```
 
 Overrides the existing SRL TRSMagic.CastSpell() for better cast detection with
-the usage of WaspLib's TRSMagic.SpellWasCast().
+the usage of BashLib's TRSMagic.SpellWasCast().
 *)
 function TRSMagic.CastSpell(spell: ERSSpell; option: String = ''): Boolean; override;
 begin

@@ -1,0 +1,231 @@
+{$SCOPEDENUMS ON}
+
+type
+  EBASHFarmPatch = (
+    WEISS_HERB,
+    STRONGHOLD_HERB,
+    ARDOUGNE_HERB,
+    ARDOUGNE_FLOWER,
+    ARDOUGNE_ALLOT_N,
+    ARDOUGNE_ALLOT_S,
+    FALADOR_HERB,
+    FALADOR_FLOWER,
+    FALADOR_ALLOT_N,
+    FALADOR_ALLOT_S,
+    CATHERBY_HERB,
+    CATHERBY_FLOWER,
+    CATHERBY_ALLOT_N,
+    CATHERBY_ALLOT_S,
+    PHASMATYS_HERB,
+    PHASMATYS_FLOWER,
+    PHASMATYS_ALLOT_N,
+    PHASMATYS_ALLOT_S,
+    HOSIDIUS_HERB,
+    HOSIDIUS_FLOWER,
+    HOSIDIUS_ALLOT_N,
+    HOSIDIUS_ALLOT_S,
+    GUILD_HERB,
+    GUILD_FLOWER,
+    GUILD_ALLOT_N,
+    GUILD_ALLOT_S,
+    GUILD_BUSH,
+    GUILD_CACTUS,
+    GUILD_ANIMA,
+    HARMONY_ISLAND_HERB,
+    LUMBRIDGE_TREE,
+    VARROCK_TREE,
+    FALADOR_TREE,
+    TAVERLEY_TREE,
+    GNOME_TREE,
+    GUILD_TREE,
+    GUILD_REDWOOD,
+    GNOME_STRONGHOLD_FRUIT,
+    CATHERBY_FRUIT,
+    GNOME_VILLAGE_FRUIT,
+    BRIMHAVEN_FRUIT,
+    LLETYA_FRUIT,
+    GUILD_FRUIT,
+
+    // --- Stubs (coords TBD; not in GUI yet) ---
+    HARMONY_ISLAND_ALLOT,
+    PRIF_FLOWER,
+    PRIF_ALLOT_N,
+    PRIF_ALLOT_S,
+    ORTUS_HERB,
+    ORTUS_FLOWER,
+    ORTUS_ALLOT_N,
+    ORTUS_ALLOT_S,
+    KASTORI_FLOWER,
+    NEMUS_TREE,
+    KASTORI_FRUIT,
+    LUMBRIDGE_HOPS,
+    MCGRUBORS_HOPS,
+    YANILLE_HOPS,
+    ENTRANA_HOPS,
+    ALDARIN_HOPS,
+    CHAMPIONS_BUSH,
+    RIMMINGTON_BUSH,
+    ARDOUGNE_BUSH,
+    ETCETERIA_BUSH,
+    AL_KHARID_CACTUS,
+    UNDERWATER_SEAWEED_1,
+    UNDERWATER_SEAWEED_2,
+    CORAL_NURSERY_1,
+    CORAL_NURSERY_2,
+    HOSIDIUS_GRAPE_1,
+    HOSIDIUS_GRAPE_2,
+    HOSIDIUS_GRAPE_3,
+    HOSIDIUS_GRAPE_4,
+    HOSIDIUS_GRAPE_5,
+    HOSIDIUS_GRAPE_6,
+    HOSIDIUS_GRAPE_7,
+    HOSIDIUS_GRAPE_8,
+    HOSIDIUS_GRAPE_9,
+    HOSIDIUS_GRAPE_10,
+    HOSIDIUS_GRAPE_11,
+    HOSIDIUS_GRAPE_12,
+    CANIFIS_MUSHROOM,
+    DRAYNOR_BELLADONNA,
+    AUBURNVALE_BELLADONNA,
+    TAI_BWO_CALQUAT,
+    SUMMER_SHORE_CALQUAT,
+    KASTORI_CALQUAT,
+    PRIF_CRYSTAL,
+    GUILD_CELASTRUS
+  );
+
+  EBASHPatchType = (
+    HERB,
+    FLOWER,
+    ALLOTMENT,
+    TREE,
+    FRUIT,
+    BUSH,
+    CACTUS,
+    ANIMA,
+    HOPS,
+    SEAWEED,
+    CORAL,
+    GRAPE,
+    MUSHROOM,
+    BELLADONNA,
+    CALQUAT,
+    CRYSTAL,
+    CELASTRUS
+  );
+
+  EBASHPatchState = (
+    TELEPORT_TO,
+    DEAD,
+    DISEASED,
+    EMPTY,
+    UNCOMPOSTED,
+    GROWING,
+    GROWN,
+    FRESH,
+    OVERGROWN,
+    NEED_CLEAR,
+    NOT_FOUND,
+    NOTE_ITEMS,
+    COMPLETE,
+    SKIP,
+    FAILED
+  );
+
+  EBASHCompostMethod = (
+    REGULAR,
+    SUPER,
+    ULTRA,
+    BOTTOMLESS,
+    FERTILE_SOIL
+  );
+
+  EBASHJournalState = (
+    UNKNOWN,
+    EMPTY,
+    GROWING,
+    DISEASED,
+    DEAD,
+    GROWN
+  );
+
+  TBASHPatchData = record
+    PatchType: EBASHPatchType;
+    BorderColor, SoilColor: TCTS2Color;
+    Coords: TPoint;
+    LeprechaunCoords: TPoint;
+    LeprechaunColor: TCTS2Color;
+    Name: String;
+    MapCoords: TBox;
+    FarmerName: String;
+    FarmerColor: TCTS2Color;
+    Chunks: array of TRSMapChunk;
+    Outline: TPointArray; // polygon (≈6 verts) OR soil tiles (4=herb/flower, >8=allotment)
+    CompostBinCoords: TPoint; // [0,0] = no bin at this site; shared per location when set
+  end;
+
+  TBASHFarmPatch = record
+    Id: EBASHFarmPatch;
+    Data: TBASHPatchData;
+    Travel: TTeleportLocation;
+    Seed: TRSItem;
+    CompostItem: TRSItem;
+    EmptyUpText, PlantedUpText, HarvestUpText: String;
+    TPA: TPointArray;
+    SearchBox: TBox;
+    Harvested, Planted, Composted, Skip, Complete, DontClear: Boolean;
+    UseResurrectCrop, UseFertileSoil, UseCurePlant: Boolean;
+    FailCount: Int32;
+  end;
+
+  TBASHJournalEntry = record
+    PatchId: EBASHFarmPatch;
+    PatchType: EBASHPatchType;
+    PlantedItem: String;
+    PlantedAt: Int32;       // unix seconds
+    ExpectedReadyAt: Int32; // unix seconds
+    LastObservedState: EBASHJournalState;
+    ContractTag: String;
+  end;
+
+  TBASHFarmJournal = record
+    Path: String;
+    Entries: array of TBASHJournalEntry;
+  end;
+
+  TBASHFarmContract = record
+    Active: Boolean;
+    RawText: String;
+    RequiredSeed: TRSItem;
+    RequiredPatchType: EBASHPatchType;
+    AssignedPatch: EBASHFarmPatch;
+    Satisfied: Boolean;
+  end;
+
+const
+  BASH_FARM_GRIMY_HERBS: TRSItemArray = [
+    'Grimy guam leaf', 'Grimy marrentill',
+    'Grimy tarromin', 'Grimy harralander',
+    'Grimy ranarr weed', 'Grimy toadflax',
+    'Grimy irit leaf', 'Grimy avantoe',
+    'Grimy kwuarm', 'Grimy snapdragon',
+    'Grimy cadantine', 'Grimy lantadyme',
+    'Grimy dwarf weed', 'Grimy torstol'
+  ];
+
+  BASH_FARM_LEPRECHAUN_ITEMS: TRSItemArray = [
+    'Guam leaf', 'Marrentill', 'Tarromin', 'Harralander',
+    'Ranarr weed', 'Toadflax', 'Irit leaf', 'Avantoe',
+    'Kwuarm', 'Snapdragon', 'Cadantine', 'Lantadyme',
+    'Dwarf weed', 'Torstol', 'Limpwurt root', 'Snape grass',
+    'Cooking apple', 'Banana', 'Orange', 'Curry leaf',
+    'Pineapple', 'Papaya fruit', 'Dragonfruit', 'Coconut',
+    'Weeds',
+    'Grimy guam leaf', 'Grimy marrentill',
+    'Grimy tarromin', 'Grimy harralander',
+    'Grimy ranarr weed', 'Grimy toadflax',
+    'Grimy irit leaf', 'Grimy avantoe',
+    'Grimy kwuarm', 'Grimy snapdragon',
+    'Grimy cadantine', 'Grimy lantadyme',
+    'Grimy dwarf weed', 'Grimy torstol'
+  ];

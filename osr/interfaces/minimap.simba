@@ -5,7 +5,7 @@ Methods to handle Minimap. Extends SRL's Minimap.
 
 {$DEFINE WL_MINIMAP_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 function TRSMinimap.PercentBlack(): Integer;

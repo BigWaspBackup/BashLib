@@ -5,7 +5,7 @@ The POH Map is what's responsible for mapping a user's POH.
 
 {$DEFINE WL_POHMAP_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 type
@@ -117,7 +117,7 @@ This box is a box of the following image:
 
 Example:
 ```pascal
-{$I WaspLib/optional/handlers/poh.simba}
+{$I BashLib/optional/handlers/poh.simba}
 begin
   WriteLn POH.Map.GetRoomBitmapBox(ERSHouseRoom.SUPERIOR_GARDEN);
 end;
@@ -140,7 +140,7 @@ Internal method used to retrieve a bitmap of the {ref}`ERSHouseRoom` you pass in
 
 Example:
 ```pascal
-{$I WaspLib/optional/handlers/poh.simba}
+{$I BashLib/optional/handlers/poh.simba}
 var
   bmp: TMufasaBitmap;
 begin
@@ -178,7 +178,7 @@ It's also a static method and can be called directly from the type.
 
 Example:
 ```pascal
-{$I WaspLib/optional/handlers/poh.simba}
+{$I BashLib/optional/handlers/poh.simba}
 var
   bmp: TMufasaBitmap;
 begin
@@ -421,7 +421,7 @@ Helper method that returns the the position of the minimapBMP in the `TPOHMap.Ma
 
 Example:
 ```pascal
-{$I WaspLib/optional/handlers/poh.simba}
+{$I BashLib/optional/handlers/poh.simba}
 var
   minimapBMP: TMufasaBitmap;
 begin

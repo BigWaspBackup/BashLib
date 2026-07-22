@@ -5,7 +5,7 @@ Methods to interact with the mouse.
 
 {$DEFINE WL_MOUSE_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 (*

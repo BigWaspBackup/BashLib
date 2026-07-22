@@ -5,7 +5,7 @@ TPoint related methods that extend SRL's TPoint functionality.
 
 {$DEFINE WL_TPOINT_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 function TPoint.Between(a, b: TPoint; forceLine: Boolean = False): Boolean;

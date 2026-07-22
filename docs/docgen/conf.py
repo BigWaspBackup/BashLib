@@ -19,8 +19,8 @@
 
 # -- Project information -----------------------------------------------------
 
-project = u'WaspLib'
-description = u'Wasplib is Simba library that extends SRL-T and allows to write powerful scripts fast.'
+project = u'BashLib'
+description = u'Wasplib is Simba library that extends SRL-B and allows to write powerful scripts fast.'
 copyright = u'2021, WaspScripts'
 author = u'Torwent'
 
@@ -161,7 +161,7 @@ texinfo_documents = [(master_doc, project, project+' Documentation', author, pro
 
 
 # -- Extension configuration -------------------------------------------------
-intersphinx_mapping = {'SRL-T': ('https://torwent.github.io/SRL-T', None)}
+intersphinx_mapping = {'SRL-B': ('https://torwent.github.io/SRL-B', None)}
 intersphinx_disabled_reftypes = ["*"]
 
 myst_enable_extensions = [

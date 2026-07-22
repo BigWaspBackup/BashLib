@@ -4,7 +4,7 @@ Lectern interface.
 *)
 {$DEFINE WL_LECTERN_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 type

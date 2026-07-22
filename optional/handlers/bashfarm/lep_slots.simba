@@ -1,0 +1,241 @@
+(*!
+  Shared Amazing Farming Equipment Store slot grid helpers.
+  Steel corners → uniform button boxes (store 4x3, invent 2x6).
+*)
+
+const
+  BASH_LEP_COORD_TOL = 10;
+  BASH_LEP_MIN_BW = 45;
+  BASH_LEP_MAX_BW = 130;
+  BASH_LEP_MIN_BH = 22;
+  BASH_LEP_MAX_BH = 80;
+  BASH_LEP_ALIGN = 14;
+
+function BASHLepMedianInt(Values: TIntegerArray): Int32;
+var
+  S: TIntegerArray;
+  N, I: Int32;
+begin
+  N := Length(Values);
+  if N = 0 then
+    Exit(0);
+  SetLength(S, N);
+  for I := 0 to N - 1 do
+    S[I] := Values[I];
+  Sort(S);
+  if (N mod 2) = 1 then
+    Exit(S[N div 2]);
+  Result := (S[N div 2 - 1] + S[N div 2]) div 2;
+end;
+
+function BASHLepClusterCoords(Values: TIntegerArray; Tol: Int32): TIntegerArray;
+var
+  S: TIntegerArray;
+  I, Sum, Count: Int32;
+begin
+  SetLength(Result, 0);
+  if Length(Values) = 0 then
+    Exit;
+
+  SetLength(S, Length(Values));
+  for I := 0 to High(Values) do
+    S[I] := Values[I];
+  Sort(S);
+
+  Sum := S[0];
+  Count := 1;
+  for I := 1 to High(S) do
+  begin
+    if Abs(S[I] - S[I - 1]) <= Tol then
+    begin
+      Sum := Sum + S[I];
+      Count := Count + 1;
+    end
+    else
+    begin
+      Result += Sum div Count;
+      Sum := S[I];
+      Count := 1;
+    end;
+  end;
+  Result += Sum div Count;
+end;
+
+function BASHLepFindRight(C: TPoint; Corners: TPointArray): Int32;
+var
+  J, Dist, BestDist: Int32;
+  P: TPoint;
+begin
+  Result := -1;
+  BestDist := BASH_LEP_MAX_BW + 1;
+  for J := 0 to High(Corners) do
+  begin
+    P := Corners[J];
+    if Abs(P.Y - C.Y) > BASH_LEP_ALIGN then
+      Continue;
+    Dist := P.X - C.X;
+    if (Dist < BASH_LEP_MIN_BW) or (Dist > BASH_LEP_MAX_BW) then
+      Continue;
+    if Dist < BestDist then
+    begin
+      BestDist := Dist;
+      Result := J;
+    end;
+  end;
+end;
+
+function BASHLepFindBelow(C: TPoint; Corners: TPointArray): Int32;
+var
+  J, Dist, BestDist: Int32;
+  P: TPoint;
+begin
+  Result := -1;
+  BestDist := BASH_LEP_MAX_BH + 1;
+  for J := 0 to High(Corners) do
+  begin
+    P := Corners[J];
+    if Abs(P.X - C.X) > BASH_LEP_ALIGN then
+      Continue;
+    Dist := P.Y - C.Y;
+    if (Dist < BASH_LEP_MIN_BH) or (Dist > BASH_LEP_MAX_BH) then
+      Continue;
+    if Dist < BestDist then
+    begin
+      BestDist := Dist;
+      Result := J;
+    end;
+  end;
+end;
+
+// Steel corner centers → uniform Cols×Rows button boxes.
+function BASHLepFitGrid(Corners: TPointArray; Cols, Rows: Int32): TBoxArray;
+var
+  I, J, R, C, Ox, Oy, PitchX, PitchY, BtnW, BtnH, Gap: Int32;
+  AllXs, AllYs, Lefts, Tops, PitchXs, PitchYs, Widths, Heights: TIntegerArray;
+  TL: TPoint;
+  RI, DI: Int32;
+begin
+  SetLength(Result, 0);
+  if Length(Corners) < 4 then
+    Exit;
+
+  SetLength(AllXs, 0);
+  SetLength(AllYs, 0);
+  SetLength(Widths, 0);
+  SetLength(Heights, 0);
+  SetLength(Lefts, 0);
+  SetLength(Tops, 0);
+  SetLength(PitchXs, 0);
+  SetLength(PitchYs, 0);
+
+  for I := 0 to High(Corners) do
+  begin
+    AllXs += Corners[I].X;
+    AllYs += Corners[I].Y;
+  end;
+  AllXs := BASHLepClusterCoords(AllXs, BASH_LEP_COORD_TOL);
+  AllYs := BASHLepClusterCoords(AllYs, BASH_LEP_COORD_TOL);
+
+  for I := 0 to High(Corners) do
+  begin
+    TL := Corners[I];
+    if TL.Y < 40 then
+      Continue;
+    RI := BASHLepFindRight(TL, Corners);
+    DI := BASHLepFindBelow(TL, Corners);
+    if (RI < 0) or (DI < 0) then
+      Continue;
+    Widths += Corners[RI].X - TL.X;
+    Heights += Corners[DI].Y - TL.Y;
+  end;
+
+  if Length(Widths) = 0 then
+    Exit;
+
+  BtnW := BASHLepMedianInt(Widths);
+  BtnH := BASHLepMedianInt(Heights);
+
+  for I := 0 to High(AllXs) do
+    for J := 0 to High(AllXs) do
+      if Abs(AllXs[J] - AllXs[I] - BtnW) <= 12 then
+        Lefts += AllXs[I];
+  Lefts := BASHLepClusterCoords(Lefts, BASH_LEP_COORD_TOL);
+
+  for I := 0 to High(AllYs) do
+  begin
+    if AllYs[I] < 40 then
+      Continue;
+    for J := 0 to High(AllYs) do
+      if Abs(AllYs[J] - AllYs[I] - BtnH) <= 12 then
+        Tops += AllYs[I];
+  end;
+  Tops := BASHLepClusterCoords(Tops, BASH_LEP_COORD_TOL);
+
+  if (Length(Lefts) = 0) or (Length(Tops) = 0) then
+    Exit;
+
+  Ox := Lefts[0];
+  Oy := Tops[0];
+
+  for I := 0 to High(Lefts) - 1 do
+  begin
+    Gap := Lefts[I + 1] - Lefts[I];
+    if Gap >= (BtnW * 8 div 10) then
+      PitchXs += Gap;
+  end;
+  for I := 0 to High(Tops) - 1 do
+  begin
+    Gap := Tops[I + 1] - Tops[I];
+    if Gap >= (BtnH * 8 div 10) then
+      PitchYs += Gap;
+  end;
+
+  if Length(PitchXs) > 0 then
+    PitchX := BASHLepMedianInt(PitchXs)
+  else if Length(Lefts) >= 2 then
+    PitchX := Lefts[1] - Lefts[0]
+  else
+    PitchX := BtnW + 4;
+
+  if Length(PitchYs) > 0 then
+    PitchY := BASHLepMedianInt(PitchYs)
+  else if Length(Tops) >= 2 then
+    PitchY := Tops[1] - Tops[0]
+  else
+    PitchY := BtnH + 4;
+
+  SetLength(Result, Cols * Rows);
+  for R := 0 to Rows - 1 do
+    for C := 0 to Cols - 1 do
+      Result[R * Cols + C] := [
+        Ox + C * PitchX,
+        Oy + R * PitchY,
+        Ox + C * PitchX + BtnW,
+        Oy + R * PitchY + BtnH
+      ];
+end;
+
+function BASHLepSteelCorners(Search: TBox): TPointArray;
+var
+  TPA: TPointArray;
+  ATPA: T2DPointArray;
+  Cluster: TPointArray;
+  B: TBox;
+  W, H: Int32;
+begin
+  SetLength(Result, 0);
+  if SRL.FindColors(TPA, CTS2(7632003, 13, 1.33, 0.05), Search) < 1 then
+    Exit;
+
+  ATPA := TPA.Cluster(3);
+  for Cluster in ATPA do
+  begin
+    if Length(Cluster) < 2 then
+      Continue;
+    B := Cluster.Bounds();
+    B.GetDimensions(W, H);
+    if (W > 40) or (H > 40) then
+      Continue;
+    Result += B.Center();
+  end;
+end;

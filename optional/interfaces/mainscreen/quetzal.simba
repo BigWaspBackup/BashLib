@@ -1,0 +1,392 @@
+(*!
+Quetzal Transport System interface handler. 
+Credits to n0ll/aether may he RIP, My libs can do whatever they want so bloat they go brrrrrrrr
+
+Example:
+```pascal
+{$I BashLib/optional/interfaces/mainscreen/quetzal.simba}
+
+// Whistle
+if Inventory.ClickItem(whistle, 'Signal') and Quetzal.IsOpen(1500) then
+  Quetzal.Travel(EQuetzalLanding.HUNTER_GUILD);
+
+// Or Renu at Civitas (GemStone object setup)
+Quetzal.TravelFromRenu(EQuetzalLanding.HUNTER_GUILD);
+```
+*)
+
+{$IFNDEF WL_QUETZAL_INCLUDED}
+{$DEFINE WL_QUETZAL_INCLUDED}
+
+{$IFNDEF WL_OSR}
+  {$I BashLib/osr.simba}
+{$ENDIF}
+
+type
+  EQuetzalLanding = (
+    ALDARIN,
+    AUBURNVALE,
+    CIVITAS_ILLA_FORTIS,
+    HUNTER_GUILD,
+    THE_TEOMAT,
+    QUETZACALLI_GORGE,
+    SUNSET_COAST,
+    TAL_TEKLAN,
+    CAM_TORUM_ENTRANCE,
+    OUTER_FORTIS,
+    KASTORI,
+    COLOSSAL_WYRM_REMAINS,
+    FORTIS_COLOSSEUM,
+    SALVAGER_OVERLOOK,
+    CLOSE
+  );
+
+  TQuetzalButton = record
+    UpText: String;
+    Offset: TPoint;
+  end;
+
+  TQuetzal = record
+    Buttons: array[EQuetzalLanding] of TQuetzalButton;
+    AUTOBUILT: set of EQuetzalLanding;
+    LOCK_COLOR: TCTS2Color;
+    DTM: Int32;
+    LastDestination: EQuetzalLanding;
+    Renu: TRSNPCV2; // Civitas illa Fortis landing bird (GemStone coords)
+  end;
+
+const
+  QUETZAL_WHISTLES: TRSItemArray = [
+    'Perfected quetzal whistle(i)',
+    'Perfected quetzal whistle',
+    'Enhanced quetzal whistle',
+    'Basic quetzal whistle'
+  ];
+
+procedure _QuetzalSetButton(var btn: TQuetzalButton; upText: String; x, y: Int32);
+begin
+  btn.UpText := upText;
+  btn.Offset.X := x;
+  btn.Offset.Y := y;
+end;
+
+function TQuetzal.FindAnchor(out x, y: Int32): Boolean;
+begin
+  Result := FindDTM(Self.DTM, x, y, MainScreen.Bounds);
+end;
+
+function TQuetzal.ButtonBox(Site: EQuetzalLanding; AnchorX, AnchorY: Int32): TBox;
+var
+  Pt: TPoint;
+begin
+  Pt := Point(
+    AnchorX + Self.Buttons[Site].Offset.X,
+    AnchorY + Self.Buttons[Site].Offset.Y
+  );
+  Result := Box(Pt, 16, 16);
+end;
+
+function TQuetzal.IsOpen(): Boolean;
+var
+  x, y: Int32;
+  {$IFDEF DEBUG_QUETZAL}
+  Site: EQuetzalLanding;
+  Pt: TPoint;
+  {$ENDIF}
+begin
+  Result := Self.FindAnchor(x, y);
+  {$IFDEF DEBUG_QUETZAL}
+  if Result then
+    for Site := Low(EQuetzalLanding) to High(EQuetzalLanding) do
+    begin
+      Pt := Point(x + Self.Buttons[Site].Offset.X, y + Self.Buttons[Site].Offset.Y);
+      RSClient.Image.DrawCross(Pt, 6, clFuchsia);
+      RSClient.Image.DrawText(Self.Buttons[Site].UpText, Pt, clFuchsia);
+    end;
+  {$ENDIF}
+end;
+
+function TQuetzal.IsOpen(waitTime: Int32): Boolean; overload;
+begin
+  Result := WaitUntil(Self.IsOpen(), 35, waitTime);
+end;
+
+function TQuetzal.IsUnlocked(Site: EQuetzalLanding; AnchorX, AnchorY: Int32): Boolean;
+begin
+  if Site in Self.AUTOBUILT then
+    Exit(True);
+
+  Result := SRL.CountColor(Self.LOCK_COLOR, Self.ButtonBox(Site, AnchorX, AnchorY)) = 0;
+end;
+
+function TQuetzal.IsUnlocked(Site: EQuetzalLanding): Boolean; overload;
+var
+  x, y: Int32;
+begin
+  if not Self.FindAnchor(x, y) then
+    Exit(False);
+  Result := Self.IsUnlocked(Site, x, y);
+end;
+
+(*!
+  Wait for Quetzal teleport: fade to black, then fade back.
+  `timeout` is for the return from black (default 8s).
+*)
+function TQuetzal.WaitArrived(timeout: Int32 = 8000): Boolean;
+begin
+  // Teleport blackscreen first — don't treat "already clear" as arrived
+  WaitUntil(Minimap.PercentBlack() >= 50, 35, 3000);
+
+  Result := WaitUntil(Minimap.PercentBlack() < 25, 35, timeout);
+end;
+
+(*!
+  Click a landing site on the open Quetzal map.
+  Returns True once the interface closes (and optionally after the teleport blackscreen).
+*)
+function TQuetzal.Travel(Destination: EQuetzalLanding; waitArrive: Boolean = True): Boolean;
+var
+  Bounds: TBox;
+  x, y: Int32;
+  Pt: TPoint;
+begin
+  Result := False;
+
+  if not Self.FindAnchor(x, y) then
+    Exit(False);
+
+  // CLOSE is always available — skip lock check
+  if (Destination <> EQuetzalLanding.CLOSE) and (not Self.IsUnlocked(Destination, x, y)) then
+  begin
+    WriteLn('[Quetzal] Landing locked: ', ToStr(Destination));
+    Exit(False);
+  end;
+
+  Pt := Point(
+    x + Self.Buttons[Destination].Offset.X,
+    y + Self.Buttons[Destination].Offset.Y
+  );
+  Bounds := Box(Pt, 16, 16);
+  Mouse.HumanMove(SRL.ROWP(Pt, Bounds));
+
+  if not MainScreen.IsUpText(Self.Buttons[Destination].UpText, 250) then
+    Exit(False);
+
+  Mouse.Click(MOUSE_LEFT);
+
+  if not WaitUntil(not Self.IsOpen(), 35, 1500) then
+    Exit(False);
+
+  if Destination = EQuetzalLanding.CLOSE then
+    Exit(True);
+
+  Self.LastDestination := Destination;
+
+  if waitArrive then
+    Result := Self.WaitArrived()
+  else
+    Result := True;
+end;
+
+function TQuetzal.Close(PressEscape: Boolean = True): Boolean;
+begin
+  if not Self.IsOpen() then
+    Exit(True);
+
+  if PressEscape then
+  begin
+    Keyboard.PressKey(VK_ESCAPE);
+    Result := WaitUntil(not Self.IsOpen(), 35, 1500);
+  end
+  else
+    Result := Self.Travel(EQuetzalLanding.CLOSE, False);
+end;
+
+(*!
+  Open the Quetzal map from an inventory whistle and travel.
+  Tries Last-destination first when `preferLast` and LastDestination matches.
+*)
+function TQuetzal.TravelFromWhistle(
+  Destination: EQuetzalLanding;
+  preferLast: Boolean = True
+): Boolean;
+var
+  item: TRSItem;
+begin
+  Result := False;
+
+  for item in QUETZAL_WHISTLES do
+  begin
+    if not Inventory.ContainsItem(item) then
+      Continue;
+
+    if preferLast and
+       (Self.LastDestination = Destination) and
+       Inventory.ClickItem(item, 'Signal') then
+    begin
+      WaitUntil(ChooseOption.IsOpen(), 35, 400);
+      if ChooseOption.Select('Last-destination') then
+      begin
+        Result := Self.WaitArrived();
+        if Result then
+          Exit;
+      end;
+    end;
+
+    if not Inventory.ClickItem(item, 'Signal') then
+      Continue;
+
+    if not Self.IsOpen(8000) then
+      Continue;
+
+    Result := Self.Travel(Destination);
+    if Result then
+      Exit;
+  end;
+end;
+
+(*!
+  Renu at Civitas
+  WalkerV2 NPC at [2692, 37862], color CTS2(9809513, 14, 0.16, 1.68).
+*)
+procedure TQuetzal.EnsureRenu();
+begin
+  Self.Renu.Walker := @Map.Walker;
+
+  if Self.Renu.Name = 'Renu' then
+    Exit;
+
+  Self.Renu.Name := 'Renu';
+  Self.Renu.Finder.Colors := [CTS2(9809513, 14, 0.16, 1.68)];
+  Self.Renu.SetupEx([4], [3, 3, 4], [[2692, 37862]]);
+  Self.Renu.SetupUpText(['Travel', 'Renu']);
+  Self.Renu.Filter.Minimap := True;
+  Self.Renu.DotType := ERSMinimapDot.NPC;
+end;
+
+(*!
+  Walk to Renu (Civitas), open the Quetzal map, travel to Destination.
+*)
+function TQuetzal.TravelFromRenu(
+  Destination: EQuetzalLanding;
+  preferLast: Boolean = True;
+  attempts: Int32 = 4
+): Boolean;
+var
+  i: Int32;
+begin
+  Result := False;
+  Self.EnsureRenu();
+
+  for i := 1 to attempts do
+  begin
+    WriteLn('[Quetzal] Renu → ', ToStr(Destination), ' (attempt ', i, '/', attempts, ')');
+
+    if preferLast and (Self.LastDestination = Destination) then
+    begin
+      if Self.Renu.WalkSelectOption(['Last-destination'], 2) then
+      begin
+        Result := Self.WaitArrived();
+        if Result then
+          Exit;
+      end;
+    end;
+
+    if Self.IsOpen() then
+    begin
+      Result := Self.Travel(Destination);
+      if Result then
+        Exit;
+    end;
+
+    if Self.Renu.WalkSelectOption(['Travel'], 3) then
+    begin
+      if Self.IsOpen(10000) then
+      begin
+        Result := Self.Travel(Destination);
+        if Result then
+          Exit;
+      end
+      else
+        WriteLn('[Quetzal] Renu clicked — Quetzal UI did not open');
+    end
+    else if Self.Renu.WalkClick() then
+    begin
+      // Left-click fallback (uptext Travel)
+      if Self.IsOpen(10000) then
+      begin
+        Result := Self.Travel(Destination);
+        if Result then
+          Exit;
+      end;
+    end
+    else
+      WriteLn('[Quetzal] Failed to click Renu');
+
+    WaitUntil(Self.IsOpen(), 35, 1200);
+  end;
+end;
+
+var
+  Quetzal: TQuetzal;
+
+procedure TQuetzal.Free();
+begin
+  if Self.DTM > 0 then
+  begin
+    FreeDTM(Self.DTM);
+    Self.DTM := 0;
+  end;
+end;
+
+procedure TQuetzal.Setup();
+begin
+  if Self.DTM > 0 then
+  begin
+    Self.EnsureRenu();
+    Exit;
+  end;
+
+  Self.DTM := DTMFromString(
+    'mwQAAAHic42RgYOhgZGBoAOJOIO4H4olA3AfE7UDcCMTNQOzOAMHWQGwPxG5AHADEgUDsDxXrmjCZITbMES8mBjASgeEAAE55ELA='
+  );
+
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.ALDARIN], 'ldari', -171, 188);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.AUBURNVALE], 'burnva', -180, 14);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.CIVITAS_ILLA_FORTIS], 'ivitas', -22, 104);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.HUNTER_GUILD], 'unter', -84, 119);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.THE_TEOMAT], 'eomat', -165, 77);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.QUETZACALLI_GORGE], 'etzac', -108, 53);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.SUNSET_COAST], 'unset', -99, 161);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.TAL_TEKLAN], 'eklan', -261, 107);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.CAM_TORUM_ENTRANCE], 'orum', -153, 107);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.OUTER_FORTIS], 'uter', -39, 149);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.KASTORI], 'stori', -207, 137);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.COLOSSAL_WYRM_REMAINS], 'emain', -42, 194);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.FORTIS_COLOSSEUM], 'olosseu', 39, 125);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.SALVAGER_OVERLOOK], 'alvage', -42, 50);
+  _QuetzalSetButton(Self.Buttons[EQuetzalLanding.CLOSE], 'lose', 104, -29);
+
+  Self.AUTOBUILT := [
+    EQuetzalLanding.ALDARIN,
+    EQuetzalLanding.AUBURNVALE,
+    EQuetzalLanding.CIVITAS_ILLA_FORTIS,
+    EQuetzalLanding.HUNTER_GUILD,
+    EQuetzalLanding.THE_TEOMAT,
+    EQuetzalLanding.QUETZACALLI_GORGE,
+    EQuetzalLanding.SUNSET_COAST,
+    EQuetzalLanding.TAL_TEKLAN
+  ];
+  Self.LOCK_COLOR := CTS2(1813935, 1, 0.01, 0.01);
+  Self.LastDestination := EQuetzalLanding.CLOSE;
+  Self.EnsureRenu();
+  AddOnTerminate(@Quetzal.Free);
+end;
+
+procedure TSRL.Setup(); override;
+begin
+  inherited;
+  Quetzal.Setup();
+end;
+
+{$ENDIF}

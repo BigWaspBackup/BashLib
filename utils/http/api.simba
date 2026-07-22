@@ -5,7 +5,7 @@ Methods related to wasp-api.
 
 {$DEFINE WL_API_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 (*
@@ -516,7 +516,7 @@ Retrieves the latest version of the package specified from https://api.waspscrip
 
 Example:
 ```pascal
-WriteLn APIClient.GetVersion('srl-t');
+WriteLn APIClient.GetVersion('srl-b');
 WriteLn APIClient.GetVersion('wasplib');
 ```
 *)
@@ -540,7 +540,7 @@ end;
 ```pascal
 function TAPIClient.GetAllVersions(script_id: String; out revision, srltVersion, wlVersion: String; verbose: Boolean = False): String;
 ```
-Retrieves the latest script revison of **script_id** and the latest SRL-T and WaspLib versions https://api.waspscripts.com.
+Retrieves the latest script revison of **script_id** and the latest SRL-B and BashLib versions https://api.waspscripts.com.
 *)
 function TAPIClient.GetAllVersions(script_id: String; out revision, srltVersion, wlVersion: String; verbose: Boolean = False): String;
 var

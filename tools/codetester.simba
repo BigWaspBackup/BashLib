@@ -6,8 +6,8 @@ Add your method or methods to the Benchmark() method or Compare method() and
 make sure the one you don't want is commented out in Run().
 *)
 
-{$I SRL-T/osr.simba}
-{$I WaspLib/osr.simba}
+{$I SRL-B/osr.simba}
+{$I BashLib/osr.simba}
 
 begin
   Login.PlayerIndex  := 0;

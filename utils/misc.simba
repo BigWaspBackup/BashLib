@@ -1,11 +1,11 @@
 (*
 # Misc
-This file has miscellaneous WaspLib methods.
+This file has miscellaneous BashLib methods.
 *)
 
 {$DEFINE WL_MISC_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 (*

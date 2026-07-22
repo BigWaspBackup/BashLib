@@ -14,13 +14,13 @@ TRSWalkerObjects are very customizable and can be used to interact with almost e
 For some niche use cases it might be worth do something custom or override some methods to get the behavior you want.
 
 The default way they work is:
-- WaspLib checks if you are in the TRSWalkerObject.Coordinates range.
+- BashLib checks if you are in the TRSWalkerObject.Coordinates range.
   If not and you used one of the **Walk** methods, it will walk to that location.
 - Being in the TRSWalkerObject location, then we check if our TRSWalkerObject is a TRSObject or a TRSMMDot.
   for a TRSObject we stick with the TRSWalkerObject.Coordinates, for TRSMMDots, the coordinates are changed to the minimap dots that within the radius specified when the TRSWalkerObject was setup.
-- WaspLib then convert the coordinate along with the TRSWalkerObject.ShapeArray information to a TCuboidArray on the mainscreen (https://en.wikipedia.org/wiki/Cuboid).
+- BashLib then convert the coordinate along with the TRSWalkerObject.ShapeArray information to a TCuboidArray on the mainscreen (https://en.wikipedia.org/wiki/Cuboid).
 - This TCuboidArray is the "bounds" of our targets. Each one should accurately surround each of our possible targets.
-- Then WaspLib runs MainScreen.FindObject() inside of each TCuboid. For more info on how this works read the TRSObjectFinder documentation (https://torwent.github.io/SRL-T/mainscreen.html#type-trsobjectfinder).
+- Then BashLib runs MainScreen.FindObject() inside of each TCuboid. For more info on how this works read the TRSObjectFinder documentation (https://torwent.github.io/SRL-B/mainscreen.html#type-trsobjectfinder).
 - An ATPA of the found colors inside each cuboid is then returned.
 - If the method used is related to hovering or clicking, we hover the closest target and then check if TRSWalkerObject.UpText matches the uptext.
 - If it does and we are using a clicking method, we click it.
@@ -41,7 +41,7 @@ You cannot disable Filter.Walker, Filter.MinimapDot, Filter.Finder all at the sa
 *)
 {$DEFINE WL_WALKEROBJECT_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 const

@@ -4,7 +4,7 @@ This file contains types and arrays of consumable items that can be used as is o
 *)
 {$DEFINE WL_CONSUMABLES_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 type

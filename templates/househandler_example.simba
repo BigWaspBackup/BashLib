@@ -1,16 +1,16 @@
 (*
 ====================================================================================
 A lot of things are missing colors, uptext and coordinates. feel free to contribute:
-Simba/Includes/WaspLib/optional/handlers/house/houseutils.simba
+Simba/Includes/BashLib/optional/handlers/house/houseutils.simba
 there's some basic instructions on the file.
 ====================================================================================
 *)
 
 {.$DEFINE SRL_DISABLE_REMOTEINPUT}
 {$DEFINE SCRIPT_GUI}
-{$I SRL-T/osr.simba}
-{$I WaspLib/osr.simba}
-{$I WaspLib/optional/handlers/house/house.simba}
+{$I SRL-B/osr.simba}
+{$I BashLib/osr.simba}
+{$I BashLib/optional/handlers/house/house.simba}
 
 {$IFDEF SCRIPT_GUI}
 
@@ -82,7 +82,7 @@ begin
   (*
   ====================================================================================
   A lot of things are missing colors, uptext and coordinates. feel free to contribute:
-  Simba/Includes/WaspLib/optional/handlers/house/houseutils.simba
+  Simba/Includes/BashLib/optional/handlers/house/houseutils.simba
   there's some basic instructions on the file.
   ====================================================================================
   *)

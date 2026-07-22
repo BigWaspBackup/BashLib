@@ -1,0 +1,1349 @@
+{$DEFINE BASH_FARM_RUNNER}
+
+{$IFNDEF WL_OSR}
+  {$I BashLib/osr.simba}
+{$ENDIF}
+{$IFNDEF SKUNK_UNIVERSAL_TRANSPORTV2}
+  {$I BashLib/optional/handlers/teleports/transportv2.simba}
+{$ENDIF}
+{$IFNDEF WL_QUETZAL_INCLUDED}
+  {$I BashLib/optional/interfaces/mainscreen/quetzal.simba}
+{$ENDIF}
+
+{$I BashLib/optional/handlers/bashfarm/types.simba}
+{$I BashLib/optional/handlers/bashfarm/patchdata.simba}
+{$I BashLib/optional/handlers/bashfarm/journal.simba}
+{$I BashLib/optional/handlers/bashfarm/contracts.simba}
+{$I BashLib/optional/handlers/bashfarm/patch.simba}
+{$I BashLib/optional/handlers/bashfarm/config.simba}
+{$I BashLib/optional/handlers/bashfarm/travel.simba}
+
+(*!
+  BASHFarmRunner — WalkerV2 farm runner for BashLib.
+
+  Host integration:
+  ```pascal
+  {$I BashLib/optional/handlers/bashfarm/bashfarmrunner.simba}
+
+  var Form: TBASHFarmGUI;
+
+  procedure TBASHFarmGUI.StartScript(sender: TObject); override;
+  begin
+    Self.ApplySettings(); // INI + BASHFarmRunner.BuildFromConfig
+    BASHFarmRunner.Init();
+    inherited; // closes GUI
+  end;
+
+  function TBASHFarmRunner.OnStart(): Boolean; override;
+  begin
+    if not Bank.IsOpen() then
+      Banks.WalkOpen();
+    Bank.DepositAll();
+    Result := inherited; // withdraw farm loadout
+  end;
+
+begin
+  Form.Run(); // left-nav dashboard — returns after Start
+  BASHFarmRunner.DoFarmRun();
+end;
+  ```
+*)
+
+type
+  TBASHFarmRunner = record
+    Patches: array of TBASHFarmPatch;
+    Transport: TUniversalTransportV2;
+    ReadyTimer: TCountDown;
+    Journal: TBASHFarmJournal;
+    Contract: TBASHFarmContract;
+    CompostMethod: EBASHCompostMethod;
+    BarbDibber: Boolean;
+    MagicSecateurs: Boolean;
+    LumbyElite: Boolean;
+    Initialized: Boolean;
+    PatchesCompleted, PatchesSkipped, RunsComplete: Int32;
+  end;
+
+var
+  BASHFarmRunner: TBASHFarmRunner;
+
+function TBASHFarmRunner.CompostItemName(): TRSItem;
+begin
+  case Self.CompostMethod of
+    EBASHCompostMethod.BOTTOMLESS: Exit('Bottomless compost bucket');
+    EBASHCompostMethod.ULTRA: Exit('Ultracompost');
+    EBASHCompostMethod.SUPER: Exit('Supercompost');
+    EBASHCompostMethod.FERTILE_SOIL: Exit('Ultracompost'); // fallback if spell unavailable
+    EBASHCompostMethod.REGULAR: Exit('Compost');
+  end;
+  Result := 'Ultracompost';
+end;
+
+procedure TBASHFarmRunner.SetupUpTexts(var patch: TBASHFarmPatch);
+begin
+  case patch.Data.PatchType of
+    EBASHPatchType.HERB:
+      begin
+        patch.EmptyUpText := 'Herb';
+        patch.PlantedUpText := 'Herb';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.FLOWER:
+      begin
+        patch.EmptyUpText := 'Flower';
+        patch.PlantedUpText := 'Flower';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.ALLOTMENT:
+      begin
+        patch.EmptyUpText := 'Allotment';
+        patch.PlantedUpText := 'Allotment';
+        patch.HarvestUpText := 'arves';
+      end;
+    EBASHPatchType.TREE:
+      begin
+        patch.EmptyUpText := 'Tree';
+        patch.PlantedUpText := 'Tree';
+        patch.HarvestUpText := 'heck';
+      end;
+    EBASHPatchType.FRUIT:
+      begin
+        patch.EmptyUpText := 'Fruit';
+        patch.PlantedUpText := 'Fruit';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.BUSH:
+      begin
+        patch.EmptyUpText := 'Bush';
+        patch.PlantedUpText := 'Bush';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.CACTUS:
+      begin
+        patch.EmptyUpText := 'Cactus';
+        patch.PlantedUpText := 'Cactus';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.ANIMA:
+      begin
+        patch.EmptyUpText := 'Anima';
+        patch.PlantedUpText := 'Anima';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.HOPS:
+      begin
+        patch.EmptyUpText := 'Hops';
+        patch.PlantedUpText := 'Hops';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.SEAWEED:
+      begin
+        patch.EmptyUpText := 'Seaweed';
+        patch.PlantedUpText := 'Seaweed';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.CORAL:
+      begin
+        patch.EmptyUpText := 'Coral';
+        patch.PlantedUpText := 'Coral';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.GRAPE:
+      begin
+        patch.EmptyUpText := 'Grape';
+        patch.PlantedUpText := 'Grape';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.MUSHROOM:
+      begin
+        patch.EmptyUpText := 'Mushroom';
+        patch.PlantedUpText := 'Mushroom';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.BELLADONNA:
+      begin
+        patch.EmptyUpText := 'Belladonna';
+        patch.PlantedUpText := 'Belladonna';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.CALQUAT:
+      begin
+        patch.EmptyUpText := 'Calquat';
+        patch.PlantedUpText := 'Calquat';
+        patch.HarvestUpText := 'ick';
+      end;
+    EBASHPatchType.CRYSTAL:
+      begin
+        patch.EmptyUpText := 'Crystal';
+        patch.PlantedUpText := 'Crystal';
+        patch.HarvestUpText := 'heck';
+      end;
+    EBASHPatchType.CELASTRUS:
+      begin
+        patch.EmptyUpText := 'Celastrus';
+        patch.PlantedUpText := 'Celastrus';
+        patch.HarvestUpText := 'ick';
+      end;
+  end;
+end;
+
+procedure TBASHFarmRunner.AddPatch(patchId: EBASHFarmPatch; travel: TTeleportLocation; seed: TRSItem);
+var
+  patch: TBASHFarmPatch;
+begin
+  EnsureBASHFarmPatchData();
+
+  patch.Reset();
+  patch.Id := patchId;
+  patch.Data := BASHFarmPatchData[patchId];
+  patch.Travel := travel;
+  patch.Seed := seed;
+  patch.CompostItem := Self.CompostItemName();
+  patch.UseFertileSoil := Self.CompostMethod = EBASHCompostMethod.FERTILE_SOIL;
+  Self.SetupUpTexts(patch);
+
+  // Contract override for this patch (no-op until Phase 2 assigns one)
+  patch.Seed := Self.Contract.ApplyContractOverride(patchId, seed);
+
+  Self.Patches += patch;
+end;
+
+procedure TBASHFarmRunner.ClearPatches();
+begin
+  SetLength(Self.Patches, 0);
+  Self.Initialized := False;
+end;
+
+procedure TBASHFarmRunner.BuildFromConfig(cfg: TBASHFarmConfig);
+var
+  p: EBASHFarmPatch;
+  seed: TRSItem;
+begin
+  Self.ClearPatches();
+
+  Self.CompostMethod := EBASHCompostMethod.ULTRA;
+  case cfg.CompostIdx of
+    1: Self.CompostMethod := EBASHCompostMethod.SUPER;
+    2: Self.CompostMethod := EBASHCompostMethod.REGULAR;
+    3: Self.CompostMethod := EBASHCompostMethod.BOTTOMLESS;
+    4: Self.CompostMethod := EBASHCompostMethod.FERTILE_SOIL;
+  end;
+  Self.BarbDibber := cfg.BarbDibber;
+  Self.MagicSecateurs := False;
+  Self.LumbyElite := cfg.LumbyElite;
+
+  for p := Low(EBASHFarmPatch) to High(EBASHFarmPatch) do
+  begin
+    if p = EBASHFarmPatch.HARMONY_ISLAND_HERB then
+      Continue;
+    if not cfg.Enabled[p] then
+      Continue;
+
+    seed := cfg.SeedForPatch(p);
+    if seed = '' then
+    begin
+      WriteLn('[BASHFarm] Skip ', ToStr(p), ' — no seed/sapling selected');
+      Continue;
+    end;
+
+    Self.AddPatch(p, BASHFarmTravelForPatch(p, cfg), seed);
+  end;
+
+  if cfg.RunNow then
+    Self.ReadyTimer.Init(0);
+
+  WriteLn('[BASHFarm] BuildFromConfig: ', Length(Self.Patches), ' patches enabled');
+end;
+
+function BASHFarmIsGuildFairyCIR(constref travel: TTeleportLocation): Boolean;
+begin
+  Result := 'bash guild fairy cir' in travel.destination.Lower();
+end;
+
+procedure TBASHFarmRunner.EnsureChunks();
+var
+  i, j, k: Int32;
+  chunks: array of TRSMapChunk;
+  chunk: TRSMapChunk;
+  exists, needArdyCloak: Boolean;
+begin
+  SetLength(chunks, 0);
+  needArdyCloak := False;
+
+  for i := 0 to High(Self.Patches) do
+  begin
+    if BASHFarmIsGuildFairyCIR(Self.Patches[i].Travel) then
+      needArdyCloak := True;
+
+    for j := 0 to High(Self.Patches[i].Data.Chunks) do
+    begin
+      chunk := Self.Patches[i].Data.Chunks[j];
+      exists := False;
+      for k := 0 to High(chunks) do
+        if (chunks[k].Chunk = chunk.Chunk) then
+        begin
+          exists := True;
+          Break;
+        end;
+      if not exists then
+        chunks += chunk;
+    end;
+  end;
+
+  // Fairy CIR: Ardougne cloak Monastery → DJP (Tower of Life) ring walk
+  // (don't call Chunk() here — local `chunk` shadows the helper)
+  if needArdyCloak then
+  begin
+    chunk.Chunk := Box(38, 51, 42, 48);
+    chunk.Planes := [0];
+    exists := False;
+    for k := 0 to High(chunks) do
+      if (chunks[k].Chunk = chunk.Chunk) then
+      begin
+        exists := True;
+        Break;
+      end;
+    if not exists then
+    begin
+      chunks += chunk;
+      WriteLn('[BASHFarm] EnsureChunks: + Ardougne/Monastery (Fairy CIR cloak walk)');
+    end;
+  end;
+
+  if Length(chunks) = 0 then
+  begin
+    WriteLn('[BASHFarm] EnsureChunks: no chunks on enabled patches');
+    Exit;
+  end;
+
+  WriteLn('[BASHFarm] EnsureChunks: loading ', Length(chunks), ' map chunk(s)');
+
+  // First load must use SetupChunks. AddChunks → InternalSetup match-templates the
+  // minimap; doing that while the GUI is still open / FIXED mode is settling causes
+  // "Invalid floating point operation" (especially with a single fast-loading chunk).
+  if Map.IsSetup then
+    Map.AddChunks(chunks, 8)
+  else
+    Map.SetupChunks(chunks, 8);
+
+  Map.Walker.AdaptiveWalk := True;
+  WriteLn('[BASHFarm] EnsureChunks: map ready');
+end;
+
+procedure TBASHFarmRunner.Init();
+begin
+  if Self.Initialized then
+    Exit;
+
+  EnsureBASHFarmPatchData();
+
+  if Length(Self.Patches) = 0 then
+    WriteLn('[BASHFarm] Init with no patches — call AddPatch first');
+
+  // Do NOT load map chunks here — StartScript runs while the farm GUI is open.
+  // EnsureChunks runs at the start of Run() after Form.Run() returns.
+  Self.Journal.Load();
+  Self.Contract.Clear();
+  Self.ReadyTimer.Init(0); // allow immediate first run; DoFarmRun reschedules
+  Self.Initialized := True;
+  WriteLn('[BASHFarm] Initialized with ', Length(Self.Patches), ' patches (WalkerV2)');
+end;
+
+function TBASHFarmRunner.FarmWithdrawHelper(item: TRSItem; quant: Int32): Boolean;
+var
+  attempt, before: Int32;
+begin
+  if item = '' then
+    Exit(True);
+
+  if quant < 0 then
+    quant := Bank.QUANTITY_ALL;
+
+  if Inventory.ContainsItem(item) then
+  begin
+    if quant = Bank.QUANTITY_ALL then
+      Exit(True);
+    if (Inventory.CountItem(item) >= quant) or (Inventory.CountItemStack(item) >= quant) then
+      Exit(True);
+  end;
+
+  if not Bank.IsOpen() then
+  begin
+    WriteLn('[BASHFarm] FarmWithdrawHelper: bank not open for ', ToStr(item));
+    Exit(False);
+  end;
+
+  WriteLn('[BASHFarm] Withdrawing ', quant, 'x ', ToStr(item));
+
+  for attempt := 1 to 5 do
+  begin
+    if Inventory.ContainsItem(item) then
+    begin
+      if quant = Bank.QUANTITY_ALL then
+        Exit(True);
+      if (Inventory.CountItem(item) >= quant) or (Inventory.CountItemStack(item) >= quant) then
+        Exit(True);
+    end;
+
+    if not Bank.IsOpen() then
+    begin
+      WriteLn('[BASHFarm] FarmWithdrawHelper: bank closed mid-withdraw (', ToStr(item), ')');
+      Exit(False);
+    end;
+
+    before := Inventory.CountItem(item);
+
+    // Exact pattern that works: Bank.WithdrawItem(['Spade', 1, False], True);
+    if not Bank.WithdrawItem([item, quant, False], True) then
+      WriteLn('[BASHFarm] WithdrawItem returned False for ', ToStr(item));
+
+    Result := WaitUntil(
+      Inventory.ContainsItem(item) and
+      ((quant = Bank.QUANTITY_ALL) or
+       (Inventory.CountItem(item) > before) or
+       (Inventory.CountItem(item) >= quant) or
+       (Inventory.CountItemStack(item) >= quant)),
+      35, 4000);
+
+    if Result then
+    begin
+      WriteLn('[BASHFarm] Withdrew ', ToStr(item));
+      Exit(True);
+    end;
+
+    WriteLn('[BASHFarm] Withdraw retry ', attempt, '/5');
+  end;
+
+  WriteLn('[BASHFarm] Failed to withdraw ', ToStr(item));
+  Result := False;
+end;
+
+function BASHFarmIsMagicTeleport(tp: ETeleportType): Boolean;
+begin
+  Result := tp in [
+    ETeleportType.NORMAL_MAGIC,
+    ETeleportType.LUNAR_MAGIC,
+    ETeleportType.ARCEUUS_MAGIC,
+    ETeleportType.ANCIENT_MAGICKS
+  ];
+end;
+
+procedure BASHFarmAddRuneNeed(var names: TRSItemArray; var qtys: TIntegerArray; rune: TRSItem; amount: Int32);
+var
+  i: Int32;
+begin
+  if (rune = '') or (amount <= 0) then
+    Exit;
+
+  for i := 0 to High(names) do
+    if names[i] = rune then
+    begin
+      Inc(qtys[i], amount);
+      Exit;
+    end;
+
+  names += rune;
+  qtys += amount;
+end;
+
+// Spell rune costs for teleports used by BASHFarm travel options.
+procedure BASHFarmAddMagicRuneCost(var names: TRSItemArray; var qtys: TIntegerArray; travel: TTeleportLocation);
+var
+  dest: String;
+begin
+  dest := travel.destination.Lower();
+
+  case dest of
+    'ardougne':
+      begin
+        BASHFarmAddRuneNeed(names, qtys, 'Water rune', 2);
+        BASHFarmAddRuneNeed(names, qtys, 'Law rune', 2);
+      end;
+    'falador':
+      begin
+        BASHFarmAddRuneNeed(names, qtys, 'Air rune', 3);
+        BASHFarmAddRuneNeed(names, qtys, 'Water rune', 1);
+        BASHFarmAddRuneNeed(names, qtys, 'Law rune', 1);
+      end;
+    'lumbridge':
+      begin
+        BASHFarmAddRuneNeed(names, qtys, 'Earth rune', 3);
+        BASHFarmAddRuneNeed(names, qtys, 'Air rune', 1);
+        BASHFarmAddRuneNeed(names, qtys, 'Law rune', 1);
+      end;
+    'varrock':
+      begin
+        BASHFarmAddRuneNeed(names, qtys, 'Air rune', 3);
+        BASHFarmAddRuneNeed(names, qtys, 'Fire rune', 1);
+        BASHFarmAddRuneNeed(names, qtys, 'Law rune', 1);
+      end;
+    'catherby':
+      begin
+        BASHFarmAddRuneNeed(names, qtys, 'Water rune', 3);
+        BASHFarmAddRuneNeed(names, qtys, 'Law rune', 3);
+        BASHFarmAddRuneNeed(names, qtys, 'Astral rune', 1);
+      end;
+    'camelot':
+      begin
+        BASHFarmAddRuneNeed(names, qtys, 'Air rune', 5);
+        BASHFarmAddRuneNeed(names, qtys, 'Law rune', 1);
+      end;
+    'house':
+      begin
+        BASHFarmAddRuneNeed(names, qtys, 'Air rune', 1);
+        BASHFarmAddRuneNeed(names, qtys, 'Earth rune', 1);
+        BASHFarmAddRuneNeed(names, qtys, 'Law rune', 1);
+      end;
+    'ortus civitas spell':
+      begin
+        // Civitas illa Fortis teleport spell
+        BASHFarmAddRuneNeed(names, qtys, 'Fire rune', 1);
+        BASHFarmAddRuneNeed(names, qtys, 'Earth rune', 1);
+        BASHFarmAddRuneNeed(names, qtys, 'Law rune', 2);
+      end;
+  else
+    WriteLn('[BASHFarm] No rune cost table for magic teleport: ', travel.destination);
+  end;
+end;
+
+{ Invent only — never call Equipment.* while the bank is open (it closes the bank). }
+function BASHFarmHasTeleportItem(constref travel: TTeleportLocation): Boolean;
+var
+  j: Int32;
+  tpItem: TRSItem;
+  variants: TRSItemArray;
+begin
+  for j := 0 to High(travel.items) do
+  begin
+    tpItem := travel.items[j];
+    if tpItem = '' then
+      Continue;
+    if Inventory.ContainsItem(tpItem) then
+      Exit(True);
+  end;
+
+  // Diary items: one "explorer's ring 4..1" range — ContainsItem expands via GetArray
+  if (travel.teleportType = ETeleportType.DIARY_ITEM) and (travel.item <> '') then
+  begin
+    variants := getNumberedDiaryItems(travel.item);
+    if (Length(variants) > 0) and Inventory.ContainsItem(variants[0]) then
+      Exit(True);
+    Exit(False);
+  end;
+
+  // Jewellery uses charged charge-count names
+  if (travel.teleportType = ETeleportType.JEWELLERY) and (travel.item <> '') then
+  begin
+    variants := getChargedJewelleryNames(travel.item);
+    for j := 0 to High(variants) do
+      if Inventory.ContainsItem(variants[j]) then
+        Exit(True);
+    Exit(False);
+  end;
+
+  if (travel.item <> '') and Inventory.ContainsItem(travel.item) then
+    Exit(True);
+
+  Result := False;
+end;
+
+function BASHFarmTravelItemKey(constref travel: TTeleportLocation): String;
+var
+  j: Int32;
+begin
+  // Shared key so Hosidius herb/flower/allot only withdraw Book once
+  Result := ToStr(travel.teleportType) + ':';
+  for j := 0 to High(travel.items) do
+    if travel.items[j] <> '' then
+      Result += ToStr(travel.items[j]).Lower() + '|';
+  if travel.item <> '' then
+    Result += ToStr(travel.item).Lower();
+  if Result.EndsWith(':') then
+    Result += travel.destination.Lower();
+end;
+
+function TBASHFarmRunner.OnStart(): Boolean;
+var
+  i, j, seedsNeeded: Int32;
+  seed, tpItem: TRSItem;
+  counted, magicSeen, itemSeen, withdrew: Boolean;
+  travel: TTeleportLocation;
+  runeNames: TRSItemArray;
+  runeQtys: TIntegerArray;
+  seenMagic, seenItems: TStringArray;
+  magicKey, itemKey: String;
+begin
+  // Assumes bank is already open (host walks/opens in override).
+  if not Bank.IsOpen() then
+  begin
+    WriteLn('[BASHFarm] OnStart: bank is not open');
+    Exit(False);
+  end;
+
+  if not Self.BarbDibber then
+    Self.FarmWithdrawHelper('Seed dibber', 1);
+  // Rake is withdrawn on demand when a patch shows weeds (ClearWeeds).
+  // Spade + compost + secateurs come from the tool leprechaun at each patch.
+
+  // Sum seeds/saplings per unique item across all enabled patches
+  for i := 0 to High(Self.Patches) do
+  begin
+    seed := Self.Patches[i].Seed;
+    if seed = '' then
+      Continue;
+
+    counted := False;
+    for j := 0 to i - 1 do
+      if Self.Patches[j].Seed = seed then
+      begin
+        counted := True;
+        Break;
+      end;
+    if counted then
+      Continue;
+
+    seedsNeeded := 0;
+    for j := 0 to High(Self.Patches) do
+      if Self.Patches[j].Seed = seed then
+      begin
+        if Self.Patches[j].Data.PatchType = EBASHPatchType.ALLOTMENT then
+          Inc(seedsNeeded, 3)
+        else
+          Inc(seedsNeeded);
+      end;
+
+    Self.FarmWithdrawHelper(seed, seedsNeeded);
+  end;
+
+  // Teleport items — magic spells are tallied as runes once; other methods withdraw items once.
+  SetLength(runeNames, 0);
+  SetLength(runeQtys, 0);
+  SetLength(seenMagic, 0);
+  SetLength(seenItems, 0);
+
+  for i := 0 to High(Self.Patches) do
+  begin
+    travel := Self.Patches[i].Travel;
+
+    if BASHFarmIsMagicTeleport(travel.teleportType) then
+    begin
+      // One cast worth of runes per unique spell destination (e.g. all Ardy patches share one)
+      magicKey := ToStr(travel.teleportType) + ':' + travel.destination.Lower();
+      magicSeen := False;
+      for j := 0 to High(seenMagic) do
+        if seenMagic[j] = magicKey then
+        begin
+          magicSeen := True;
+          Break;
+        end;
+
+      if not magicSeen then
+      begin
+        seenMagic += magicKey;
+        BASHFarmAddMagicRuneCost(runeNames, runeQtys, travel);
+        WriteLn('[BASHFarm] Tallied runes for ', travel.destination, ' spell');
+      end;
+      Continue;
+    end;
+
+    itemKey := BASHFarmTravelItemKey(travel);
+    itemSeen := False;
+    for j := 0 to High(seenItems) do
+      if seenItems[j] = itemKey then
+      begin
+        itemSeen := True;
+        Break;
+      end;
+    if itemSeen then
+      Continue;
+    seenItems += itemKey;
+
+    // Fairy CIR loadout handled after this loop (cloak + Dramen)
+    if BASHFarmIsGuildFairyCIR(travel) then
+    begin
+      WriteLn('[BASHFarm] Guild Fairy CIR travel queued for ', Self.Patches[i].Data.Name);
+      Continue;
+    end;
+
+    if BASHFarmHasTeleportItem(travel) then
+    begin
+      WriteLn('[BASHFarm] Already have teleport for ', travel.destination, ' — skip withdraw');
+      Continue;
+    end;
+
+    WriteLn('[BASHFarm] Withdraw teleport for ', Self.Patches[i].Data.Name,
+            ' → ', travel.destination, ' (', ToStr(travel.teleportType),
+            ', ', Length(travel.items), ' items)');
+
+    // Diary / jewellery: never withdraw bare base name ("Explorer's Ring" ≠ "Explorer's ring 2")
+    if travel.teleportType in [ETeleportType.JEWELLERY, ETeleportType.DIARY_ITEM] then
+    begin
+      if not Bank.IsOpen() then
+        WriteLn('[BASHFarm] Warning: bank closed before teleport withdraw — reopening needed');
+      if not Self.Transport.withdrawTeleportItem(travel) then
+        WriteLn('[BASHFarm] Warning: could not withdraw teleport for ', Self.Patches[i].Data.Name)
+      else
+        WriteLn('[BASHFarm] Withdrew diary/jewellery variant for ', travel.destination);
+      Continue;
+    end;
+
+    withdrew := False;
+    for j := 0 to High(travel.items) do
+    begin
+      tpItem := travel.items[j];
+      if tpItem = '' then
+        Continue;
+      // Invent only while bank is open — Equipment.* closes the bank
+      if Inventory.ContainsItem(tpItem) then
+      begin
+        withdrew := True;
+        Break;
+      end;
+      if Self.FarmWithdrawHelper(tpItem, 1) then
+      begin
+        withdrew := True;
+        Break;
+      end;
+    end;
+
+    if (not withdrew) and (travel.item <> '') then
+    begin
+      if Inventory.ContainsItem(travel.item) then
+        withdrew := True
+      else if Self.FarmWithdrawHelper(travel.item, 1) then
+        withdrew := True;
+    end;
+
+    // OTHER / SCROLL multi-name fallback via Transport
+    if (not BASHFarmHasTeleportItem(travel)) and
+       (travel.teleportType in [ETeleportType.OTHER, ETeleportType.SCROLL]) then
+    begin
+      if not Bank.IsOpen() then
+        WriteLn('[BASHFarm] Warning: bank closed before teleport withdraw — reopening needed');
+      if not Self.Transport.withdrawTeleportItem(travel) then
+        WriteLn('[BASHFarm] Warning: could not withdraw teleport for ', Self.Patches[i].Data.Name);
+    end
+    else if not BASHFarmHasTeleportItem(travel) then
+      WriteLn('[BASHFarm] Warning: failed to withdraw teleport for ', Self.Patches[i].Data.Name);
+  end;
+
+  // Farming Guild Fairy CIR: Ardougne cloak + Dramen (unless Lumby elite)
+  for i := 0 to High(Self.Patches) do
+  begin
+    if not BASHFarmIsGuildFairyCIR(Self.Patches[i].Travel) then
+      Continue;
+
+    if Self.LumbyElite then
+      WriteLn('[BASHFarm] Guild Fairy CIR loadout — Ardougne cloak (Lumby elite — no Dramen)')
+    else
+      WriteLn('[BASHFarm] Guild Fairy CIR loadout — Ardougne cloak + Dramen staff');
+
+    if not Bank.IsOpen() then
+      WriteLn('[BASHFarm] Warning: bank closed before guild fairy withdraw')
+    else
+    begin
+      if not Self.Transport.withdrawTeleportItem(RSTeleportsV2.MONASTERY) then
+        WriteLn('[BASHFarm] Warning: could not withdraw Ardougne cloak for guild fairy');
+      if not Self.LumbyElite then
+      begin
+        // Invent only while bank is open — Equipment.* closes the bank
+        if Inventory.ContainsItem('Dramen staff') then
+          WriteLn('[BASHFarm] Already have Dramen staff')
+        else if not Self.FarmWithdrawHelper('Dramen staff', 1) then
+          WriteLn('[BASHFarm] Warning: could not withdraw Dramen staff');
+      end;
+    end;
+    Break;
+  end;
+
+  for i := 0 to High(runeNames) do
+  begin
+    WriteLn('[BASHFarm] Rune total: ', runeQtys[i], 'x ', ToStr(runeNames[i]));
+    if not Self.FarmWithdrawHelper(runeNames[i], runeQtys[i]) then
+      WriteLn('[BASHFarm] Warning: failed to withdraw ', runeQtys[i], 'x ', ToStr(runeNames[i]));
+  end;
+
+  // Tree payment coins
+  for i := 0 to High(Self.Patches) do
+    if Self.Patches[i].Data.PatchType in [EBASHPatchType.TREE, EBASHPatchType.FRUIT] then
+    begin
+      Self.FarmWithdrawHelper('Coins', 2000);
+      Break;
+    end;
+
+  Bank.Close();
+  Result := True;
+end;
+
+procedure TBASHFarmRunner.OnComplete();
+begin
+  // Host overrides to return to its bank / activity.
+end;
+
+{ Ardougne cloak → Monastery → walk DJP fairy ring → CIR → run SW to Farming Guild. }
+procedure BASHFarmDebugFairyCIRPos(const context: String; me, monastery, djpRing, cirLand, guildDest: TPoint);
+var
+  distMon, distDjp, distCir, distGuild: Double;
+begin
+  distMon := me.DistanceTo(monastery);
+  distDjp := me.DistanceTo(djpRing);
+  distCir := me.DistanceTo(cirLand);
+  distGuild := me.DistanceTo(guildDest);
+
+  WriteLn('[BASHFarm] FairyCIR pos — ', context);
+  WriteLn('  me=', me,
+          '  monasteryExpect=', monastery,
+          '  djp=', djpRing,
+          '  cir=', cirLand,
+          '  guild=', guildDest);
+  WriteLn('  distMon=', Round(distMon), ' (', Round(distMon / 4), ' tiles)',
+          '  distDjp=', Round(distDjp), ' (', Round(distDjp / 4), ' tiles)',
+          '  distCir=', Round(distCir),
+          '  distGuild=', Round(distGuild));
+  WriteLn('  nearMon40=', ToStr(Map.Walker.InRange(monastery, 40)),
+          '  nearDjp40=', ToStr(Map.Walker.InRange(djpRing, 40)),
+          '  nearCir30=', ToStr(Map.Walker.InRange(cirLand, 30)),
+          '  nearGuild40=', ToStr(Map.Walker.InRange(guildDest, 40)),
+          '  mapSetup=', ToStr(Map.IsSetup));
+end;
+
+function TBASHFarmRunner.TeleportGuildFairyCIR(): Boolean;
+var
+  startPos, me, monastery, djpRing, cirLand, guildDest: TPoint;
+  cloakVariants: TRSItemArray;
+  cloak: TRSItem;
+  cloaked: Boolean;
+begin
+  Result := False;
+  startPos := Map.Position();
+  monastery := RSTeleportsV2.MONASTERY.worldPoint; // [6328, 37566]
+  djpRing := RSTeleportsV2.DJP_TOWER_OF_LIFE.worldPoint; // [6535, 37509]
+  cirLand := RSTeleportsV2.CIR_NORTHEAST_OF_THE_FARMING_GUILD.worldPoint; // [1114, 36090]
+  guildDest := RSTeleportsV2.FARMING_GUILD.worldPoint; // [900, 35572]
+
+  BASHFarmDebugFairyCIRPos('enter', startPos, monastery, djpRing, cirLand, guildDest);
+
+  if Map.Walker.InRange(guildDest, 40) then
+  begin
+    WriteLn('[BASHFarm] Already near Farming Guild — skip fairy CIR');
+    Exit(True);
+  end;
+
+  // Already at CIR landing — just walk SW into guild
+  if Map.Walker.InRange(cirLand, 30) then
+  begin
+    WriteLn('[BASHFarm] At CIR landing — walking SW to Farming Guild');
+    Result := Map.Walker.WebWalk(guildDest, 6, 0.15);
+    Exit;
+  end;
+
+  WriteLn('[BASHFarm] Guild Fairy CIR: cloak Monastery → DJP ring → CIR → guild');
+
+  // 1) Ardougne cloak → Monastery (unless already near DJP)
+  if not Map.Walker.InRange(djpRing, 40) then
+  begin
+    cloaked := False;
+    // Range ("cloak 4..1") works for bank/find; ClickItem needs concrete names
+    cloakVariants := [];
+    for cloak in getNumberedDiaryItems('Ardougne Cloak') do
+      cloakVariants += cloak.GetArray();
+
+    for cloak in cloakVariants do
+      if Inventory.ContainsItem(cloak) then
+      begin
+        WriteLn('[BASHFarm] FairyCIR: ClickItem Monastery invent=', ToStr(cloak), ' from me=', Map.Position());
+        if Inventory.ClickItem(cloak, 'Monastery') then
+          cloaked := True;
+        Break;
+      end;
+
+    if not cloaked then
+      for cloak in cloakVariants do
+        if Equipment.ContainsItem(cloak) then
+        begin
+          WriteLn('[BASHFarm] FairyCIR: ClickItem Monastery equip=', ToStr(cloak), ' from me=', Map.Position());
+          if Equipment.ClickItem(cloak, 'Monastery') then
+            cloaked := True;
+          Break;
+        end;
+
+    if not cloaked then
+    begin
+      WriteLn('[BASHFarm] Guild Fairy CIR: no Ardougne cloak to Monastery');
+      Exit(False);
+    end;
+
+    if not WaitUntil(not Map.Position().InRange(startPos, 10), 35, 12000) then
+    begin
+      me := Map.Position();
+      BASHFarmDebugFairyCIRPos('Monastery tele FAILED (me still near start)', me, monastery, djpRing, cirLand, guildDest);
+      WriteLn('[BASHFarm] Guild Fairy CIR: Monastery teleport failed startPos=', startPos, ' me=', me);
+      Exit(False);
+    end;
+
+    WaitUntil(not Minimap.IsPlayerMoving(), 35, 6000);
+    me := Map.Position();
+    BASHFarmDebugFairyCIRPos('after Monastery cloak tele', me, monastery, djpRing, cirLand, guildDest);
+
+    if not Map.Walker.InRange(monastery, 50) then
+      WriteLn('[BASHFarm] FairyCIR WARNING: after cloak tele, me is NOT near monasteryExpect=',
+              monastery, ' — Map.Position may be wrong / wrong chunk match');
+  end
+  else
+  begin
+    me := Map.Position();
+    BASHFarmDebugFairyCIRPos('already near DJP — skip cloak', me, monastery, djpRing, cirLand, guildDest);
+  end;
+
+  // 2) Walk to DJP fairy ring (Tower of Life)
+  me := Map.Position();
+  BASHFarmDebugFairyCIRPos('before WebWalk DJP', me, monastery, djpRing, cirLand, guildDest);
+  WriteLn('[BASHFarm] Walking to DJP fairy ring ', djpRing, ' from ', me);
+  if not Map.Walker.WebWalk(djpRing, 5, 0.15) then
+  begin
+    me := Map.Position();
+    BASHFarmDebugFairyCIRPos('WebWalk DJP FAILED', me, monastery, djpRing, cirLand, guildDest);
+    WriteLn('[BASHFarm] Guild Fairy CIR: failed to walk to DJP ring');
+    Exit(False);
+  end;
+  WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+  me := Map.Position();
+  BASHFarmDebugFairyCIRPos('arrived DJP', me, monastery, djpRing, cirLand, guildDest);
+
+  // 3) Dramen (or elite null) → open ring → CIR
+  if Self.LumbyElite then
+    FairyRing.Item := 'null'
+  else
+    FairyRing.Item := 'Dramen staff';
+
+  startPos := Map.Position();
+  WriteLn('[BASHFarm] FairyRing → CIR (item=', ToStr(FairyRing.Item), ') from ', startPos);
+  if not FairyRing.WalkTeleport('CIR') then
+  begin
+    WriteLn('[BASHFarm] Guild Fairy CIR: WalkTeleport(CIR) failed me=', Map.Position());
+    Exit(False);
+  end;
+
+  if not WaitUntil(Map.Walker.InRange(cirLand, 40) or (not Map.Position().InRange(startPos, 20)), 35, 15000) then
+    WriteLn('[BASHFarm] Guild Fairy CIR: CIR arrival uncertain — attempting guild walk anyway');
+
+  me := Map.Position();
+  BASHFarmDebugFairyCIRPos('after CIR tele', me, monastery, djpRing, cirLand, guildDest);
+
+  // 4) Run SW to Farming Guild
+  WriteLn('[BASHFarm] Walking SW to Farming Guild ', guildDest, ' from ', me);
+  Result := Map.Walker.WebWalk(guildDest, 6, 0.15);
+  if Result then
+    WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000)
+  else
+  begin
+    me := Map.Position();
+    BASHFarmDebugFairyCIRPos('WebWalk guild FAILED', me, monastery, djpRing, cirLand, guildDest);
+    WriteLn('[BASHFarm] Guild Fairy CIR: WebWalk to guild failed');
+  end;
+end;
+
+function TBASHFarmRunner.TeleportTo(travel: TTeleportLocation): Boolean;
+var
+  startPos: TPoint;
+  item: TRSItem;
+  i: Int32;
+  dest, itemName: String;
+  isKharedst: Boolean;
+begin
+  Result := False;
+  startPos := Map.Position();
+  dest := travel.destination.Lower();
+
+  // Farming Guild — Fairy CIR via Ardy cloak Monastery
+  if BASHFarmIsGuildFairyCIR(travel) then
+  begin
+    Result := Self.TeleportGuildFairyCIR();
+    Exit;
+  end;
+
+  // House spell at Hosidius — always Outside (V1 farm runner)
+  if BASHFarmIsMagicTeleport(travel.teleportType) and (dest = 'house') then
+  begin
+    Result := Magic.CastSpell(ERSSpell.TELEPORT_TO_HOUSE, 'Outside');
+    if Result then
+      Result := WaitUntil(not Map.Position().InRange(startPos, 10), 35, 10000);
+    if not Result then
+      WriteLn('[BASHFarm] House spell (Outside) failed');
+    Exit;
+  end;
+
+  // House tablet — Outside on "Teleport to house"
+  if (dest = 'outside') and (Length(travel.items) > 0) then
+  begin
+    for i := 0 to High(travel.items) do
+    begin
+      item := travel.items[i];
+      if (item = '') or (not Inventory.ContainsItem(item)) then
+        Continue;
+      Result := Inventory.ClickItem(item, 'Outside');
+      if Result then
+        Break;
+    end;
+    if not Result then
+      for i := 0 to High(travel.items) do
+      begin
+        item := travel.items[i];
+        if (item = '') or (not Equipment.ContainsItem(item)) then
+          Continue;
+        Result := Equipment.ClickItem(item, 'Outside');
+        if Result then
+          Break;
+      end;
+    if Result then
+      Result := WaitUntil(not Map.Position().InRange(startPos, 10), 35, 10000);
+    if not Result then
+      WriteLn('[BASHFarm] House tablet (Outside) failed');
+    Exit;
+  end;
+
+  // Book of the dead / Kharedst — ChooseOption Reminisce, then press 1 (Lunch)
+  isKharedst := False;
+  for i := 0 to High(travel.items) do
+  begin
+    itemName := ToStr(travel.items[i]).Lower();
+    if ('book of the dead' in itemName) or ('kharedst' in itemName) then
+    begin
+      isKharedst := True;
+      Break;
+    end;
+  end;
+
+  if isKharedst and ('lancallium' in dest) then
+  begin
+    // Invent first (bank withdraw). Equipment only if not in invent.
+    for i := 0 to High(travel.items) do
+    begin
+      item := travel.items[i];
+      if (item = '') or (not Inventory.ContainsItem(item)) then
+        Continue;
+
+      if Inventory.ClickItem(item, 'Reminisce') then
+      begin
+        WaitUntil(Chat.IsOpen(), 35, 350);
+        Keyboard.Send('1');
+        Result := True;
+        Break;
+      end;
+    end;
+
+    if not Result then
+      for i := 0 to High(travel.items) do
+      begin
+        item := travel.items[i];
+        if (item = '') or (not Equipment.ContainsItem(item)) then
+          Continue;
+
+        if Equipment.ClickItem(item, 'Reminisce') then
+        begin
+          WaitUntil(Chat.IsOpen(), 35, 350);
+          Keyboard.Send('1');
+          Result := True;
+          Break;
+        end;
+      end;
+
+    if Result then
+      Result := WaitUntil(not Map.Position().InRange(startPos, 10), 35, 12000);
+    if not Result then
+      WriteLn('[BASHFarm] Book of the dead Reminisce → 1 (Lunch) failed');
+    Exit;
+  end;
+
+  // Ortus Farm — Hunter cape → Guild → run north
+  if 'ortus hunter cape' in dest then
+  begin
+    Result := Self.TeleportOrtusHunterCape();
+    Exit;
+  end;
+
+  // Ortus Farm — Quetzal whistle → Guild → run north
+  if 'ortus quetzal whistle' in dest then
+  begin
+    Result := Self.TeleportOrtusQuetzalWhistle();
+    Exit;
+  end;
+
+  // Ortus Farm — Civitas tablet → Renu Quetzal → Hunter Guild → run north
+  if 'ortus civitas tablet' in dest then
+  begin
+    Result := Self.TeleportOrtusCivitasTablet();
+    Exit;
+  end;
+
+  // Ortus Farm — Civitas spell → Renu Quetzal → Hunter Guild → run north
+  if 'ortus civitas spell' in dest then
+  begin
+    Result := Self.TeleportOrtusCivitasSpell();
+    Exit;
+  end;
+
+  // Default: magic spells cast; tablets/jewellery via transport
+  if BASHFarmIsMagicTeleport(travel.teleportType) then
+    Result := Self.Transport.run(travel, True, False, Map)
+  else
+    Result := Self.Transport.run(travel, False, False, Map);
+
+  if not Result then
+    WriteLn('[BASHFarm] Teleport failed: ', travel.destination, ' (', ToStr(travel.teleportType), ')');
+end;
+
+function TBASHFarmRunner.OrtusWalkNorthToFarm(): Boolean;
+var
+  me, lep, dest: TPoint;
+  dist, scale: Double;
+begin
+  WriteLn('[BASHFarm] Ortus: walking north from Hunter Guild to farm');
+  lep := BASH_ORTUS_LEP;
+  me := Map.Position();
+  dist := me.DistanceTo(lep);
+
+  if dist <= 14 then
+    Exit(Map.Position().InBox(BASH_ORTUS_MAP) or (dist <= 14));
+
+  // Stop ~10 tiles short of the lep
+  scale := 10 / dist;
+  dest.X := Round(lep.X + (me.X - lep.X) * scale);
+  dest.Y := Round(lep.Y + (me.Y - lep.Y) * scale);
+
+  Result := Map.Walker.WebWalk(dest, 3, 0.15);
+  if not Result then
+    Result := Map.Position().InBox(BASH_ORTUS_MAP);
+end;
+
+function TBASHFarmRunner.OrtusUseQuetzalWhistle(): Boolean;
+begin
+  Result := Quetzal.TravelFromWhistle(EQuetzalLanding.HUNTER_GUILD, True);
+end;
+
+function TBASHFarmRunner.OrtusUseHunterCape(): Boolean;
+var
+  item: TRSItem;
+  capes: TRSItemArray;
+begin
+  Result := False;
+  capes := ['Hunter cape(t)', 'Hunter cape'];
+
+  for item in capes do
+  begin
+    if Inventory.ContainsItem(item) then
+    begin
+      if Inventory.ClickItem(item, 'Teleport') then
+      begin
+        if WaitUntil(Chat.FindOption('Hunter Guild'), 35, 4000) then
+          Chat.ClickOption('Hunter Guild');
+        Result := WaitUntil(Minimap.PercentBlack() < 25, 35, 5000);
+        if Result then
+          Exit;
+      end;
+    end;
+
+    if Equipment.ContainsItem(item) then
+    begin
+      if Equipment.ClickItem(item, 'Hunter Guild') then
+      begin
+        Result := WaitUntil(Minimap.PercentBlack() < 25, 35, 5000);
+        if Result then
+          Exit;
+      end;
+    end;
+  end;
+end;
+
+function TBASHFarmRunner.TeleportOrtusHunterCape(): Boolean;
+begin
+  Result := False;
+  WriteLn('[BASHFarm] Ortus travel: Hunter Guild (Hunters Cape)');
+
+  if Self.OrtusUseHunterCape() then
+  begin
+    Result := Self.OrtusWalkNorthToFarm();
+    Exit;
+  end;
+
+  WriteLn('[BASHFarm] Ortus: no Hunter cape available');
+end;
+
+function TBASHFarmRunner.TeleportOrtusQuetzalWhistle(): Boolean;
+begin
+  Result := False;
+  WriteLn('[BASHFarm] Ortus travel: Quetzal Whistle');
+
+  if Self.OrtusUseQuetzalWhistle() then
+  begin
+    Result := Self.OrtusWalkNorthToFarm();
+    Exit;
+  end;
+
+  WriteLn('[BASHFarm] Ortus: no quetzal whistle available');
+end;
+
+function TBASHFarmRunner.OrtusUseRenuToHunterGuild(): Boolean;
+begin
+  WriteLn('[BASHFarm] Ortus: using Quetzal Transport (Renu) to Hunter Guild');
+  Result := Quetzal.TravelFromRenu(EQuetzalLanding.HUNTER_GUILD);
+end;
+
+function TBASHFarmRunner.TeleportOrtusCivitasAfterArrive(): Boolean;
+begin
+  WaitUntil(not Minimap.IsPlayerMoving() and (Minimap.PercentBlack() < 25), 35, 1200);
+
+  if not Self.OrtusUseRenuToHunterGuild() then
+    Exit(False);
+
+  Result := Self.OrtusWalkNorthToFarm();
+end;
+
+function TBASHFarmRunner.TeleportOrtusCivitasTablet(): Boolean;
+var
+  startPos: TPoint;
+begin
+  Result := False;
+  startPos := Map.Position();
+  WriteLn('[BASHFarm] Ortus travel: Civitas tablet → Quetzal → Hunter Guild');
+
+  if not Inventory.ContainsItem('Civitas illa fortis teleport') then
+  begin
+    WriteLn('[BASHFarm] Ortus: no Civitas tablet in inventory');
+    Exit(False);
+  end;
+
+  if not Inventory.ClickItem('Civitas illa fortis teleport', 'Break') then
+    Exit(False);
+
+  if not WaitUntil(not Map.Position().InRange(startPos, 10), 35, 12000) then
+    Exit(False);
+
+  Result := Self.TeleportOrtusCivitasAfterArrive();
+end;
+
+function TBASHFarmRunner.TeleportOrtusCivitasSpell(): Boolean;
+var
+  startPos: TPoint;
+begin
+  Result := False;
+  startPos := Map.Position();
+  WriteLn('[BASHFarm] Ortus travel: Civitas spell → Quetzal → Hunter Guild');
+
+  if not Magic.CastSpell(ERSSpell.CIVITAS_ILLA_FORTIS_TELEPORT, 'Cast') then
+  begin
+    WriteLn('[BASHFarm] Ortus: Civitas spell cast failed');
+    Exit(False);
+  end;
+
+  if not WaitUntil(not Map.Position().InRange(startPos, 10), 35, 12000) then
+    Exit(False);
+
+  Result := Self.TeleportOrtusCivitasAfterArrive();
+end;
+
+procedure TBASHFarmRunner.Run();
+var
+  i: Int32;
+  patch: TBASHFarmPatch;
+begin
+  if not Self.Initialized then
+    Self.Init();
+
+  // Map before OnStart — Banks.WalkOpen / teleports need WalkerV2 ready.
+  Self.EnsureChunks();
+
+  WriteLn('[BASHFarm] Calling OnStart');
+  if not Self.OnStart() then
+  begin
+    WriteLn('[BASHFarm] OnStart returned False — aborting run');
+    Exit;
+  end;
+
+  for i := 0 to High(Self.Patches) do
+  begin
+    patch := Self.Patches[i];
+    patch.Reset();
+    patch.Seed := Self.Contract.ApplyContractOverride(patch.Id, patch.Seed);
+    patch.CompostItem := Self.CompostItemName();
+    patch.UseFertileSoil := Self.CompostMethod = EBASHCompostMethod.FERTILE_SOIL;
+
+    // Skip plant if journal says still growing (trees especially)
+    if Self.Journal.IsLikelyGrowing(patch.Id) and (patch.Data.PatchType in [EBASHPatchType.TREE, EBASHPatchType.FRUIT]) then
+      WriteLn('[BASHFarm] Journal: ', patch.Data.Name, ' likely still growing (', Self.Journal.GetPlantedItem(patch.Id), ')');
+
+    // AtFarm (near lep/patch) — not the large MapCoords box, which can include
+    // west of the guild and wrongly skip Fairy CIR / skills necklace teleports.
+    if not patch.AtFarm() then
+    begin
+      if not Self.TeleportTo(patch.Travel) then
+      begin
+        patch.SkipPatch('Teleport failed');
+        Self.Patches[i] := patch;
+        Inc(Self.PatchesSkipped);
+        Continue;
+      end;
+    end;
+
+    // Non-diary stony basalt: climb rocks (73 Agility) before walking to patch
+    if not patch.HandleStrongholdShortcut() then
+    begin
+      patch.SkipPatch('Stronghold shortcut failed (need 73 Agility if below rocks)');
+      Self.Patches[i] := patch;
+      Inc(Self.PatchesSkipped);
+      Continue;
+    end;
+
+    // Arrive at farm if still at teleport landing (Ecto etc.). Once at farm: coords/colour only — no walk onto patches/lep.
+    patch.DebugFarmPos('Pre-walk check after tele → ' + patch.Data.Name);
+    if not patch.AtFarm() then
+    begin
+      if not patch.WalkNearLeprechaun(10) then
+        WriteLn('[BASHFarm] Warning: could not walk to farm near leprechaun at ', patch.Data.Name);
+    end
+    else
+      WriteLn('[BASHFarm] AtFarm=True for ', patch.Data.Name, ' — skip WalkNearLeprechaun');
+
+    if not patch.EnsureLepTools() then
+      WriteLn('[BASHFarm] Warning: could not withdraw tools/compost from leprechaun at ', patch.Data.Name);
+
+    patch.Run(Self.Journal);
+
+    if patch.Skip then
+      Inc(Self.PatchesSkipped)
+    else if patch.Complete or patch.Harvested or patch.Planted then
+      Inc(Self.PatchesCompleted);
+
+    Self.Patches[i] := patch;
+  end;
+
+  // Final note + deposit tools back to leprechaun for next run
+  if Length(Self.Patches) > 0 then
+  begin
+    Self.Patches[High(Self.Patches)].NoteItems();
+    Self.Patches[High(Self.Patches)].DepositLepTools();
+  end;
+
+  Inc(Self.RunsComplete);
+  Self.Journal.Save();
+
+  WriteLn('[BASHFarm] Calling OnComplete');
+  Self.OnComplete();
+end;
+
+procedure TBASHFarmRunner.DoFarmRun();
+begin
+  if not Self.ReadyTimer.IsFinished() then
+    Exit;
+
+  Self.Run();
+  Self.ReadyTimer.Init(Random(86 * ONE_MINUTE, 97 * ONE_MINUTE));
+  WriteLn('[BASHFarm] Next run in ', SRL.MsToTime(Self.ReadyTimer.TimeRemaining(), TTimeFormat.Time_Short));
+end;
+
+function TBASHFarmRunner.CanDoFarmRun(): Boolean;
+begin
+  Result := Self.ReadyTimer.IsFinished();
+end;
+
+{$I BashLib/optional/handlers/bashfarm/gui.simba}

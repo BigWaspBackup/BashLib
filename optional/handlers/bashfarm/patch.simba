@@ -1,0 +1,2224 @@
+(*!
+  Per-patch find / inspect / plant / harvest / compost / clear / note.
+  Uses global Map (WalkerV2) — not ScriptWalker / worlds.png.
+*)
+
+procedure TBASHFarmPatch.Reset();
+begin
+  Self.Harvested := False;
+  Self.Planted := False;
+  Self.Composted := False;
+  Self.Skip := False;
+  Self.Complete := False;
+  Self.FailCount := 0;
+  Self.TPA := [];
+  Self.SearchBox := [0, 0, 0, 0];
+end;
+
+procedure TBASHFarmPatch.SkipPatch(reason: String);
+begin
+  WriteLn('[BASHFarm] Skipping ' + Self.Data.Name + ': ' + reason);
+  Self.Skip := True;
+end;
+
+{ After stony basalt: diary = near patch; otherwise at rocks bottom — climb to top. }
+function TBASHFarmPatch.HandleStrongholdShortcut(): Boolean;
+var
+  attempt: Int32;
+  rocksMS: TPoint;
+begin
+  Result := True;
+  if Self.Id <> EBASHFarmPatch.STRONGHOLD_HERB then
+    Exit;
+
+  // Diary (or already climbed): near patch / top of rocks
+  if Map.Walker.InRange(Self.Data.Coords, 45) then
+    Exit;
+  // Tight range — TOP and BOTTOM are only ~24 tiles apart; wide range fires mid-climb.
+  if Map.Walker.InRange(BASH_STRONGHOLD_SHORTCUT_TOP, 6) then
+    Exit;
+
+  // Not standing at the bottom — leave WebWalk to sort it out
+  if not Map.Walker.InRange(BASH_STRONGHOLD_SHORTCUT_BOTTOM, 40) and
+     not Map.Walker.InRange(BASH_STRONGHOLD_ROCKS, 40) then
+    Exit;
+
+  if Stats.GetLevel(ERSSkill.AGILITY, True) < 73 then
+  begin
+    WriteLn('[BASHFarm] Stronghold rocks need 73 Agility (landed below shortcut)');
+    Exit(False);
+  end;
+
+  WriteLn('[BASHFarm] Climbing Stronghold rocks shortcut');
+  for attempt := 1 to 3 do
+  begin
+    if not Map.Walker.InRange(BASH_STRONGHOLD_ROCKS, 12) then
+      Map.Walker.WebWalk(BASH_STRONGHOLD_SHORTCUT_BOTTOM, 6, 0.15);
+
+    rocksMS := Map.GetTileMS(BASH_STRONGHOLD_ROCKS).Mean;
+    if not (rocksMS in MainScreen.Bounds) then
+    begin
+      Map.Walker.MakePointVisible(BASH_STRONGHOLD_ROCKS);
+      rocksMS := Map.GetTileMS(BASH_STRONGHOLD_ROCKS).Mean;
+    end;
+
+    Mouse.Move(SRL.RandomPoint(rocksMS, MainScreen.NormalizeDistance(8)));
+    if not (MainScreen.IsUpText('Climb') or MainScreen.IsUpText('Rocks')) then
+    begin
+      Mouse.Click(MOUSE_RIGHT);
+      if not ChooseOption.Select(['Climb']) then
+      begin
+        ChooseOption.Close();
+        Continue;
+      end;
+    end
+    else
+      Mouse.Click(MOUSE_LEFT);
+
+    if not MainScreen.DidRedClick() then
+      Continue;
+
+    // Wait until we are actually on the completed-climb tile (not mid-animation).
+    if WaitUntil(
+         Map.Walker.InRange(BASH_STRONGHOLD_SHORTCUT_TOP, 4) and
+         (not Minimap.IsPlayerMoving()),
+         35,
+         8000
+       ) then
+    begin
+      WriteLn('[BASHFarm] Stronghold shortcut complete — at top');
+      Exit(True);
+    end;
+
+    WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+  end;
+
+  Result := Map.Walker.InRange(BASH_STRONGHOLD_SHORTCUT_TOP, 4) or
+            Map.Walker.InRange(Self.Data.Coords, 45);
+  if not Result then
+    WriteLn('[BASHFarm] Failed to climb Stronghold rocks');
+end;
+
+function TBASHFarmPatch.OutlineToMS(): TPointArray;
+var
+  p: TPoint;
+begin
+  SetLength(Result, 0);
+  for p in Self.Data.Outline do
+    Result += Map.GetTileMS(p).Mean;
+end;
+
+{ L allotments: Outline is either a polygon (6 verts, filled) or an explicit
+  soil-tile list. Tile lists: >8 points (allotments) or exactly 4 (herb/flower 2x2). }
+function TBASHFarmPatch.UsesTileList(): Boolean;
+begin
+  if Length(Self.Data.Outline) > 8 then
+    Exit(True);
+  // Herb / flower / bush / cactus 2x2 — all four soil tiles
+  Result := (Length(Self.Data.Outline) = 4) and
+            (Self.Data.PatchType in [
+              EBASHPatchType.HERB, EBASHPatchType.FLOWER,
+              EBASHPatchType.BUSH, EBASHPatchType.CACTUS,
+              EBASHPatchType.FRUIT
+            ]);
+end;
+
+function TBASHFarmPatch.GetOutlineMapTiles(): TPointArray;
+var
+  b: TBox;
+  x, y: Int32;
+begin
+  SetLength(Result, 0);
+  if Length(Self.Data.Outline) < 3 then
+    Exit;
+
+  // Explicit soil tiles — use as-is (no polygon fill)
+  if Self.UsesTileList() then
+  begin
+    Result := Self.Data.Outline;
+    Exit;
+  end;
+
+  b := Self.Data.Outline.Bounds();
+  for y := b.Y1 to b.Y2 do
+    for x := b.X1 to b.X2 do
+      if SRL.PointInPoly([x, y], Self.Data.Outline) then
+        Result += [x, y];
+end;
+
+function TBASHFarmPatch.GetInteractTile(): TPoint;
+var
+  tiles: TPointArray;
+  me, nearest, target, interior, toward, p: TPoint;
+  d, lateral, score, bestScore, tx, ty, tlen, dx, dy, len, lipDist, pastLip: Double;
+begin
+  if Length(Self.Data.Outline) < 3 then
+    Exit(Self.Data.Coords);
+
+  tiles := Self.GetOutlineMapTiles();
+  if Length(tiles) = 0 then
+    Exit(Self.Data.Coords);
+
+  me := Map.Position();
+  toward := Self.Data.Coords;
+  tx := toward.X - me.X;
+  ty := toward.Y - me.Y;
+  tlen := Sqrt(tx * tx + ty * ty);
+
+  // Prefer tile in front (low lateral vs me→Coords) — avoids L-corner path-around
+  nearest := tiles[0];
+  bestScore := 1000000;
+  for p in tiles do
+  begin
+    dx := p.X - me.X;
+    dy := p.Y - me.Y;
+    d := Sqrt(dx * dx + dy * dy);
+    if tlen > 0.1 then
+      lateral := Abs(dx * ty - dy * tx) / tlen
+    else
+      lateral := 0;
+    score := d + lateral * 0.85;
+    if score < bestScore then
+    begin
+      bestScore := score;
+      nearest := p;
+    end;
+  end;
+
+  // Explicit soil tiles are already centers — no inset needed
+  if Self.UsesTileList() then
+    Exit(nearest);
+
+  // Polygon-fill path: inset toward interior, snap to nearest fill point
+  interior := tiles.Mean;
+  dx := interior.X - nearest.X;
+  dy := interior.Y - nearest.Y;
+  len := Sqrt(dx * dx + dy * dy);
+  if len < 0.1 then
+    Exit(nearest);
+
+  lipDist := me.DistanceTo(nearest);
+  if lipDist <= 7 then
+    pastLip := 1.5
+  else if lipDist <= 14 then
+    pastLip := 2.5
+  else
+    pastLip := 3.0;
+
+  target.X := Round(nearest.X + (dx / len) * pastLip);
+  target.Y := Round(nearest.Y + (dy / len) * pastLip);
+  Result := tiles.NearestPoint(target);
+end;
+
+function TBASHFarmPatch.Find(): Boolean;
+var
+  borderTPA: TPointArray;
+  borderATPA: T2DPointArray;
+  i, searchMod, bestIdx: Int32;
+  filterPt, centerSearch, interact: TPoint;
+  bestDist, dist, nearTol: Double;
+  hull: TPointArray;
+begin
+  Self.SearchBox := [0, 0, 0, 0];
+  Self.TPA := [];
+
+  interact := Self.GetInteractTile();
+  filterPt := Map.GetTileMS(interact).Mean;
+  if not (filterPt in MainScreen.Bounds) then
+    Exit(False);
+
+  // Concave / L-shaped patches: use stored outline (not ConvexHull — that fills the notch)
+  if Length(Self.Data.Outline) >= 3 then
+  begin
+    Self.TPA := Self.OutlineToMS();
+    if Length(Self.TPA) < 3 then
+      Exit(False);
+
+    searchMod := MainScreen.NormalizeDistance(14);
+    // Soil / hover target = nearest on-patch tile to player (not fixed Coords / notch mean)
+    centerSearch := filterPt;
+    Self.SearchBox.X1 := centerSearch.X - searchMod;
+    Self.SearchBox.Y1 := centerSearch.Y - searchMod;
+    Self.SearchBox.X2 := centerSearch.X + searchMod;
+    Self.SearchBox.Y2 := centerSearch.Y + searchMod;
+    Self.SearchBox.LimitTo(MainScreen.Bounds);
+    Exit(True);
+  end;
+
+  if SRL.FindColors(borderTPA, Self.Data.BorderColor, MainScreen.Bounds) = 0 then
+    Exit(False);
+
+  borderATPA := borderTPA.Cluster(MainScreen.NormalizeDistance(20));
+  borderATPA.SortFrom(filterPt);
+
+  bestIdx := -1;
+  bestDist := 1000000;
+  // MM2MS drifts at range — Coords can project outside the real hull (top-left miss).
+  // Accept PointInPoly, or nearest hull mean within a loose pixel tolerance.
+  nearTol := MainScreen.NormalizeDistance(90);
+
+  for i := 0 to High(borderATPA) do
+  begin
+    hull := borderATPA[i].ConvexHull.Connect;
+    if Length(hull) < 8 then
+      Continue;
+
+    if SRL.PointInPoly(filterPt, hull) then
+    begin
+      Self.TPA := hull;
+      bestIdx := i;
+      bestDist := 0;
+      Break;
+    end;
+
+    dist := filterPt.DistanceTo(hull.Mean);
+    if dist < bestDist then
+    begin
+      bestDist := dist;
+      bestIdx := i;
+      Self.TPA := hull;
+    end;
+  end;
+
+  if (bestIdx < 0) or (bestDist > nearTol) then
+  begin
+    Self.TPA := [];
+    Exit(False);
+  end;
+
+  searchMod := MainScreen.NormalizeDistance(12);
+  if Self.Data.PatchType = EBASHPatchType.FRUIT then
+    searchMod := MainScreen.NormalizeDistance(16);
+
+  // Always aim at the found hull (screen truth), not drifted GetTileMS(Coords)
+  centerSearch := Self.TPA.Mean;
+  Self.SearchBox.X1 := centerSearch.X - searchMod;
+  Self.SearchBox.Y1 := centerSearch.Y - searchMod;
+  Self.SearchBox.X2 := centerSearch.X + searchMod;
+  Self.SearchBox.Y2 := centerSearch.Y + searchMod;
+  Self.SearchBox.LimitTo(MainScreen.Bounds);
+  Result := True;
+end;
+
+procedure TBASHFarmPatch.DebugDraw();
+var
+  interactPt, lepPt, mePt, mousePt, binPt, a, b, interact, me, coordsMS: TPoint;
+  tileBox, meBox, binBox: TRectangle;
+  dot: TBox;
+  i: Int32;
+  outlineMS: TPointArray;
+begin
+  me := Map.Position();
+  interact := Self.GetInteractTile();
+  tileBox := Map.GetTileMS(Self.Data.Coords);
+  meBox := Map.GetTileMS(me);
+  coordsMS := tileBox.Mean;
+  mePt := meBox.Mean;
+  lepPt := Map.GetTileMS(Self.Data.LeprechaunCoords).Mean;
+  mousePt := Mouse.Position();
+
+  // Prefer found patch (SearchBox / TPA) — GetTileMS(Coords) drifts at range
+  if Self.SearchBox.Area > 0 then
+    interactPt := Self.SearchBox.Center()
+  else if Length(Self.TPA) > 0 then
+    interactPt := Self.TPA.Mean
+  else
+    interactPt := Map.GetTileMS(interact).Mean;
+
+  RSClient.Image.Clear();
+  // Simba colors are BGR ($BBGGRR), not RGB
+  RSClient.Image.DrawBox(tileBox.Bounds(), $00FFFF); // yellow = GetTileMS(Coords) — may drift
+  RSClient.Image.DrawBox(meBox.Bounds(), $FF8000); // blue = player tile
+
+  RSClient.Image.DrawTPA(TPAFromLine(mePt, interactPt), $FFFFFF); // player -> aim
+
+  // Lime = actual hover/search aim (hull/SearchBox), red = same center
+  dot := [interactPt.X - 4, interactPt.Y - 4, interactPt.X + 4, interactPt.Y + 4];
+  RSClient.Image.DrawBox(dot, $00FF00);
+  RSClient.Image.DrawBox([interactPt.X - 2, interactPt.Y - 2, interactPt.X + 2, interactPt.Y + 2], $0000FF);
+
+  // Yellow cross = mouse
+  RSClient.Image.DrawTPA(TPAFromLine([mousePt.X - 8, mousePt.Y], [mousePt.X + 8, mousePt.Y]), $00FFFF);
+  RSClient.Image.DrawTPA(TPAFromLine([mousePt.X, mousePt.Y - 8], [mousePt.X, mousePt.Y + 8]), $00FFFF);
+
+  if Length(Self.Data.Outline) >= 2 then
+  begin
+    outlineMS := Self.OutlineToMS();
+    if Self.UsesTileList() then
+      RSClient.Image.DrawTPA(outlineMS, $FF00FF) // pink dots = each soil tile
+    else
+    begin
+      for i := 0 to High(outlineMS) do
+      begin
+        a := outlineMS[i];
+        b := outlineMS[(i + 1) mod Length(outlineMS)];
+        RSClient.Image.DrawTPA(TPAFromLine(a, b), $FF00FF);
+      end;
+      RSClient.Image.DrawTPA(outlineMS, $00A5FF);
+    end;
+  end
+  else if Length(Self.TPA) > 0 then
+    RSClient.Image.DrawTPA(Self.TPA, $FF00FF);
+
+  if Self.SearchBox.Area > 0 then
+    RSClient.Image.DrawBox(Self.SearchBox, $008000); // dark green = SearchBox
+
+  if (Self.Data.CompostBinCoords.X <> 0) or (Self.Data.CompostBinCoords.Y <> 0) then
+  begin
+    binBox := Map.GetTileMS(Self.Data.CompostBinCoords);
+    binPt := binBox.Mean;
+    RSClient.Image.DrawBox(binBox.Bounds(), $8000FF);
+    RSClient.Image.DrawText('bin', binPt, $8000FF);
+  end;
+
+  dot := [lepPt.X - 3, lepPt.Y - 3, lepPt.X + 3, lepPt.Y + 3];
+  RSClient.Image.DrawBox(dot, $FFFF00); // cyan = lep
+  RSClient.Image.DrawText(Self.Data.Name, interactPt, $FFFFFF);
+  RSClient.Image.DrawText('me', mePt, $FF8000);
+  RSClient.Image.DrawText('aim', [interactPt.X, interactPt.Y + 12], $0000FF);
+  RSClient.Image.DrawText('coordsMS', [coordsMS.X, coordsMS.Y - 12], $00FFFF); // drifted GetTileMS
+  RSClient.Image.DrawText('mouse', [mousePt.X + 6, mousePt.Y - 10], $00FFFF);
+end;
+
+{ Find patch via soil colour + interact coords. Camera/compass only — no WebWalk onto the patch. }
+function TBASHFarmPatch.WalkFind(): Boolean;
+var
+  interact: TPoint;
+  attempt: Int32;
+begin
+  Self.SearchBox := [0, 0, 0, 0];
+  Self.TPA := [];
+  interact := Self.GetInteractTile();
+
+  for attempt := 0 to 5 do
+  begin
+    if Self.Find() then
+      Exit(True);
+
+    Map.Walker.MakePointVisible(interact);
+    if Self.Find() then
+      Exit(True);
+
+    Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(35, 70) * (1 - 2 * (attempt mod 2)), 10);
+  end;
+
+  Result := False;
+end;
+
+{ Fraction of SearchBox matching SoilColor. -1 if patch/box unavailable. }
+function TBASHFarmPatch.SoilPercent(): Double;
+begin
+  Result := -1;
+  if Self.SearchBox.Area = 0 then
+  begin
+    if not Self.Find() then
+      Exit;
+    if Self.SearchBox.Area = 0 then
+      Exit;
+  end;
+  Result := SRL.CountColor(Self.Data.SoilColor, Self.SearchBox) / Self.SearchBox.Area;
+end;
+
+function TBASHFarmPatch.IsEmpty(): Boolean;
+var
+  pct: Double;
+begin
+  if Self.Data.PatchType = EBASHPatchType.TREE then
+  begin
+    Result := Self.Hover() and MainScreen.IsUpText(Self.EmptyUpText);
+    if not MainScreen.IsUpText('Rake') then
+      Exit(Result);
+  end;
+
+  if not Self.Find() then
+    Exit(False);
+  pct := Self.SoilPercent();
+  Result := (pct >= 0) and (pct > 0.99);
+end;
+
+function TBASHFarmPatch.IsDiseased(): Boolean;
+begin
+  Result := Self.Find() and (SRL.CountColor(CTS2(1272942, 14, 0.03, 2.31), Self.SearchBox) > MainScreen.NormalizeDistance(3));
+end;
+
+procedure TBASHFarmPatch._UpdateTarget(sender: PMouse; var x, y: Double; var done: Boolean);
+var
+  p, destination: TPoint;
+begin
+  destination := [Round(x), Round(y)];
+  p := sender^.Position();
+  if p.DistanceTo(destination) > 5 then
+    Exit;
+
+  sender^.OnMovingEx := nil;
+
+  if not (done := Self.Find()) then
+    Exit;
+
+  if PointInBox(destination, Self.SearchBox) then
+    Exit;
+
+  // Prefer nearest on-patch tile (SearchBox); never aim at L-outline notch mean
+  if Length(Self.Data.Outline) >= 3 then
+    p := SRL.RandomPoint(Self.SearchBox.Center(), MainScreen.NormalizeDistance(8))
+  else
+    p := SRL.RandomPoint(Self.TPA.Mean, MainScreen.NormalizeDistance(10));
+  x := p.X;
+  y := p.Y;
+end;
+
+function TBASHFarmPatch.Hover(): Boolean;
+var
+  attempt: Int32;
+  p, interact: TPoint;
+begin
+  interact := Self.GetInteractTile();
+
+  for attempt := 1 to 4 do
+  begin
+    if Self.Find() then
+    begin
+      Mouse.OnMovingEx := @Self._UpdateTarget;
+      // L patches: aim at nearest on-patch tile so we don't path across the L
+      if Length(Self.Data.Outline) >= 3 then
+      begin
+        p := Map.GetTileMS(Self.GetInteractTile()).Mean;
+        // Tight jitter — large RandomPoint was missing the 2-tile-thick arm
+        Mouse.Move(SRL.RandomPoint(p, MainScreen.NormalizeDistance(6)));
+      end
+      else
+      begin
+        p := Self.TPA.Mean;
+        Mouse.Move(SRL.RandomPoint(p, MainScreen.NormalizeDistance(25)));
+      end;
+      Exit(True);
+    end;
+
+    // At farm: rotate onto the patch — do not WebWalk onto soil tiles
+    Map.Walker.MakePointVisible(interact);
+    Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(35, 70) * (1 - 2 * (attempt mod 2)), 10);
+  end;
+
+  Result := False;
+end;
+
+function TBASHFarmPatch.Inspect(): EBASHPatchState;
+label
+  doInspect;
+var
+  upText: String;
+begin
+  if Self.Complete then
+    Exit(EBASHPatchState.COMPLETE);
+  if Self.Skip then
+    Exit(EBASHPatchState.SKIP);
+
+  if Minimap.InPOH() then
+    Exit(EBASHPatchState.TELEPORT_TO);
+
+  if not Map.Position().InBox(Self.Data.MapCoords) then
+    Exit(EBASHPatchState.TELEPORT_TO);
+
+  if not Self.WalkFind() then
+    Exit(EBASHPatchState.NOT_FOUND);
+
+  if Inventory.IsFull() then
+    Exit(EBASHPatchState.NOTE_ITEMS);
+
+  if Self.Data.PatchType = EBASHPatchType.HERB then
+  begin
+    if SRL.CountColor(CTS2(6050153, 7, 2.73, 0.61), Self.SearchBox) > MainScreen.NormalizeDistance(14) then
+      Exit(EBASHPatchState.DEAD);
+    if SRL.CountColor(CTS2(1272942, 14, 0.03, 2.31), Self.SearchBox) > MainScreen.NormalizeDistance(14) then
+      Exit(EBASHPatchState.DISEASED);
+  end;
+
+  // Prefer Planted flag over soil-color — tiny seedlings still look "empty".
+  if Self.Planted and not Self.Composted then
+    Exit(EBASHPatchState.UNCOMPOSTED);
+
+  if Self.Planted and Self.Composted then
+    Exit(EBASHPatchState.GROWING);
+
+  if Self.Planted then
+    Exit(EBASHPatchState.GROWING);
+
+  // Just harvested — trust that and plant next. Skip hover/Inspect click.
+  if Self.Harvested and (not Self.Planted) then
+    Exit(EBASHPatchState.EMPTY);
+
+  if Self.IsEmpty() then
+    Exit(EBASHPatchState.EMPTY);
+
+  Self.Hover();
+  upText := MainScreen.GetUpText();
+
+  if 'Rake' in upText then
+    Exit(EBASHPatchState.OVERGROWN);
+  if 'ead' in upText then
+    Exit(EBASHPatchState.DEAD);
+  if 'seas' in upText then
+    Exit(EBASHPatchState.DISEASED);
+  if ('Chop' in upText) or ('lear' in upText) then
+  begin
+    if Self.DontClear then
+      Exit(EBASHPatchState.GROWING);
+    Exit(EBASHPatchState.NEED_CLEAR);
+  end;
+  if 'eck-hea' in upText then
+    Exit(EBASHPatchState.FRESH);
+  if Self.HarvestUpText in upText then
+    Exit(EBASHPatchState.GROWN);
+  if 'spect' in upText then
+    goto doInspect;
+
+  if Self.Hover() then
+  begin
+    ChooseOption.Open();
+    if ChooseOption.HasOption(Self.HarvestUpText, False, False) then
+      Exit(EBASHPatchState.GROWN);
+    if ChooseOption.HasOption('ead', False, False) then
+      Exit(EBASHPatchState.DEAD);
+    if ChooseOption.HasOption('seas', False, False) then
+      Exit(EBASHPatchState.DISEASED);
+    if ChooseOption.HasOption('spect', False, False) then
+      goto doInspect;
+  end;
+
+  Exit(EBASHPatchState.NOT_FOUND);
+
+doInspect:
+  if ChooseOption.IsOpen() then
+  begin
+    if not ChooseOption.Select('spect') then
+      Exit(EBASHPatchState.NOT_FOUND);
+  end
+  else
+    Mouse.Click(MOUSE_LEFT);
+
+  WaitUntil((not Minimap.IsPlayerMoving()) and Chat.FindMessage('This is a'), 35, 4000);
+
+  if Chat.FindMessage('is empty') then
+    Exit(EBASHPatchState.EMPTY);
+  if Chat.FindMessage('not bee') then
+    Exit(EBASHPatchState.UNCOMPOSTED);
+  if Chat.FindMessage('lly gr') then
+    Exit(EBASHPatchState.GROWN);
+  if Chat.FindMessage('has been') then
+    Exit(EBASHPatchState.GROWING);
+  if Chat.FindMessage('ead') then
+    Exit(EBASHPatchState.DEAD);
+  if Chat.FindMessage('seas') then
+    Exit(EBASHPatchState.DISEASED);
+
+  Result := EBASHPatchState.NOT_FOUND;
+end;
+
+function TBASHFarmPatch.Harvest(): Boolean;
+var
+  timeout, stall: TCountdown;
+  lastCount, curCount, lastEmpty, curEmpty: Int32;
+  gotActivity, started: Boolean;
+  soilPct: Double;
+  colourEmpty: Boolean;
+
+  { Re-click harvest on the patch after invent was full / we stopped picking. }
+  function ResumePick(): Boolean;
+  begin
+    Result := False;
+    if not Self.Hover() then
+      Exit;
+    if MainScreen.IsUpText(Self.HarvestUpText) then
+      Mouse.Click(MOUSE_LEFT)
+    else if not ChooseOption.Select(Self.HarvestUpText) then
+      Exit;
+    if not MainScreen.DidRedClick() then
+      Exit;
+    WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+    lastCount := Inventory.Count();
+    lastEmpty := Inventory.CountEmptySlots();
+    Result := True;
+  end;
+
+  { Drop buckets + note produce so picking can continue. }
+  procedure FreeInventForPick();
+  begin
+    Self.DropEmptyBuckets();
+    if Inventory.IsFull() or (Inventory.CountEmptySlots() < 3) then
+    begin
+      WriteLn('[BASHFarm] Harvest: noting produce to free invent space');
+      Self.NoteItems();
+    end;
+    lastCount := Inventory.Count();
+    lastEmpty := Inventory.CountEmptySlots();
+  end;
+begin
+  Result := False;
+  Self.Harvested := False;
+
+  if not Self.Hover() then
+    Exit(False);
+
+  if MainScreen.IsUpText(Self.HarvestUpText) then
+    Mouse.Click(MOUSE_LEFT)
+  else if not ChooseOption.Select(Self.HarvestUpText) then
+    Exit(False);
+
+  if not MainScreen.DidRedClick() then
+    Exit(False);
+
+  WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+
+  // Primary: XP / invent activity. Stall only after first pick (don't arm while still walking in).
+  // Colour empty is confirmation after stall only (not early exit).
+  XPBar.Read();
+  XPBar.EarnedXP(); // flush any pre-harvest XP so we only see pick XP
+  lastCount := Inventory.Count();
+  lastEmpty := Inventory.CountEmptySlots();
+  timeout.Init((Inventory.CountEmptySlots() + 3) * 3 * 600);
+  started := False;
+
+  while not timeout.IsFinished() do
+  begin
+    gotActivity := False;
+
+    if XPBar.EarnedXP() then
+      gotActivity := True;
+
+    curCount := Inventory.Count();
+    curEmpty := Inventory.CountEmptySlots();
+    if (curCount <> lastCount) or (curEmpty <> lastEmpty) then
+    begin
+      lastCount := curCount;
+      lastEmpty := curEmpty;
+      gotActivity := True;
+    end;
+
+    if gotActivity then
+    begin
+      Result := True;
+      if not started then
+      begin
+        started := True;
+        stall.Init(3000);
+        WriteLn('[BASHFarm] Harvest: first XP/invent — stall armed');
+      end
+      else
+        stall.Restart();
+    end
+    else if started and stall.IsFinished() then
+    begin
+      Self.Find(); // refresh SearchBox for colour check
+      soilPct := Self.SoilPercent();
+      colourEmpty := (soilPct >= 0) and (soilPct > 0.99);
+      WriteLn('[BASHFarm] Harvest: stall — soil ', ToStr(Round(soilPct * 1000) / 10),
+        '% (empty=', ToStr(colourEmpty), ', inventFull=', ToStr(Inventory.IsFull()), ')');
+
+      if colourEmpty then
+      begin
+        WriteLn('[BASHFarm] Harvest: colour confirms empty — picked clean');
+        Self.DropEmptyBuckets();
+        Self.Harvested := True;
+        Exit(True);
+      end;
+
+      // Invent full (or nearly) — drop buckets + note herbs, then re-click pick
+      if Inventory.IsFull() or (Inventory.CountEmptySlots() < 2) then
+      begin
+        FreeInventForPick();
+        if colourEmpty then
+        begin
+          Self.Harvested := True;
+          Exit(True);
+        end;
+        WriteLn('[BASHFarm] Harvest: freed invent — resume pick (uptext/click)');
+        if ResumePick() then
+        begin
+          stall.Restart();
+          // Extra time after noting / resuming a mid-patch invent clear
+          timeout.Init(25000);
+          Continue;
+        end;
+
+        // Could not re-engage — still harvestable?
+        if Self.Hover() and MainScreen.IsUpText(Self.HarvestUpText) then
+        begin
+          WriteLn('[BASHFarm] Harvest: invent freed but resume click failed — still grown');
+          Self.Harvested := False;
+          Exit(True);
+        end;
+
+        WriteLn('[BASHFarm] Harvest: invent freed, no harvest uptext — treating as done');
+        Self.Harvested := True;
+        Exit(True);
+      end;
+
+      // Free invent + stall + soil not empty → stopped picking; resume
+      WriteLn('[BASHFarm] Harvest: stall with free space, soil not empty — resume pick');
+      if ResumePick() then
+      begin
+        stall.Restart();
+        Continue;
+      end;
+
+      if Self.Hover() and MainScreen.IsUpText(Self.HarvestUpText) then
+      begin
+        WriteLn('[BASHFarm] Harvest: resume failed, still harvestable — leave as grown');
+        Self.Harvested := False;
+        Exit(True);
+      end;
+
+      WriteLn('[BASHFarm] Harvest: stall, no harvest uptext — treating as done');
+      Self.DropEmptyBuckets();
+      Self.Harvested := True;
+      Exit(True);
+    end;
+
+    WaitUntil(
+      XPBar.EarnedXP() or
+      (Inventory.Count() <> lastCount) or
+      (Inventory.CountEmptySlots() <> lastEmpty),
+      35,
+      250
+    );
+  end;
+
+  Self.Find();
+  soilPct := Self.SoilPercent();
+  colourEmpty := (soilPct >= 0) and (soilPct > 0.99);
+  WriteLn('[BASHFarm] Harvest: timeout — soil ', ToStr(Round(soilPct * 1000) / 10),
+    '% (empty=', ToStr(colourEmpty), ', started=', ToStr(started), ')');
+
+  // Never got a pick — don't claim harvested
+  if not started then
+  begin
+    WriteLn('[BASHFarm] Harvest: timed out before first XP/invent');
+    Exit(False);
+  end;
+
+  if colourEmpty then
+  begin
+    Self.Harvested := True;
+    Exit(True);
+  end;
+
+  // Timeout with plants still on patch — never claim EMPTY / plant over them
+  if Inventory.IsFull() then
+    FreeInventForPick();
+
+  if Self.Hover() and MainScreen.IsUpText(Self.HarvestUpText) then
+  begin
+    WriteLn('[BASHFarm] Harvest: timeout, patch still harvestable — not marking empty');
+    Self.Harvested := False;
+    Result := True;
+  end
+  else if colourEmpty then
+  begin
+    Self.Harvested := True;
+    Result := True;
+  end
+  else
+  begin
+    // Soil not empty and no uptext — ambiguous; do not plant over
+    WriteLn('[BASHFarm] Harvest: timeout, soil not empty — not marking empty');
+    Self.Harvested := False;
+    Result := True;
+  end;
+end;
+
+function TBASHFarmPatch.Plant(): Boolean;
+var
+  attempt, seedBefore, seedsNeeded: Int32;
+  hadSelection: Boolean;
+begin
+  Result := False;
+
+  if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
+    seedsNeeded := 3
+  else
+    seedsNeeded := 1;
+
+  // CountItemStack returns -1 while the seed slot is selected (SlotSelected sprite).
+  // Only enforce the stack check when nothing is selected yet.
+  hadSelection := Inventory.GetSelectedSlot() <> -1;
+  seedBefore := Inventory.CountItemStack(Self.Seed);
+
+  if not hadSelection then
+  begin
+    if seedBefore < seedsNeeded then
+    begin
+      WriteLn('[BASHFarm] Not enough seeds to plant (have ', seedBefore, ', need ', seedsNeeded, ')');
+      Exit(False);
+    end;
+
+    for 1 to 2 do
+      if Inventory.SetSelectedItem(Self.Seed) then
+        Break;
+
+    if Inventory.GetSelectedSlot() = -1 then
+      Exit(False);
+  end
+  else if seedBefore < 0 then
+    // Already selected — stack unreadable; assume at least one plant worth for drop detect.
+    seedBefore := seedsNeeded;
+
+  // Hover the patch up to 5 times until uptext is correct, then click.
+  for attempt := 1 to 5 do
+  begin
+    WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+
+    if Inventory.GetSelectedSlot() = -1 then
+    begin
+      // Re-count only while unselected
+      seedBefore := Inventory.CountItemStack(Self.Seed);
+      if seedBefore < seedsNeeded then
+      begin
+        WriteLn('[BASHFarm] Not enough seeds to plant (have ', seedBefore, ', need ', seedsNeeded, ')');
+        Exit(False);
+      end;
+      if not Inventory.SetSelectedItem(Self.Seed) then
+        Exit(False);
+    end;
+
+    if not Self.Find() then
+    begin
+      Self.WalkFind();
+      Continue;
+    end;
+
+    if not Self.Hover() then
+    begin
+      WriteLn('[BASHFarm] Plant hover ', attempt, '/5 — could not aim at patch');
+      Continue;
+    end;
+
+    // Weeds can regrow after a prior rake — clear again before planting
+    if MainScreen.IsUpText('Rake') then
+    begin
+      WriteLn('[BASHFarm] Weeds before plant at ', Self.Data.Name, ' — raking');
+      Inventory.SetSelectedSlot(-1);
+      if not Self.ClearWeeds() then
+        Exit(False);
+      Continue;
+    end;
+
+    if not MainScreen.IsUpText(Self.EmptyUpText) then
+    begin
+      WriteLn('[BASHFarm] Plant hover ', attempt, '/5 — uptext not on patch, retrying');
+      Continue;
+    end;
+
+    // Do not CountItemStack here — seed is selected and stack would read -1.
+    Mouse.Click(MOUSE_LEFT);
+
+    if not MainScreen.DidRedClick() then
+    begin
+      WriteLn('[BASHFarm] Plant click ', attempt, '/5 — no red click, retrying');
+      Continue;
+    end;
+
+    // Wait until we start moving toward the patch, then until we stop (V1-style)
+    WaitUntil(Minimap.IsPlayerMoving(), 35, 800);
+    WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+
+    if Chat.HasContinue() then
+    begin
+      // Already planted / wrong tool / etc. — clear dialog; may already be planted
+      Chat.ClickContinue(True);
+      if not Self.IsEmpty() then
+      begin
+        Self.Planted := True;
+        Result := True;
+        Exit;
+      end;
+    end;
+
+    // V1 confirms plant by seed stack dropping — tiny seedlings still look "empty" by soil color.
+    // After plant, selection clears so CountItemStack is readable again.
+    if WaitUntil(
+      (Inventory.CountItemStack(Self.Seed) <= seedBefore - seedsNeeded) or
+      (Inventory.CountItemStack(Self.Seed) < seedBefore) or
+      ((seedBefore <= seedsNeeded) and (not Inventory.ContainsItem(Self.Seed))) or
+      (not Self.IsEmpty()),
+      35,
+      8000
+    ) then
+    begin
+      WaitUntil(not Minimap.IsPlayerMoving(), 35, 900);
+      Inventory.SetSelectedSlot(-1);
+      Self.Planted := True;
+      Result := True;
+      WriteLn('[BASHFarm] Planted ', ToStr(Self.Seed), ' at ', Self.Data.Name);
+      Exit;
+    end;
+
+    WriteLn('[BASHFarm] Plant attempt ', attempt, '/5 — seed not consumed yet, retrying');
+  end;
+
+  Inventory.SetSelectedSlot(-1);
+  Result := False;
+end;
+
+function TBASHFarmPatch.Compost(): Boolean;
+var
+  slot, i, attempt, beforeStack: Int32;
+  upText: String;
+  clicked: Boolean;
+  isBottomless: Boolean;
+  correctItems: TRSItemArray := ['Bottomless compost bucket', 'Ultracompost', 'Supercompost', 'Compost'];
+begin
+  Result := False;
+  slot := -1;
+  clicked := False;
+
+  if Self.Composted then
+    Exit(True);
+
+  for i := 0 to High(correctItems) do
+    if Self.CompostItem = correctItems[i] then
+    begin
+      Result := True;
+      Break;
+    end;
+
+  if not Result then
+    Exit(False);
+
+  Result := False;
+  isBottomless := Self.CompostItem = 'Bottomless compost bucket';
+
+  for 1 to 2 do
+    if Inventory.FindItem(Self.CompostItem, slot) then
+      Break;
+
+  // Fallback withdraw if EnsureLepTools didn't get compost earlier.
+  if slot < 0 then
+  begin
+    Inventory.SetSelectedSlot(-1);
+    if not Self.WithdrawLepCompost() then
+      Exit(False);
+    if not Inventory.FindItem(Self.CompostItem, slot) then
+      Exit(False);
+  end;
+
+  beforeStack := Inventory.CountItemStack(Self.CompostItem);
+  XPBar.Read();
+  // Flush any pending XP so the wait below only sees compost XP
+  if XPBar.EarnedXP() then
+    WriteLn('[BASHFarm] Flushed pending XP before compost');
+
+  for attempt := 1 to 4 do
+  begin
+    if not Inventory.SetSelectedSlot(slot) then
+      Continue;
+
+    if not Self.Hover() then
+      Continue;
+
+    upText := MainScreen.GetUpText();
+
+    // Empty: "Use Supercompost -> Herbs"
+    // Planted: "Use Supercompost -> Guam Leaf" (crop name, NOT "Herb")
+    if MainScreen.IsUpText([Self.PlantedUpText, Self.EmptyUpText]) or
+       ('Use' in upText) or
+       ((ToStr(Self.Seed) <> '') and (ToStr(Self.Seed) in upText)) then
+    begin
+      Mouse.Click(MOUSE_LEFT);
+      clicked := True;
+      Break;
+    end;
+
+    if ChooseOption.Select([Self.PlantedUpText, Self.EmptyUpText, 'Use']) then
+    begin
+      clicked := True;
+      Break;
+    end;
+
+    Inventory.SetSelectedSlot(-1);
+  end;
+
+  if not clicked then
+  begin
+    Inventory.SetSelectedSlot(-1);
+    Exit(False);
+  end;
+
+  if not MainScreen.DidRedClick() then
+  begin
+    Inventory.SetSelectedSlot(-1);
+    Exit(False);
+  end;
+
+  WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+
+  // Prefer XP confirm — bucket stack drop alone is too early to leave/teleport
+  Result := WaitUntil(
+    XPBar.EarnedXP() or
+    Chat.FindMessage('already been') or
+    Chat.FindMessage('treat the') or
+    Chat.FindMessage('This patch has already'),
+    35,
+    Round(5000 + Map.Position().DistanceTo(Self.Data.Coords) / 150)
+  );
+
+  // Bucket consumed but XP OCR missed: keep waiting for XP briefly, then settle
+  if (not Result) and (not isBottomless) and (Inventory.CountItemStack(Self.CompostItem) < beforeStack) then
+  begin
+    Result := WaitUntil(XPBar.EarnedXP(), 35, 2500);
+    if not Result then
+    begin
+      WriteLn('[BASHFarm] Compost bucket used — settling before leave (XP OCR missed)');
+      Result := True;
+    end;
+  end;
+
+  // Do not return mid-action — runner may WebWalk/teleport immediately after
+  WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+  Self.Composted := Result;
+  if Result then
+    WriteLn('[BASHFarm] Composted ', Self.Data.Name)
+  else
+    WriteLn('[BASHFarm] Compost click happened but could not confirm on ', Self.Data.Name);
+  Inventory.SetSelectedSlot(-1);
+
+  if Result and (not isBottomless) then
+    Self.DropEmptyBuckets();
+end;
+
+function TBASHFarmPatch.FertileSoil(): Boolean;
+var
+  attempt: Int32;
+  upText: String;
+begin
+  if Magic.GetSpellBook() <> ERSSpellBook.LUNAR then
+    Exit(False);
+
+  if not Self.Find() then
+    Exit(False);
+
+  for 1 to 2 do
+    if Magic.CastSpell(ERSSpell.FERTILE_SOIL) then
+      Break;
+
+  XPBar.EarnedXP();
+
+  for attempt := 1 to 4 do
+  begin
+    if not Self.Hover() then
+      Continue;
+
+    if not Magic.IsSelected(ERSSpell.FERTILE_SOIL) then
+      Exit(False);
+
+    upText := MainScreen.GetUpText();
+    if MainScreen.IsUpText([Self.PlantedUpText, Self.EmptyUpText]) or
+       ('Cast' in upText) or
+       ('Fertile' in upText) then
+    begin
+      Mouse.Click(MOUSE_LEFT);
+      Break;
+    end;
+
+    if ChooseOption.Select([Self.PlantedUpText, Self.EmptyUpText, 'Fertile']) then
+      Break;
+  end;
+
+  if not MainScreen.DidRedClick() then
+    Exit(False);
+
+  WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+
+  Result := WaitUntil(XPBar.EarnedXP(), 35, Round(3000 + Map.Position().DistanceTo(Self.Data.Coords) / 150));
+  Self.Composted := Result;
+end;
+
+function TBASHFarmPatch.CheckHealth(): Boolean;
+begin
+  if not Self.Hover() then
+    Exit(False);
+
+  if MainScreen.IsUpText('eck-hea') then
+    Mouse.Click(MOUSE_LEFT)
+  else if not ChooseOption.Select('eck-hea') then
+    Exit(False);
+
+  if not MainScreen.DidRedClick() then
+    Exit(False);
+
+  WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+
+  Result := WaitUntil((not Minimap.IsPlayerMoving()) and XPBar.EarnedXP(), 35, Round(4000 + Map.Position().DistanceTo(Self.Data.Coords) / 150));
+end;
+
+function TBASHFarmPatch.DropWeeds(): Boolean;
+var
+  slots: TIntegerArray;
+begin
+  if not Inventory.FindItems(['Weeds'], slots) then
+    Exit(True);
+
+  WriteLn('[BASHFarm] Dropping ', Length(slots), ' weed slot(s)');
+  Result := Inventory.ShiftDrop(slots);
+end;
+
+{ Empty buckets from normal compost (not bottomless). Always drop when invent full;
+  otherwise random chance so it can happen anytime mid-run. }
+function TBASHFarmPatch.DropEmptyBuckets(): Boolean;
+var
+  slots: TIntegerArray;
+begin
+  Result := True;
+
+  if Self.UseFertileSoil or (Self.CompostItem = 'Bottomless compost bucket') then
+    Exit;
+
+  if not Inventory.FindItems(['Bucket'], slots) then
+    Exit;
+
+  if not Inventory.IsFull() then
+  begin
+    // ~40% chance when invent has free space
+    if Random(100) >= 40 then
+      Exit;
+    WriteLn('[BASHFarm] Dropping ', Length(slots), ' empty bucket(s) (random)');
+  end
+  else
+    WriteLn('[BASHFarm] Dropping ', Length(slots), ' empty bucket(s) (invent full)');
+
+  Result := Inventory.ShiftDrop(slots);
+end;
+
+function TBASHFarmPatch.ClearWeeds(): Boolean;
+var
+  attempt: Int32;
+begin
+  Result := False;
+
+  Inventory.SetSelectedSlot(-1);
+
+  if not Inventory.ContainsItem('Rake') then
+  begin
+    if not Self.WithdrawLepRake() then
+    begin
+      WriteLn('[BASHFarm] Could not withdraw rake from leprechaun');
+      Exit(False);
+    end;
+  end;
+
+  for attempt := 1 to 4 do
+  begin
+    Inventory.SetSelectedSlot(-1);
+
+    if not Self.Hover() then
+    begin
+      Self.WalkFind();
+      Continue;
+    end;
+
+    // Already clear (or weeds dropped and patch empty)
+    if not MainScreen.IsUpText('Rake') then
+    begin
+      Self.DropWeeds();
+      Exit(True);
+    end;
+
+    WriteLn('[BASHFarm] Raking weeds at ', Self.Data.Name, ' (attempt ', attempt, '/4)');
+
+    if MainScreen.IsUpText('Rake') then
+      Mouse.Click(MOUSE_LEFT)
+    else if not ChooseOption.Select('Rake') then
+      Continue;
+
+    if not MainScreen.DidRedClick() then
+      Continue;
+
+    WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+
+    WaitUntil(Self.IsEmpty() or (Self.Hover() and (not MainScreen.IsUpText('Rake'))),
+      35,
+      Round(25000 + Map.Position().DistanceTo(Self.Data.Coords) / 150));
+
+    Self.DropWeeds();
+
+    // Weeds can regrow between rake finish and plant — check again
+    if Self.Hover() and MainScreen.IsUpText('Rake') then
+    begin
+      WriteLn('[BASHFarm] Weeds regrew after rake — clearing again');
+      Continue;
+    end;
+
+    Exit(True);
+  end;
+
+  Self.DropWeeds();
+  Result := Self.Hover() and (not MainScreen.IsUpText('Rake'));
+  if not Result then
+    WriteLn('[BASHFarm] Failed to clear weeds at ', Self.Data.Name);
+end;
+
+function TBASHFarmPatch.ClearDead(): Boolean;
+begin
+  if not Self.Hover() then
+    Exit(False);
+
+  if MainScreen.IsUpText('lear') then
+    Mouse.Click(MOUSE_LEFT)
+  else if not ChooseOption.Select('lear') then
+    Exit(False);
+
+  if not MainScreen.DidRedClick() then
+    Exit(False);
+
+  WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+
+  Result := WaitUntil((not Minimap.IsPlayerMoving()) and Self.IsEmpty(), 35, Round(4000 + Map.Position().DistanceTo(Self.Data.Coords) / 150));
+end;
+
+function TBASHFarmPatch.Clear(): Boolean;
+begin
+  if not Self.Hover() then
+    Exit(False);
+
+  case Self.Data.PatchType of
+    EBASHPatchType.TREE:
+      begin
+        if MainScreen.IsUpText('lear') then
+          Mouse.Click(MOUSE_LEFT)
+        else if not ChooseOption.Select('lear') then
+          Exit(False);
+
+        if Chat.FindMessage('Pay') or WaitUntil(Chat.GetChatTitle() = 'Pay 200', 35, 1500) then
+        begin
+          Chat.ClickOption('Yes');
+          WaitUntil(not Chat.IsOpen(), 35, 3000);
+        end;
+
+        Result := WaitUntil(Self.IsEmpty(), 35, 8000);
+      end;
+    EBASHPatchType.FRUIT:
+      begin
+        if MainScreen.IsUpText('Chop') then
+          Mouse.Click(MOUSE_LEFT)
+        else if not ChooseOption.Select('Chop') then
+          Exit(False);
+
+        WaitUntil(MainScreen.IsUpText('lear'), 35, 5000);
+        if MainScreen.IsUpText('lear') then
+          Mouse.Click(MOUSE_LEFT)
+        else if not ChooseOption.Select('lear') then
+          Exit(False);
+
+        Result := WaitUntil(Self.IsEmpty(), 35, 5000);
+      end;
+  else
+    Result := Self.ClearDead();
+  end;
+end;
+
+function TBASHFarmPatch.Cure(): Boolean;
+var
+  slot: Int32;
+begin
+  if not Self.Find() then
+    Exit(False);
+
+  if not Inventory.FindItem('Plant cure', slot) then
+    Exit(False);
+
+  if not Inventory.SetSelectedSlot(slot) then
+    Exit(False);
+
+  if not Self.Hover() then
+    Exit(False);
+
+  if MainScreen.IsUpText('seas') then
+    Mouse.Click(MOUSE_LEFT)
+  else if not ChooseOption.Select('seas') then
+    Exit(False);
+
+  if not MainScreen.DidRedClick() then
+    Exit(False);
+
+  WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+
+  Result := WaitUntil(not Self.IsDiseased(), 35, Round(3000 + Map.Position().DistanceTo(Self.Data.Coords) / 150));
+end;
+
+{ AtFarm / interact ranges (map coords; 4px = 1 tile).
+  Wide enough for allotment hops (e.g. Ortus N→S ~7 tiles) without WebWalk;
+  still far enough that Ecto/ring landings outside this will walk in. }
+const
+  BASH_ATFARM_LEP_DIST = 40;   // ~10 tiles
+  BASH_ATFARM_PATCH_DIST = 48; // ~12 tiles
+
+{ Debug: patch identity + me/lep/patch distances (coords are 4px per tile). }
+procedure TBASHFarmPatch.DebugFarmPos(const context: String);
+var
+  me, lep, patchPt: TPoint;
+  distLep, distPatch: Double;
+  nearLep, nearPatch: Boolean;
+begin
+  me := Map.Position();
+  lep := Self.Data.LeprechaunCoords;
+  patchPt := Self.Data.Coords;
+  distLep := me.DistanceTo(lep);
+  distPatch := me.DistanceTo(patchPt);
+  nearLep := Map.Walker.InRange(lep, BASH_ATFARM_LEP_DIST);
+  nearPatch := Map.Walker.InRange(patchPt, BASH_ATFARM_PATCH_DIST);
+
+  WriteLn('[BASHFarm] ', context);
+  WriteLn('  patch=', Self.Data.Name, ' id=', ToStr(Self.Id), ' type=', ToStr(Self.Data.PatchType));
+  WriteLn('  me=', me, '  lep=', lep, '  patchCoords=', patchPt);
+  WriteLn('  lepDist=', Round(distLep), ' (', ToStr(Round(distLep / 4)), ' tiles)',
+          '  patchDist=', Round(distPatch), ' (', ToStr(Round(distPatch / 4)), ' tiles)');
+  WriteLn('  nearLep', BASH_ATFARM_LEP_DIST, '=', ToStr(nearLep),
+          ' nearPatch', BASH_ATFARM_PATCH_DIST, '=', ToStr(nearPatch),
+          ' mapBox=', Self.Data.MapCoords,
+          ' inMapBox=', ToStr(me.InBox(Self.Data.MapCoords)));
+end;
+
+{ True when close enough to lep/patch to interact — not the whole MapCoords region. }
+function TBASHFarmPatch.AtFarm(): Boolean;
+begin
+  Result := Map.Walker.InRange(Self.Data.LeprechaunCoords, BASH_ATFARM_LEP_DIST) or
+            Map.Walker.InRange(Self.Data.Coords, BASH_ATFARM_PATCH_DIST);
+end;
+
+{ Walk toward the farm only when far away (e.g. after Ecto tele).
+  Stops ~keepOut tiles short of the lep — never walks onto him.
+  When already AtFarm, does nothing (find/rotate only). }
+function TBASHFarmPatch.WalkNearLeprechaun(keepOut: Int32 = 10): Boolean;
+var
+  me, lep, dest: TPoint;
+  dist, scale: Double;
+  attempt: Int32;
+begin
+  lep := Self.Data.LeprechaunCoords;
+  me := Map.Position();
+  dist := me.DistanceTo(lep);
+
+  Self.DebugFarmPos('WalkNearLeprechaun(keepOut=' + ToStr(keepOut) + ')');
+
+  // Already at the farm — do not walk
+  if dist <= (keepOut + 8) then
+  begin
+    WriteLn('[BASHFarm] WalkNearLeprechaun: already close enough (lepDist=',
+            Round(dist), ' <= ', keepOut + 8, ') — skip walk');
+    Exit(True);
+  end;
+
+  // Far — approach a point keepOut tiles short of the lep
+  scale := keepOut / dist;
+  dest.X := Round(lep.X + (me.X - lep.X) * scale);
+  dest.Y := Round(lep.Y + (me.Y - lep.Y) * scale);
+
+  WriteLn('[BASHFarm] Far from farm — WebWalk dest=', dest,
+          ' (keepOut=', keepOut, ' from lep=', lep, ')');
+
+  for attempt := 1 to 3 do
+  begin
+    if Map.Walker.WebWalk(dest, 4, 0.15) then
+      Break;
+    WriteLn('[BASHFarm] WalkNearLeprechaun path failed (attempt ', attempt, '/3)',
+            ' me=', Map.Position(), ' dest=', dest);
+    // Fallback: map box center (helps when tele lands outside farm chunks path)
+    dest := Self.Data.MapCoords.Center();
+    WriteLn('[BASHFarm] WalkNearLeprechaun fallback dest=mapBox center ', dest);
+  end;
+
+  me := Map.Position();
+  dist := me.DistanceTo(lep);
+  Result := dist <= (keepOut + 12);
+  if not Result then
+    WriteLn('[BASHFarm] WalkNearLeprechaun: still far — me=', me,
+            ' lep=', lep, ' lepDist=', Round(dist),
+            ' (', ToStr(Round(dist / 4)), ' tiles)');
+end;
+
+{ Find lep by CTS2 on mainscreen + LeprechaunCoords.
+  No walking — rotate camera / compass until color is visible. }
+function TBASHFarmPatch.FindLeprechaun(out lepPoints: TPointArray): Boolean;
+var
+  filterPt, me, lep: TPoint;
+  tpa: TPointArray;
+  atpa: T2DPointArray;
+  attempt: Int32;
+  dist: Double;
+
+  function TryColor(): Boolean;
+  begin
+    Result := False;
+    SetLength(lepPoints, 0);
+    filterPt := Map.GetTileMS(Self.Data.LeprechaunCoords).Mean;
+
+    if SRL.FindColors(tpa, Self.Data.LeprechaunColor, MainScreen.Bounds) < 5 then
+      Exit;
+
+    atpa := tpa.Cluster(1);
+    if Length(atpa) = 0 then
+      Exit;
+
+    // Prefer cluster nearest the expected lep tile when that MS point is valid
+    if filterPt in MainScreen.Bounds then
+      atpa.SortFrom(filterPt)
+    else
+      atpa.SortBySize();
+
+    SetLength(lepPoints, 1);
+    lepPoints[0] := atpa[0].Mean;
+    Result := True;
+  end;
+
+begin
+  SetLength(lepPoints, 0);
+  me := Map.Position();
+  lep := Self.Data.LeprechaunCoords;
+  dist := me.DistanceTo(lep);
+  WriteLn('[BASHFarm] FindLeprechaun ', Self.Data.Name,
+          ' me=', me, ' lep=', lep,
+          ' lepDist=', Round(dist), ' (', Round(dist / 4), ' tiles)');
+
+  for attempt := 0 to 5 do
+  begin
+    if TryColor() then
+    begin
+      me := Map.Position();
+      dist := me.DistanceTo(lep);
+      WriteLn('[BASHFarm] FindLeprechaun FOUND attempt=', attempt,
+              ' screenPt=', lepPoints[0],
+              ' lepDist=', Round(dist), ' (', Round(dist / 4), ' tiles)');
+      Exit(True);
+    end;
+
+    // Rotate toward lep coords, then nudge compass if still missing
+    Map.Walker.MakePointVisible(Self.Data.LeprechaunCoords);
+    if TryColor() then
+    begin
+      me := Map.Position();
+      dist := me.DistanceTo(lep);
+      WriteLn('[BASHFarm] FindLeprechaun FOUND (after rotate) attempt=', attempt,
+              ' screenPt=', lepPoints[0],
+              ' lepDist=', Round(dist), ' (', Round(dist / 4), ' tiles)');
+      Exit(True);
+    end;
+
+    Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(35, 70) * (1 - 2 * (attempt mod 2)), 10);
+  end;
+
+  me := Map.Position();
+  dist := me.DistanceTo(lep);
+  WriteLn('[BASHFarm] FindLeprechaun MISS ', Self.Data.Name,
+          ' me=', me, ' lep=', lep,
+          ' lepDist=', Round(dist), ' (', Round(dist / 4), ' tiles)');
+  Result := False;
+end;
+
+function TBASHFarmPatch.HoverLeprechaun(): Boolean;
+var
+  tpa: TPointArray;
+  i: Int32;
+begin
+  if not Self.FindLeprechaun(tpa) then
+    Exit(False);
+
+  for i := 0 to High(tpa) do
+  begin
+    Mouse.Move(SRL.RandomPoint(tpa[i], MainScreen.NormalizeDistance(6)));
+    if MainScreen.IsUpText('Lepr') then
+      Exit(True);
+  end;
+
+  Result := MainScreen.IsUpText('Lepr');
+end;
+
+function TBASHFarmPatch.ClickLeprechaun(): Boolean;
+var
+  tpa: TPointArray;
+  i: Int32;
+begin
+  if not Self.FindLeprechaun(tpa) then
+    Exit(False);
+
+  for i := 0 to High(tpa) do
+  begin
+    Mouse.Move(tpa[i]);
+    if MainScreen.IsUpText('Lepr') then
+      Break;
+  end;
+
+  if MainScreen.IsUpText('Lepr') then
+    Mouse.Click(MOUSE_LEFT)
+  else
+    Exit(ChooseOption.Select('Lepr'));
+
+  Result := True;
+end;
+
+// Amazing Farming Equipment Store (fixed mode).
+// Store 4×3 and invent 2×6 share the same item order (row-major):
+//   0 Rake, 1 Dibber, 2 Spade, 3 Secateurs,
+//   4 Watering can, 5 Trowel, 6 Plant cure, 7 Bottomless,
+//   8 Buckets, 9 Compost, 10 Supercompost, 11 Ultracompost
+// Steel corners → uniform boxes. Never use Inventory.* while toolshed is open.
+{$I BashLib/optional/handlers/bashfarm/lep_slots.simba}
+
+const
+  BASH_LEP_STORE_COLS = 4;
+  BASH_LEP_STORE_ROWS = 3;
+  BASH_LEP_INV_COLS = 2;
+  BASH_LEP_INV_ROWS = 6;
+
+  BASH_LEP_SLOT_RAKE = 0;
+  BASH_LEP_SLOT_DIBBER = 1;
+  BASH_LEP_SLOT_SPADE = 2;
+  BASH_LEP_SLOT_SECATEURS = 3;
+  BASH_LEP_SLOT_WATERING_CAN = 4;
+  BASH_LEP_SLOT_TROWEL = 5;
+  BASH_LEP_SLOT_PLANT_CURE = 6;
+  BASH_LEP_SLOT_BOTTOMLESS = 7;
+  BASH_LEP_SLOT_BUCKETS = 8;
+  BASH_LEP_SLOT_COMPOST = 9;
+  BASH_LEP_SLOT_SUPERCOMPOST = 10;
+  BASH_LEP_SLOT_ULTRACOMPOST = 11;
+
+var
+  BASHLepStoreSlots: TBoxArray;
+  BASHLepInvSlots: TBoxArray;
+
+function _BASHLepBox(x1, y1, x2, y2: Int32): TBox;
+begin
+  Result.X1 := x1;
+  Result.Y1 := y1;
+  Result.X2 := x2;
+  Result.Y2 := y2;
+end;
+
+function _BASHLepOwnedGreen(): TCTS2Color;
+begin
+  Result := CTS2(2154272, 1, 0.01, 0.01);
+end;
+
+procedure _BASHLepClearSlots();
+begin
+  SetLength(BASHLepStoreSlots, 0);
+  SetLength(BASHLepInvSlots, 0);
+end;
+
+function _BASHLepRefreshSlots(): Boolean;
+begin
+  Result := False;
+  _BASHLepClearSlots();
+
+  BASHLepStoreSlots := BASHLepFitGrid(
+    BASHLepSteelCorners(MainScreen.Bounds),
+    BASH_LEP_STORE_COLS,
+    BASH_LEP_STORE_ROWS
+  );
+  BASHLepInvSlots := BASHLepFitGrid(
+    BASHLepSteelCorners(Inventory.Bounds),
+    BASH_LEP_INV_COLS,
+    BASH_LEP_INV_ROWS
+  );
+
+  Result := (Length(BASHLepStoreSlots) = BASH_LEP_STORE_COLS * BASH_LEP_STORE_ROWS) and
+            (Length(BASHLepInvSlots) = BASH_LEP_INV_COLS * BASH_LEP_INV_ROWS);
+
+  if Result then
+    WriteLn('[BASHFarm] Lep slots ready — store ', Length(BASHLepStoreSlots),
+            ' invent ', Length(BASHLepInvSlots))
+  else
+    WriteLn('[BASHFarm] Lep slot scan incomplete — store ', Length(BASHLepStoreSlots),
+            ' invent ', Length(BASHLepInvSlots));
+end;
+
+function _BASHLepEnsureSlots(): Boolean;
+begin
+  if (Length(BASHLepStoreSlots) >= 8) and (Length(BASHLepInvSlots) >= 8) then
+    Exit(True);
+  Result := _BASHLepRefreshSlots();
+end;
+
+function _BASHLepInvSlot(idx: Int32): TBox;
+begin
+  if (idx < 0) or (idx > High(BASHLepInvSlots)) then
+    Exit(_BASHLepBox(0, 0, 0, 0));
+  Result := BASHLepInvSlots[idx];
+end;
+
+function _BASHLepStoreSlot(idx: Int32): TBox;
+begin
+  if (idx < 0) or (idx > High(BASHLepStoreSlots)) then
+    Exit(_BASHLepBox(0, 0, 0, 0));
+  Result := BASHLepStoreSlots[idx];
+end;
+
+function TBASHFarmPatch.CompostSlotIdx(): Int32;
+begin
+  case Self.CompostItem of
+    'Compost': Exit(BASH_LEP_SLOT_COMPOST);
+    'Supercompost': Exit(BASH_LEP_SLOT_SUPERCOMPOST);
+    'Ultracompost': Exit(BASH_LEP_SLOT_ULTRACOMPOST);
+    'Bottomless compost bucket': Exit(BASH_LEP_SLOT_BOTTOMLESS);
+  end;
+  Result := -1;
+end;
+
+function TBASHFarmPatch.LepInvSlotIsGreen(slotIdx: Int32; minPixels: Int32 = 8): Boolean;
+var
+  box: TBox;
+begin
+  box := _BASHLepInvSlot(slotIdx);
+  if (box.X2 <= box.X1) or (box.Y2 <= box.Y1) then
+    Exit(False);
+
+  Result := SRL.CountColor(_BASHLepOwnedGreen(), box) >= minPixels;
+  if not Result then
+    Result := SRL.CountColor(RS_ITEM_GREEN_STACK, box) >= minPixels;
+end;
+
+function TBASHFarmPatch.WaitLepInvSlotGreen(slotIdx: Int32; timeout: Int32 = 5000): Boolean;
+begin
+  Result := WaitUntil(Self.LepInvSlotIsGreen(slotIdx), 35, timeout);
+end;
+
+function TBASHFarmPatch.WaitLepInvSlotNotGreen(slotIdx: Int32; timeout: Int32 = 5000): Boolean;
+begin
+  Result := WaitUntil(not Self.LepInvSlotIsGreen(slotIdx), 35, timeout);
+end;
+
+function TBASHFarmPatch.OpenLepExchange(): Boolean;
+var
+  attempt: Int32;
+begin
+  // Store already open — do NOT touch Inventory (no real invent while exchange is open).
+  if RSInterface.IsOpen() then
+  begin
+    _BASHLepEnsureSlots();
+    Exit(True);
+  end;
+
+  Inventory.SetSelectedSlot(-1);
+  MainScreen.CloseInterface();
+  _BASHLepClearSlots();
+
+  // Arrive first if still at teleport landing (Ecto etc.) — find/rotate only once at farm
+  if not Self.AtFarm() then
+    Self.WalkNearLeprechaun(10);
+
+  for attempt := 1 to 4 do
+  begin
+    if RSInterface.IsOpen() then
+    begin
+      _BASHLepRefreshSlots();
+      Exit(True);
+    end;
+
+    if not Self.HoverLeprechaun() then
+    begin
+      if not Self.AtFarm() then
+      begin
+        WriteLn('[BASHFarm] Lep not hovered and still far — walking closer');
+        Self.WalkNearLeprechaun(10);
+        Continue;
+      end;
+      WriteLn('[BASHFarm] Lep not hovered for Exchange (attempt ', attempt, '/4) — rotating');
+      Map.Walker.MakePointVisible(Self.Data.LeprechaunCoords);
+      Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(40, 80) * (1 - 2 * (attempt mod 2)), 10);
+      Continue;
+    end;
+
+    Mouse.Click(MOUSE_RIGHT);
+    if not ChooseOption.Select('Exchange') then
+      Continue;
+
+    if WaitUntil(RSInterface.IsOpen(), 35, 7500) then
+    begin
+      if BankPin.IsOpen() then
+        BankPin.Enter(Login.GetPlayer.Pin);
+      WaitUntil(not BankPin.IsOpen(), 35, 3000);
+      _BASHLepRefreshSlots();
+      Exit(True);
+    end;
+  end;
+
+  Result := False;
+end;
+
+// Fixed-layout withdraw: click store slot index, confirm invent slot goes green.
+function TBASHFarmPatch.WithdrawLepCompost(closeAfter: Boolean = True): Boolean;
+var
+  slot: Int32;
+begin
+  Result := False;
+
+  if Self.UseFertileSoil then
+    Exit(True);
+
+  if (not RSInterface.IsOpen()) and Inventory.ContainsItem(Self.CompostItem) then
+    Exit(True);
+
+  slot := Self.CompostSlotIdx();
+  if slot < 0 then
+    Exit(False);
+
+  if not Self.OpenLepExchange() then
+    Exit(False);
+
+  if Self.LepInvSlotIsGreen(slot) then
+  begin
+    if closeAfter then
+    begin
+      RSInterface.Close(True);
+      _BASHLepClearSlots();
+    end;
+    Exit(True);
+  end;
+
+  Mouse.Move(_BASHLepStoreSlot(slot));
+
+  if Self.CompostItem = 'Bottomless compost bucket' then
+  begin
+    if not ChooseOption.Select('Remove') then
+    begin
+      if closeAfter then
+      begin
+        RSInterface.Close(True);
+        _BASHLepClearSlots();
+      end;
+      Exit(False);
+    end;
+  end
+  else if not ChooseOption.Select('Remove-1') then
+  begin
+    if closeAfter then
+    begin
+      RSInterface.Close(True);
+      _BASHLepClearSlots();
+    end;
+    Exit(False);
+  end;
+
+  Result := Self.WaitLepInvSlotGreen(slot, 5000);
+
+  if closeAfter then
+  begin
+    RSInterface.Close(True);
+    _BASHLepClearSlots();
+  end;
+end;
+
+function TBASHFarmPatch.DepositLepCompost(): Boolean;
+var
+  slot: Int32;
+  invBox: TBox;
+begin
+  Result := False;
+
+  if Self.UseFertileSoil then
+    Exit(True);
+
+  if RSInterface.IsOpen() then
+    Exit(False);
+  if not Inventory.ContainsItem(Self.CompostItem) then
+    Exit(True);
+
+  slot := Self.CompostSlotIdx();
+  if slot < 0 then
+    Exit(False);
+
+  if not Self.OpenLepExchange() then
+    Exit(False);
+
+  invBox := _BASHLepInvSlot(slot);
+  WaitUntil(Self.LepInvSlotIsGreen(slot), 35, 1500);
+  Mouse.Move(invBox);
+
+  if Self.CompostItem = 'Bottomless compost bucket' then
+  begin
+    if not ChooseOption.Select('Store') then
+    begin
+      RSInterface.Close(True);
+      _BASHLepClearSlots();
+      Exit(False);
+    end;
+  end
+  else if not ChooseOption.Select('Store-All') then
+  begin
+    RSInterface.Close(True);
+    _BASHLepClearSlots();
+    Exit(False);
+  end;
+
+  Result := Self.WaitLepInvSlotNotGreen(slot, 5000);
+  RSInterface.Close(True);
+  _BASHLepClearSlots();
+end;
+
+function TBASHFarmPatch.WithdrawLepSecateurs(closeAfter: Boolean = True): Boolean;
+begin
+  Result := Self.WithdrawLepTool(
+    ['Magic secateurs', 'Secateurs'],
+    BASH_LEP_SLOT_SECATEURS,
+    'secateurs',
+    closeAfter
+  );
+end;
+
+function TBASHFarmPatch.WithdrawLepSpade(closeAfter: Boolean = True): Boolean;
+begin
+  Result := Self.WithdrawLepTool(
+    ['Spade'],
+    BASH_LEP_SLOT_SPADE,
+    'spade',
+    closeAfter
+  );
+end;
+
+function TBASHFarmPatch.WithdrawLepRake(closeAfter: Boolean = True): Boolean;
+begin
+  Result := Self.WithdrawLepTool(
+    ['Rake'],
+    BASH_LEP_SLOT_RAKE,
+    'rake',
+    closeAfter
+  );
+end;
+
+// Click fixed store slot, Remove-1, wait for matching invent slot to go green.
+function TBASHFarmPatch.WithdrawLepTool(
+  haveItems: TRSItemArray;
+  slot: Int32;
+  labelName: String;
+  closeAfter: Boolean = True
+): Boolean;
+begin
+  Result := False;
+
+  if not RSInterface.IsOpen() then
+  begin
+    if Inventory.ContainsAny(haveItems) then
+      Exit(True);
+    if not Self.OpenLepExchange() then
+      Exit(False);
+  end
+  else if not _BASHLepEnsureSlots() then
+    Exit(False);
+
+  if Self.LepInvSlotIsGreen(slot) then
+    Exit(True);
+
+  Mouse.Move(_BASHLepStoreSlot(slot));
+  if not ChooseOption.Select(['Remove-1', 'Remove']) then
+  begin
+    WriteLn('[BASHFarm] Lep store Remove failed for ', labelName);
+    if closeAfter then
+    begin
+      RSInterface.Close(True);
+      _BASHLepClearSlots();
+    end;
+    Exit(False);
+  end;
+
+  Result := Self.WaitLepInvSlotGreen(slot, 5000);
+  if Result then
+    WriteLn('[BASHFarm] ', labelName, ' withdrawn (invent slot green)')
+  else
+  begin
+    WriteLn('[BASHFarm] ', labelName, ' Remove clicked — invent slot not green yet');
+    Result := True;
+  end;
+
+  if closeAfter then
+  begin
+    RSInterface.Close(True);
+    _BASHLepClearSlots();
+  end;
+end;
+
+function TBASHFarmPatch.HasStorableLepTools(): Boolean;
+begin
+  Result := Inventory.ContainsAny([
+    'Magic secateurs',
+    'Secateurs',
+    'Compost',
+    'Supercompost',
+    'Ultracompost',
+    'Bottomless compost bucket',
+    'Bucket',
+    'Seed dibber',
+    'Spade',
+    'Rake',
+    'Plant cure',
+    'Gardening trowel',
+    'Watering can'
+  ]);
+end;
+
+// Right-click Tool Leprechaun → Deposit-all (stores secs, buckets, compost, dibber, etc.)
+function TBASHFarmPatch.DepositLepTools(): Boolean;
+var
+  attempt: Int32;
+begin
+  Result := True;
+
+  if not Self.HasStorableLepTools() then
+    Exit(True);
+
+  Inventory.SetSelectedSlot(-1);
+  MainScreen.CloseInterface();
+
+  if not Self.AtFarm() then
+    Self.WalkNearLeprechaun(10);
+
+  for attempt := 1 to 5 do
+  begin
+    if not Self.HoverLeprechaun() then
+    begin
+      if not Self.AtFarm() then
+      begin
+        WriteLn('[BASHFarm] DepositLepTools: still far — walking closer');
+        Self.WalkNearLeprechaun(10);
+        Continue;
+      end;
+      WriteLn('[BASHFarm] DepositLepTools: lep not hovered (attempt ', attempt, '/5) — rotating');
+      Map.Walker.MakePointVisible(Self.Data.LeprechaunCoords);
+      Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(40, 80) * (1 - 2 * (attempt mod 2)), 10);
+      Continue;
+    end;
+
+    Mouse.Click(MOUSE_RIGHT);
+    if not ChooseOption.Select(['Deposit-all', 'Deposit-All', 'Deposit all']) then
+    begin
+      WriteLn('[BASHFarm] Deposit-all option not found (attempt ', attempt, ') — retrying');
+      ChooseOption.Close();
+      WaitUntil(not ChooseOption.IsOpen(), 35, 300);
+      Continue;
+    end;
+
+    Result := WaitUntil(not Self.HasStorableLepTools(), 35, 6000);
+    if Result then
+    begin
+      WriteLn('[BASHFarm] Deposited farm tools to leprechaun');
+      Exit(True);
+    end;
+
+    WriteLn('[BASHFarm] Deposit-all clicked but tools still in invent (attempt ', attempt, ')');
+  end;
+
+  WriteLn('[BASHFarm] DepositLepTools failed after retries — falling back to compost Store-All');
+  Result := Self.DepositLepCompost();
+end;
+
+function TBASHFarmPatch.EnsureLepTools(): Boolean;
+var
+  needSecs, needSpade, needCompost, okSecs, okSpade, okCompost: Boolean;
+begin
+  needSecs := (not Inventory.ContainsItem('Magic secateurs')) and (not Inventory.ContainsItem('Secateurs'))
+    and (not Equipment.ContainsItem('Magic secateurs')) and (not Equipment.ContainsItem('Secateurs'));
+  needSpade := not Inventory.ContainsItem('Spade');
+  needCompost := (not Self.UseFertileSoil) and (Self.CompostItem <> '') and
+                 (not Inventory.ContainsItem(Self.CompostItem));
+
+  if (not needSecs) and (not needSpade) and (not needCompost) then
+    Exit(True);
+
+  if not Self.OpenLepExchange() then
+  begin
+    WriteLn('[BASHFarm] Could not open leprechaun store');
+    Exit(False);
+  end;
+
+  if needSecs then
+    Self.WithdrawLepSecateurs(False);
+
+  if needSpade then
+    Self.WithdrawLepSpade(False);
+
+  if needCompost then
+    Self.WithdrawLepCompost(False);
+
+  RSInterface.Close(True);
+  _BASHLepClearSlots();
+  WaitUntil(
+    ((not needSecs) or Inventory.ContainsItem('Magic secateurs') or Inventory.ContainsItem('Secateurs')
+      or Equipment.ContainsItem('Magic secateurs') or Equipment.ContainsItem('Secateurs')) and
+    ((not needSpade) or Inventory.ContainsItem('Spade')) and
+    ((not needCompost) or Inventory.ContainsItem(Self.CompostItem)),
+    35,
+    350
+  );
+
+  // Source of truth: real invent after store closes.
+  okSecs := (not needSecs) or Inventory.ContainsItem('Magic secateurs') or Inventory.ContainsItem('Secateurs')
+    or Equipment.ContainsItem('Magic secateurs') or Equipment.ContainsItem('Secateurs');
+  okSpade := (not needSpade) or Inventory.ContainsItem('Spade');
+  okCompost := (not needCompost) or Inventory.ContainsItem(Self.CompostItem);
+
+  if needSecs and not okSecs then
+    WriteLn('[BASHFarm] Failed to withdraw secateurs from leprechaun');
+  if needSpade and not okSpade then
+    WriteLn('[BASHFarm] Failed to withdraw spade from leprechaun');
+  if needCompost and not okCompost then
+    WriteLn('[BASHFarm] Failed to withdraw ', Self.CompostItem, ' from leprechaun');
+
+  if okSecs and okSpade and okCompost then
+    WriteLn('[BASHFarm] Lep tools ready (spade/secateurs/compost)');
+
+  Result := okSecs and okSpade and okCompost;
+end;
+
+procedure TBASHFarmPatch.NoteItems();
+var
+  count, slot, i: Int32;
+  item: TRSItem;
+  items: TRSItemArray;
+  slots: TIntegerArray;
+  tpa: TPointArray;
+begin
+  for i := 0 to High(BASH_FARM_LEPRECHAUN_ITEMS) do
+  begin
+    item := BASH_FARM_LEPRECHAUN_ITEMS[i];
+    if Inventory.FindItem(item, slot) then
+    begin
+      slots += slot;
+      items += item;
+    end;
+  end;
+
+  if Length(slots) < 1 then
+    Exit;
+
+  if not Self.FindLeprechaun(tpa) then
+    Exit;
+
+  for i := 0 to High(slots) do
+  begin
+    MainScreen.CloseInterface();
+    count := Inventory.CountItem(items[i]);
+    Inventory.SetSelectedSlot(slots[i]);
+    Self.ClickLeprechaun();
+
+    if not MainScreen.DidRedClick() then
+    begin
+      Inventory.SetSelectedSlot(-1);
+      Exit;
+    end;
+
+    WaitUntil(Inventory.CountItem(items[i]) = 0, 35, 10000);
+    WaitUntil(not Minimap.IsPlayerMoving(), 35, 8000);
+  end;
+
+  Inventory.SetSelectedSlot(-1);
+end;
+
+procedure TBASHFarmPatch.Run(var journal: TBASHFarmJournal);
+var
+  timeout: TCountdown;
+  state: EBASHPatchState;
+begin
+  if not RSClient.IsLoggedIn() then
+    Exit;
+
+  timeout.Init(6 * ONE_MINUTE);
+
+  while not timeout.IsFinished() do
+  begin
+    if not RSClient.IsLoggedIn() then
+      Login.LoginPlayer();
+
+    // Random / invent-full empty bucket cleanup (skipped for bottomless)
+    Self.DropEmptyBuckets();
+
+    state := Self.Inspect();
+    WriteLn('[BASHFarm] ', Self.Data.Name, ' state=', ToStr(state));
+
+    case state of
+      EBASHPatchState.TELEPORT_TO:
+        Exit; // runner handles teleport
+      EBASHPatchState.NEED_CLEAR:
+        begin
+          Self.Clear();
+          journal.RecordState(Self.Id, Self.Data.PatchType, EBASHJournalState.EMPTY);
+        end;
+      EBASHPatchState.NOTE_ITEMS:
+        Self.NoteItems();
+      EBASHPatchState.GROWN:
+        begin
+          if Self.Harvest() and Self.Harvested then
+            journal.RecordState(Self.Id, Self.Data.PatchType, EBASHJournalState.EMPTY);
+        end;
+      EBASHPatchState.FRESH:
+        Self.CheckHealth();
+      EBASHPatchState.OVERGROWN:
+        begin
+          if Self.ClearWeeds() then
+            WriteLn('[BASHFarm] Cleared weeds at ', Self.Data.Name)
+          else
+            Self.SkipPatch('Failed to rake weeds');
+        end;
+      EBASHPatchState.DEAD:
+        begin
+          Self.ClearDead();
+          journal.RecordState(Self.Id, Self.Data.PatchType, EBASHJournalState.DEAD);
+        end;
+      EBASHPatchState.DISEASED:
+        begin
+          if not Self.Cure() then
+            Self.SkipPatch('Diseased and no plant cure');
+          journal.RecordState(Self.Id, Self.Data.PatchType, EBASHJournalState.DISEASED);
+        end;
+      EBASHPatchState.EMPTY:
+        begin
+          if Self.Plant() then
+          begin
+            journal.RecordPlant(Self.Id, Self.Data.PatchType, ToStr(Self.Seed));
+            // Stay in Run for UNCOMPOSTED next — do not mark complete after plant
+            if Self.Composted then
+            begin
+              Self.Complete := True;
+              Exit;
+            end;
+          end
+          else
+            Self.SkipPatch('Failed to plant');
+        end;
+      EBASHPatchState.UNCOMPOSTED:
+        begin
+          if Self.UseFertileSoil then
+          begin
+            if Self.FertileSoil() then
+            begin
+              Self.Complete := True;
+              Exit;
+            end;
+          end
+          else if Self.Compost() then
+          begin
+            journal.RecordState(Self.Id, Self.Data.PatchType, EBASHJournalState.GROWING);
+            Self.Complete := True;
+            Exit;
+          end
+          else
+          begin
+            Inc(Self.FailCount);
+            if Self.FailCount >= 3 then
+              Self.SkipPatch('Failed to compost');
+          end;
+        end;
+      EBASHPatchState.GROWING, EBASHPatchState.COMPLETE:
+        begin
+          journal.RecordState(Self.Id, Self.Data.PatchType, EBASHJournalState.GROWING);
+          Self.Complete := True;
+          Exit;
+        end;
+      EBASHPatchState.SKIP:
+        Exit;
+      EBASHPatchState.NOT_FOUND, EBASHPatchState.FAILED:
+        begin
+          Inc(Self.FailCount);
+          if Self.FailCount >= 8 then
+            Self.SkipPatch('Too many find failures');
+        end;
+    end;
+  end;
+end;

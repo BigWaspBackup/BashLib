@@ -1,6 +1,6 @@
 {$DEFINE WL_TRECTARRAY_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 function TRectArray.ToTPA(): TPointArray; constref;

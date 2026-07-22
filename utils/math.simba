@@ -5,7 +5,7 @@ This file has math related methods.
 
 {$DEFINE WL_MATH_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 (*

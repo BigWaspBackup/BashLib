@@ -1,0 +1,413 @@
+(*!
+  Persistent settings for BASHFarmRunner GUI.
+  Path: AppPath + 'Configs/BASHFarmSettings'
+*)
+
+type
+  TBASHFarmConfig = record
+    Enabled: array [EBASHFarmPatch] of Boolean;
+
+    HerbSeedIdx, FlowerSeedIdx, AllotmentSeedIdx: Int32;
+    BushSeedIdx, CactusSeedIdx, AnimaSeedIdx: Int32;
+    TreeSaplingIdx, FruitSaplingIdx: Int32;
+    CompostIdx: Int32;
+
+    WeissTP, StrongholdTP, ArdougneTP, FaladorTP, CatherbyTP: Int32;
+    PhasmatysTP, HosidiusTP, OrtusTP, GuildTP: Int32;
+    LumbridgeTreeTP, VarrockTreeTP, FaladorTreeTP, TaverleyTreeTP: Int32;
+    GnomeTreeTP, GnomeFruitTP, GnomeVillageFruitTP: Int32;
+    CatherbyFruitTP, BrimhavenFruitTP, LletyaFruitTP: Int32;
+
+    BarbDibber, MagicSecateurs, RunNow: Boolean;
+    LumbyElite: Boolean; // no Dramen for fairy rings
+  end;
+
+const
+  BASH_FARM_HERB_SEEDS: TStringArray = [
+    'None', 'Guam seed', 'Marrentill seed', 'Tarromin seed', 'Harralander seed',
+    'Ranarr seed', 'Toadflax seed', 'Irit seed', 'Avantoe seed', 'Kwuarm seed',
+    'Snapdragon seed', 'Cadantine seed', 'Lantadyme seed', 'Dwarf weed seed',
+    'Torstol seed', 'Huasca seed'
+  ];
+  BASH_FARM_FLOWER_SEEDS: TStringArray = [
+    'None', 'Marigold seed', 'Rosemary seed', 'Nasturtium seed', 'Woad seed',
+    'Limpwurt seed', 'White lily seed'
+  ];
+  BASH_FARM_ALLOT_SEEDS: TStringArray = [
+    'None', 'Potato seed', 'Onion seed', 'Cabbage seed', 'Tomato seed',
+    'Sweetcorn seed', 'Strawberry seed', 'Watermelon seed', 'Snape grass seed'
+  ];
+  BASH_FARM_BUSH_SEEDS: TStringArray = [
+    'None', 'Redberry seed', 'Cadavaberry seed', 'Dwellberry seed',
+    'Jangerberry seed', 'Whiteberry seed', 'Poison ivy seed'
+  ];
+  BASH_FARM_CACTUS_SEEDS: TStringArray = [
+    'None', 'Cactus seed', 'Potato cactus seed'
+  ];
+  BASH_FARM_ANIMA_SEEDS: TStringArray = [
+    'None', 'Attas seed', 'Iasor seed', 'Kronos seed'
+  ];
+  BASH_FARM_TREE_SAPLINGS: TStringArray = [
+    'None', 'Oak sapling', 'Willow sapling', 'Maple sapling', 'Yew sapling',
+    'Magic sapling', 'Redwood sapling'
+  ];
+  BASH_FARM_FRUIT_SAPLINGS: TStringArray = [
+    'None', 'Apple sapling', 'Banana sapling', 'Orange sapling', 'Curry sapling',
+    'Pineapple sapling', 'Papaya tree sapling', 'Palm tree sapling',
+    'Dragonfruit sapling'
+  ];
+  BASH_FARM_COMPOST: TStringArray = [
+    'Ultracompost', 'Supercompost', 'Compost', 'Bottomless compost bucket', 'Fertile Soil'
+  ];
+
+var
+  BASHFarmConfig: TBASHFarmConfig;
+
+function TBASHFarmConfig.Section(): String;
+begin
+  Result := 'BASH Farm' + ToStr(Login.PlayerIndex);
+end;
+
+function TBASHFarmConfig.Path(): String;
+begin
+  Result := AppPath + 'Configs/BASHFarmSettings';
+end;
+
+function TBASHFarmConfig.SeedFromIdx(options: TStringArray; idx: Int32): TRSItem;
+begin
+  if (idx <= 0) or (idx > High(options)) then
+    Exit('');
+  if LowerCase(options[idx]) = 'none' then
+    Exit('');
+  Result := options[idx];
+end;
+
+function TBASHFarmConfig.HerbSeed(): TRSItem;
+begin
+  Result := Self.SeedFromIdx(BASH_FARM_HERB_SEEDS, Self.HerbSeedIdx);
+end;
+
+function TBASHFarmConfig.FlowerSeed(): TRSItem;
+begin
+  Result := Self.SeedFromIdx(BASH_FARM_FLOWER_SEEDS, Self.FlowerSeedIdx);
+end;
+
+function TBASHFarmConfig.AllotmentSeed(): TRSItem;
+begin
+  Result := Self.SeedFromIdx(BASH_FARM_ALLOT_SEEDS, Self.AllotmentSeedIdx);
+end;
+
+function TBASHFarmConfig.BushSeed(): TRSItem;
+begin
+  Result := Self.SeedFromIdx(BASH_FARM_BUSH_SEEDS, Self.BushSeedIdx);
+end;
+
+function TBASHFarmConfig.CactusSeed(): TRSItem;
+begin
+  Result := Self.SeedFromIdx(BASH_FARM_CACTUS_SEEDS, Self.CactusSeedIdx);
+end;
+
+function TBASHFarmConfig.AnimaSeed(): TRSItem;
+begin
+  Result := Self.SeedFromIdx(BASH_FARM_ANIMA_SEEDS, Self.AnimaSeedIdx);
+end;
+
+function TBASHFarmConfig.TreeSapling(): TRSItem;
+begin
+  Result := Self.SeedFromIdx(BASH_FARM_TREE_SAPLINGS, Self.TreeSaplingIdx);
+end;
+
+function TBASHFarmConfig.FruitSapling(): TRSItem;
+begin
+  Result := Self.SeedFromIdx(BASH_FARM_FRUIT_SAPLINGS, Self.FruitSaplingIdx);
+end;
+
+function TBASHFarmConfig.GetCompostMethod(): EBASHCompostMethod;
+begin
+  case Self.CompostIdx of
+    1: Exit(EBASHCompostMethod.SUPER);
+    2: Exit(EBASHCompostMethod.REGULAR);
+    3: Exit(EBASHCompostMethod.BOTTOMLESS);
+    4: Exit(EBASHCompostMethod.FERTILE_SOIL);
+  end;
+  Result := EBASHCompostMethod.ULTRA;
+end;
+
+function TBASHFarmConfig.SeedForPatch(patchId: EBASHFarmPatch): TRSItem;
+begin
+  case patchId of
+    EBASHFarmPatch.WEISS_HERB, EBASHFarmPatch.STRONGHOLD_HERB,
+    EBASHFarmPatch.ARDOUGNE_HERB, EBASHFarmPatch.FALADOR_HERB,
+    EBASHFarmPatch.CATHERBY_HERB, EBASHFarmPatch.PHASMATYS_HERB,
+    EBASHFarmPatch.HOSIDIUS_HERB, EBASHFarmPatch.GUILD_HERB,
+    EBASHFarmPatch.HARMONY_ISLAND_HERB, EBASHFarmPatch.ORTUS_HERB:
+      Exit(Self.HerbSeed());
+    EBASHFarmPatch.ARDOUGNE_FLOWER, EBASHFarmPatch.FALADOR_FLOWER,
+    EBASHFarmPatch.CATHERBY_FLOWER, EBASHFarmPatch.PHASMATYS_FLOWER,
+    EBASHFarmPatch.HOSIDIUS_FLOWER, EBASHFarmPatch.GUILD_FLOWER,
+    EBASHFarmPatch.PRIF_FLOWER, EBASHFarmPatch.ORTUS_FLOWER,
+    EBASHFarmPatch.KASTORI_FLOWER:
+      Exit(Self.FlowerSeed());
+    EBASHFarmPatch.ARDOUGNE_ALLOT_N, EBASHFarmPatch.ARDOUGNE_ALLOT_S,
+    EBASHFarmPatch.FALADOR_ALLOT_N, EBASHFarmPatch.FALADOR_ALLOT_S,
+    EBASHFarmPatch.CATHERBY_ALLOT_N, EBASHFarmPatch.CATHERBY_ALLOT_S,
+    EBASHFarmPatch.PHASMATYS_ALLOT_N, EBASHFarmPatch.PHASMATYS_ALLOT_S,
+    EBASHFarmPatch.HOSIDIUS_ALLOT_N, EBASHFarmPatch.HOSIDIUS_ALLOT_S,
+    EBASHFarmPatch.GUILD_ALLOT_N, EBASHFarmPatch.GUILD_ALLOT_S,
+    EBASHFarmPatch.HARMONY_ISLAND_ALLOT, EBASHFarmPatch.PRIF_ALLOT_N,
+    EBASHFarmPatch.PRIF_ALLOT_S, EBASHFarmPatch.ORTUS_ALLOT_N,
+    EBASHFarmPatch.ORTUS_ALLOT_S:
+      Exit(Self.AllotmentSeed());
+    EBASHFarmPatch.GUILD_BUSH, EBASHFarmPatch.CHAMPIONS_BUSH,
+    EBASHFarmPatch.RIMMINGTON_BUSH, EBASHFarmPatch.ARDOUGNE_BUSH,
+    EBASHFarmPatch.ETCETERIA_BUSH:
+      Exit(Self.BushSeed());
+    EBASHFarmPatch.GUILD_CACTUS, EBASHFarmPatch.AL_KHARID_CACTUS:
+      Exit(Self.CactusSeed());
+    EBASHFarmPatch.GUILD_ANIMA:
+      Exit(Self.AnimaSeed());
+    EBASHFarmPatch.LUMBRIDGE_TREE, EBASHFarmPatch.VARROCK_TREE,
+    EBASHFarmPatch.FALADOR_TREE, EBASHFarmPatch.TAVERLEY_TREE,
+    EBASHFarmPatch.GNOME_TREE, EBASHFarmPatch.GUILD_TREE,
+    EBASHFarmPatch.GUILD_REDWOOD, EBASHFarmPatch.NEMUS_TREE:
+      Exit(Self.TreeSapling());
+    EBASHFarmPatch.GNOME_STRONGHOLD_FRUIT, EBASHFarmPatch.CATHERBY_FRUIT,
+    EBASHFarmPatch.GNOME_VILLAGE_FRUIT, EBASHFarmPatch.BRIMHAVEN_FRUIT,
+    EBASHFarmPatch.LLETYA_FRUIT, EBASHFarmPatch.GUILD_FRUIT,
+    EBASHFarmPatch.KASTORI_FRUIT:
+      Exit(Self.FruitSapling());
+  end;
+  Result := '';
+end;
+
+procedure TBASHFarmConfig.Clear();
+var
+  p: EBASHFarmPatch;
+begin
+  for p := Low(EBASHFarmPatch) to High(EBASHFarmPatch) do
+    Self.Enabled[p] := False;
+
+  Self.HerbSeedIdx := 0;
+  Self.FlowerSeedIdx := 0;
+  Self.AllotmentSeedIdx := 0;
+  Self.BushSeedIdx := 0;
+  Self.CactusSeedIdx := 0;
+  Self.AnimaSeedIdx := 0;
+  Self.TreeSaplingIdx := 0;
+  Self.FruitSaplingIdx := 0;
+  Self.CompostIdx := 0;
+
+  Self.WeissTP := 0;
+  Self.StrongholdTP := 0;
+  Self.ArdougneTP := 0;
+  Self.FaladorTP := 0;
+  Self.CatherbyTP := 0;
+  Self.PhasmatysTP := 0;
+  Self.HosidiusTP := 0;
+  Self.OrtusTP := 0;
+  Self.GuildTP := 0;
+  Self.LumbridgeTreeTP := 0;
+  Self.VarrockTreeTP := 0;
+  Self.FaladorTreeTP := 0;
+  Self.TaverleyTreeTP := 0;
+  Self.GnomeTreeTP := 0;
+  Self.GnomeFruitTP := 0;
+  Self.GnomeVillageFruitTP := 0;
+  Self.CatherbyFruitTP := 0;
+  Self.BrimhavenFruitTP := 0;
+  Self.LletyaFruitTP := 0;
+
+  Self.BarbDibber := False;
+  Self.MagicSecateurs := False;
+  Self.LumbyElite := False;
+  Self.RunNow := False;
+end;
+
+procedure TBASHFarmConfig.ReadBool(key: String; var dest: Boolean);
+begin
+  dest := StrToBoolDef(ReadINI(Self.Section(), key, Self.Path()), False);
+end;
+
+procedure TBASHFarmConfig.ReadInt(key: String; var dest: Int32);
+begin
+  dest := StrToIntDef(ReadINI(Self.Section(), key, Self.Path()), 0);
+end;
+
+procedure TBASHFarmConfig.Read();
+begin
+  Self.Clear();
+
+  Self.ReadInt('Herb seed', Self.HerbSeedIdx);
+  Self.ReadInt('Flower seed', Self.FlowerSeedIdx);
+  Self.ReadInt('Allotment seed', Self.AllotmentSeedIdx);
+  Self.ReadInt('Bush seed', Self.BushSeedIdx);
+  Self.ReadInt('Cactus seed', Self.CactusSeedIdx);
+  Self.ReadInt('Anima seed', Self.AnimaSeedIdx);
+  Self.ReadInt('Tree sapling', Self.TreeSaplingIdx);
+  Self.ReadInt('Fruit sapling', Self.FruitSaplingIdx);
+  Self.ReadInt('Compost', Self.CompostIdx);
+
+  Self.ReadInt('Weiss TP', Self.WeissTP);
+  Self.ReadInt('Stronghold TP', Self.StrongholdTP);
+  Self.ReadInt('Ardougne TP', Self.ArdougneTP);
+  Self.ReadInt('Falador TP', Self.FaladorTP);
+  Self.ReadInt('Catherby TP', Self.CatherbyTP);
+  Self.ReadInt('Phasmatys TP', Self.PhasmatysTP);
+  Self.ReadInt('Hosidius TP', Self.HosidiusTP);
+  Self.ReadInt('Ortus TP', Self.OrtusTP);
+  Self.ReadInt('Guild TP', Self.GuildTP);
+  Self.ReadInt('Lumbridge tree TP', Self.LumbridgeTreeTP);
+  Self.ReadInt('Varrock tree TP', Self.VarrockTreeTP);
+  Self.ReadInt('Falador tree TP', Self.FaladorTreeTP);
+  Self.ReadInt('Taverley tree TP', Self.TaverleyTreeTP);
+  Self.ReadInt('Gnome tree TP', Self.GnomeTreeTP);
+  Self.ReadInt('Gnome fruit TP', Self.GnomeFruitTP);
+  Self.ReadInt('Gnome village fruit TP', Self.GnomeVillageFruitTP);
+  Self.ReadInt('Catherby fruit TP', Self.CatherbyFruitTP);
+  Self.ReadInt('Brimhaven fruit TP', Self.BrimhavenFruitTP);
+  Self.ReadInt('Lletya fruit TP', Self.LletyaFruitTP);
+
+  Self.ReadBool('Weiss herb', Self.Enabled[EBASHFarmPatch.WEISS_HERB]);
+  Self.ReadBool('Stronghold herb', Self.Enabled[EBASHFarmPatch.STRONGHOLD_HERB]);
+  Self.ReadBool('Ardougne herb', Self.Enabled[EBASHFarmPatch.ARDOUGNE_HERB]);
+  Self.ReadBool('Ardougne flower', Self.Enabled[EBASHFarmPatch.ARDOUGNE_FLOWER]);
+  Self.ReadBool('Ardougne allot N', Self.Enabled[EBASHFarmPatch.ARDOUGNE_ALLOT_N]);
+  Self.ReadBool('Ardougne allot S', Self.Enabled[EBASHFarmPatch.ARDOUGNE_ALLOT_S]);
+  Self.ReadBool('Falador herb', Self.Enabled[EBASHFarmPatch.FALADOR_HERB]);
+  Self.ReadBool('Falador flower', Self.Enabled[EBASHFarmPatch.FALADOR_FLOWER]);
+  Self.ReadBool('Falador allot N', Self.Enabled[EBASHFarmPatch.FALADOR_ALLOT_N]);
+  Self.ReadBool('Falador allot S', Self.Enabled[EBASHFarmPatch.FALADOR_ALLOT_S]);
+  Self.ReadBool('Catherby herb', Self.Enabled[EBASHFarmPatch.CATHERBY_HERB]);
+  Self.ReadBool('Catherby flower', Self.Enabled[EBASHFarmPatch.CATHERBY_FLOWER]);
+  Self.ReadBool('Catherby allot N', Self.Enabled[EBASHFarmPatch.CATHERBY_ALLOT_N]);
+  Self.ReadBool('Catherby allot S', Self.Enabled[EBASHFarmPatch.CATHERBY_ALLOT_S]);
+  Self.ReadBool('Phasmatys herb', Self.Enabled[EBASHFarmPatch.PHASMATYS_HERB]);
+  Self.ReadBool('Phasmatys flower', Self.Enabled[EBASHFarmPatch.PHASMATYS_FLOWER]);
+  Self.ReadBool('Phasmatys allot N', Self.Enabled[EBASHFarmPatch.PHASMATYS_ALLOT_N]);
+  Self.ReadBool('Phasmatys allot S', Self.Enabled[EBASHFarmPatch.PHASMATYS_ALLOT_S]);
+  Self.ReadBool('Hosidius herb', Self.Enabled[EBASHFarmPatch.HOSIDIUS_HERB]);
+  Self.ReadBool('Hosidius flower', Self.Enabled[EBASHFarmPatch.HOSIDIUS_FLOWER]);
+  Self.ReadBool('Hosidius allot N', Self.Enabled[EBASHFarmPatch.HOSIDIUS_ALLOT_N]);
+  Self.ReadBool('Hosidius allot S', Self.Enabled[EBASHFarmPatch.HOSIDIUS_ALLOT_S]);
+  Self.ReadBool('Ortus herb', Self.Enabled[EBASHFarmPatch.ORTUS_HERB]);
+  Self.ReadBool('Ortus flower', Self.Enabled[EBASHFarmPatch.ORTUS_FLOWER]);
+  Self.ReadBool('Ortus allot N', Self.Enabled[EBASHFarmPatch.ORTUS_ALLOT_N]);
+  Self.ReadBool('Ortus allot S', Self.Enabled[EBASHFarmPatch.ORTUS_ALLOT_S]);
+  Self.ReadBool('Guild herb', Self.Enabled[EBASHFarmPatch.GUILD_HERB]);
+  Self.ReadBool('Guild flower', Self.Enabled[EBASHFarmPatch.GUILD_FLOWER]);
+  Self.ReadBool('Guild allot N', Self.Enabled[EBASHFarmPatch.GUILD_ALLOT_N]);
+  Self.ReadBool('Guild allot S', Self.Enabled[EBASHFarmPatch.GUILD_ALLOT_S]);
+  Self.ReadBool('Guild bush', Self.Enabled[EBASHFarmPatch.GUILD_BUSH]);
+  Self.ReadBool('Guild cactus', Self.Enabled[EBASHFarmPatch.GUILD_CACTUS]);
+  Self.ReadBool('Guild anima', Self.Enabled[EBASHFarmPatch.GUILD_ANIMA]);
+  Self.ReadBool('Lumbridge tree', Self.Enabled[EBASHFarmPatch.LUMBRIDGE_TREE]);
+  Self.ReadBool('Varrock tree', Self.Enabled[EBASHFarmPatch.VARROCK_TREE]);
+  Self.ReadBool('Falador tree', Self.Enabled[EBASHFarmPatch.FALADOR_TREE]);
+  Self.ReadBool('Taverley tree', Self.Enabled[EBASHFarmPatch.TAVERLEY_TREE]);
+  Self.ReadBool('Gnome tree', Self.Enabled[EBASHFarmPatch.GNOME_TREE]);
+  Self.ReadBool('Guild tree', Self.Enabled[EBASHFarmPatch.GUILD_TREE]);
+  Self.ReadBool('Guild redwood', Self.Enabled[EBASHFarmPatch.GUILD_REDWOOD]);
+  Self.ReadBool('Gnome stronghold fruit', Self.Enabled[EBASHFarmPatch.GNOME_STRONGHOLD_FRUIT]);
+  Self.ReadBool('Catherby fruit', Self.Enabled[EBASHFarmPatch.CATHERBY_FRUIT]);
+  Self.ReadBool('Gnome village fruit', Self.Enabled[EBASHFarmPatch.GNOME_VILLAGE_FRUIT]);
+  Self.ReadBool('Brimhaven fruit', Self.Enabled[EBASHFarmPatch.BRIMHAVEN_FRUIT]);
+  Self.ReadBool('Lletya fruit', Self.Enabled[EBASHFarmPatch.LLETYA_FRUIT]);
+  Self.ReadBool('Guild fruit', Self.Enabled[EBASHFarmPatch.GUILD_FRUIT]);
+
+  Self.Enabled[EBASHFarmPatch.HARMONY_ISLAND_HERB] := False;
+
+  Self.ReadBool('Barb dibber', Self.BarbDibber);
+  Self.ReadBool('Magic secs', Self.MagicSecateurs);
+  Self.ReadBool('Lumby elite', Self.LumbyElite);
+  Self.ReadBool('Run now', Self.RunNow);
+end;
+
+procedure TBASHFarmConfig.Write();
+var
+  sec, path: String;
+begin
+  sec := Self.Section();
+  path := Self.Path();
+
+  WriteINI(sec, 'Herb seed', ToStr(Self.HerbSeedIdx), path);
+  WriteINI(sec, 'Flower seed', ToStr(Self.FlowerSeedIdx), path);
+  WriteINI(sec, 'Allotment seed', ToStr(Self.AllotmentSeedIdx), path);
+  WriteINI(sec, 'Bush seed', ToStr(Self.BushSeedIdx), path);
+  WriteINI(sec, 'Cactus seed', ToStr(Self.CactusSeedIdx), path);
+  WriteINI(sec, 'Anima seed', ToStr(Self.AnimaSeedIdx), path);
+  WriteINI(sec, 'Tree sapling', ToStr(Self.TreeSaplingIdx), path);
+  WriteINI(sec, 'Fruit sapling', ToStr(Self.FruitSaplingIdx), path);
+  WriteINI(sec, 'Compost', ToStr(Self.CompostIdx), path);
+
+  WriteINI(sec, 'Weiss TP', ToStr(Self.WeissTP), path);
+  WriteINI(sec, 'Stronghold TP', ToStr(Self.StrongholdTP), path);
+  WriteINI(sec, 'Ardougne TP', ToStr(Self.ArdougneTP), path);
+  WriteINI(sec, 'Falador TP', ToStr(Self.FaladorTP), path);
+  WriteINI(sec, 'Catherby TP', ToStr(Self.CatherbyTP), path);
+  WriteINI(sec, 'Phasmatys TP', ToStr(Self.PhasmatysTP), path);
+  WriteINI(sec, 'Hosidius TP', ToStr(Self.HosidiusTP), path);
+  WriteINI(sec, 'Ortus TP', ToStr(Self.OrtusTP), path);
+  WriteINI(sec, 'Guild TP', ToStr(Self.GuildTP), path);
+  WriteINI(sec, 'Lumbridge tree TP', ToStr(Self.LumbridgeTreeTP), path);
+  WriteINI(sec, 'Varrock tree TP', ToStr(Self.VarrockTreeTP), path);
+  WriteINI(sec, 'Falador tree TP', ToStr(Self.FaladorTreeTP), path);
+  WriteINI(sec, 'Taverley tree TP', ToStr(Self.TaverleyTreeTP), path);
+  WriteINI(sec, 'Gnome tree TP', ToStr(Self.GnomeTreeTP), path);
+  WriteINI(sec, 'Gnome fruit TP', ToStr(Self.GnomeFruitTP), path);
+  WriteINI(sec, 'Gnome village fruit TP', ToStr(Self.GnomeVillageFruitTP), path);
+  WriteINI(sec, 'Catherby fruit TP', ToStr(Self.CatherbyFruitTP), path);
+  WriteINI(sec, 'Brimhaven fruit TP', ToStr(Self.BrimhavenFruitTP), path);
+  WriteINI(sec, 'Lletya fruit TP', ToStr(Self.LletyaFruitTP), path);
+
+  WriteINI(sec, 'Weiss herb', ToStr(Self.Enabled[EBASHFarmPatch.WEISS_HERB]), path);
+  WriteINI(sec, 'Stronghold herb', ToStr(Self.Enabled[EBASHFarmPatch.STRONGHOLD_HERB]), path);
+  WriteINI(sec, 'Ardougne herb', ToStr(Self.Enabled[EBASHFarmPatch.ARDOUGNE_HERB]), path);
+  WriteINI(sec, 'Ardougne flower', ToStr(Self.Enabled[EBASHFarmPatch.ARDOUGNE_FLOWER]), path);
+  WriteINI(sec, 'Ardougne allot N', ToStr(Self.Enabled[EBASHFarmPatch.ARDOUGNE_ALLOT_N]), path);
+  WriteINI(sec, 'Ardougne allot S', ToStr(Self.Enabled[EBASHFarmPatch.ARDOUGNE_ALLOT_S]), path);
+  WriteINI(sec, 'Falador herb', ToStr(Self.Enabled[EBASHFarmPatch.FALADOR_HERB]), path);
+  WriteINI(sec, 'Falador flower', ToStr(Self.Enabled[EBASHFarmPatch.FALADOR_FLOWER]), path);
+  WriteINI(sec, 'Falador allot N', ToStr(Self.Enabled[EBASHFarmPatch.FALADOR_ALLOT_N]), path);
+  WriteINI(sec, 'Falador allot S', ToStr(Self.Enabled[EBASHFarmPatch.FALADOR_ALLOT_S]), path);
+  WriteINI(sec, 'Catherby herb', ToStr(Self.Enabled[EBASHFarmPatch.CATHERBY_HERB]), path);
+  WriteINI(sec, 'Catherby flower', ToStr(Self.Enabled[EBASHFarmPatch.CATHERBY_FLOWER]), path);
+  WriteINI(sec, 'Catherby allot N', ToStr(Self.Enabled[EBASHFarmPatch.CATHERBY_ALLOT_N]), path);
+  WriteINI(sec, 'Catherby allot S', ToStr(Self.Enabled[EBASHFarmPatch.CATHERBY_ALLOT_S]), path);
+  WriteINI(sec, 'Phasmatys herb', ToStr(Self.Enabled[EBASHFarmPatch.PHASMATYS_HERB]), path);
+  WriteINI(sec, 'Phasmatys flower', ToStr(Self.Enabled[EBASHFarmPatch.PHASMATYS_FLOWER]), path);
+  WriteINI(sec, 'Phasmatys allot N', ToStr(Self.Enabled[EBASHFarmPatch.PHASMATYS_ALLOT_N]), path);
+  WriteINI(sec, 'Phasmatys allot S', ToStr(Self.Enabled[EBASHFarmPatch.PHASMATYS_ALLOT_S]), path);
+  WriteINI(sec, 'Hosidius herb', ToStr(Self.Enabled[EBASHFarmPatch.HOSIDIUS_HERB]), path);
+  WriteINI(sec, 'Hosidius flower', ToStr(Self.Enabled[EBASHFarmPatch.HOSIDIUS_FLOWER]), path);
+  WriteINI(sec, 'Hosidius allot N', ToStr(Self.Enabled[EBASHFarmPatch.HOSIDIUS_ALLOT_N]), path);
+  WriteINI(sec, 'Hosidius allot S', ToStr(Self.Enabled[EBASHFarmPatch.HOSIDIUS_ALLOT_S]), path);
+  WriteINI(sec, 'Ortus herb', ToStr(Self.Enabled[EBASHFarmPatch.ORTUS_HERB]), path);
+  WriteINI(sec, 'Ortus flower', ToStr(Self.Enabled[EBASHFarmPatch.ORTUS_FLOWER]), path);
+  WriteINI(sec, 'Ortus allot N', ToStr(Self.Enabled[EBASHFarmPatch.ORTUS_ALLOT_N]), path);
+  WriteINI(sec, 'Ortus allot S', ToStr(Self.Enabled[EBASHFarmPatch.ORTUS_ALLOT_S]), path);
+  WriteINI(sec, 'Guild herb', ToStr(Self.Enabled[EBASHFarmPatch.GUILD_HERB]), path);
+  WriteINI(sec, 'Guild flower', ToStr(Self.Enabled[EBASHFarmPatch.GUILD_FLOWER]), path);
+  WriteINI(sec, 'Guild allot N', ToStr(Self.Enabled[EBASHFarmPatch.GUILD_ALLOT_N]), path);
+  WriteINI(sec, 'Guild allot S', ToStr(Self.Enabled[EBASHFarmPatch.GUILD_ALLOT_S]), path);
+  WriteINI(sec, 'Guild bush', ToStr(Self.Enabled[EBASHFarmPatch.GUILD_BUSH]), path);
+  WriteINI(sec, 'Guild cactus', ToStr(Self.Enabled[EBASHFarmPatch.GUILD_CACTUS]), path);
+  WriteINI(sec, 'Guild anima', ToStr(Self.Enabled[EBASHFarmPatch.GUILD_ANIMA]), path);
+  WriteINI(sec, 'Lumbridge tree', ToStr(Self.Enabled[EBASHFarmPatch.LUMBRIDGE_TREE]), path);
+  WriteINI(sec, 'Varrock tree', ToStr(Self.Enabled[EBASHFarmPatch.VARROCK_TREE]), path);
+  WriteINI(sec, 'Falador tree', ToStr(Self.Enabled[EBASHFarmPatch.FALADOR_TREE]), path);
+  WriteINI(sec, 'Taverley tree', ToStr(Self.Enabled[EBASHFarmPatch.TAVERLEY_TREE]), path);
+  WriteINI(sec, 'Gnome tree', ToStr(Self.Enabled[EBASHFarmPatch.GNOME_TREE]), path);
+  WriteINI(sec, 'Guild tree', ToStr(Self.Enabled[EBASHFarmPatch.GUILD_TREE]), path);
+  WriteINI(sec, 'Guild redwood', ToStr(Self.Enabled[EBASHFarmPatch.GUILD_REDWOOD]), path);
+  WriteINI(sec, 'Gnome stronghold fruit', ToStr(Self.Enabled[EBASHFarmPatch.GNOME_STRONGHOLD_FRUIT]), path);
+  WriteINI(sec, 'Catherby fruit', ToStr(Self.Enabled[EBASHFarmPatch.CATHERBY_FRUIT]), path);
+  WriteINI(sec, 'Gnome village fruit', ToStr(Self.Enabled[EBASHFarmPatch.GNOME_VILLAGE_FRUIT]), path);
+  WriteINI(sec, 'Brimhaven fruit', ToStr(Self.Enabled[EBASHFarmPatch.BRIMHAVEN_FRUIT]), path);
+  WriteINI(sec, 'Lletya fruit', ToStr(Self.Enabled[EBASHFarmPatch.LLETYA_FRUIT]), path);
+  WriteINI(sec, 'Guild fruit', ToStr(Self.Enabled[EBASHFarmPatch.GUILD_FRUIT]), path);
+
+  WriteINI(sec, 'Barb dibber', ToStr(Self.BarbDibber), path);
+  WriteINI(sec, 'Magic secs', ToStr(Self.MagicSecateurs), path);
+  WriteINI(sec, 'Lumby elite', ToStr(Self.LumbyElite), path);
+  WriteINI(sec, 'Run now', ToStr(Self.RunNow), path);
+end;

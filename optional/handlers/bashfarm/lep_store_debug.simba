@@ -1,0 +1,68 @@
+(*!
+  Lep toolshed slot debugger.
+  Open Amazing Farming Equipment Store, then run.
+
+  Draws all button boxes, then invent slots that are GREEN (item withdrawn).
+*)
+
+{$I BashLib/osr.simba}
+{$I BashLib/optional/handlers/bashfarm/lep_slots.simba}
+
+const
+  INV_NAMES: TStringArray = [
+    'Rake', 'Dibber', 'Spade', 'Secateurs',
+    'Watering can', 'Trowel', 'Plant cure', 'Bottomless',
+    'Buckets', 'Compost', 'Supercompost', 'Ultracompost'
+  ];
+
+var
+  StoreCorners, InvCorners: TPointArray;
+  ButtonBoxes, StoreBoxes, InvBoxes, GreenBoxes: TBoxArray;
+  Green: TCTS2Color;
+  I, Count: Int32;
+  Tag: String;
+
+begin
+  StoreCorners := BASHLepSteelCorners(MainScreen.Bounds);
+  InvCorners := BASHLepSteelCorners(Inventory.Bounds);
+
+  StoreBoxes := BASHLepFitGrid(StoreCorners, 4, 3);
+  InvBoxes := BASHLepFitGrid(InvCorners, 2, 6);
+
+  ButtonBoxes := StoreBoxes;
+  for I := 0 to High(InvBoxes) do
+    ButtonBoxes += InvBoxes[I];
+
+  WriteLn('[LepDebug] boxes store=', Length(StoreBoxes), ' invent=', Length(InvBoxes));
+
+  // Green = withdrawn into player invent mirror
+  Green := CTS2(65280, 22, 0.18, 0.30);
+  SetLength(GreenBoxes, 0);
+
+  for I := 0 to High(InvBoxes) do
+  begin
+    Count := SRL.CountColor(Green, InvBoxes[I]);
+    if Count < 8 then
+      Count := SRL.CountColor(RS_ITEM_GREEN_STACK, InvBoxes[I]);
+
+    if I <= High(INV_NAMES) then
+      Tag := INV_NAMES[I]
+    else
+      Tag := '#' + ToStr(I);
+
+    if Count >= 8 then
+    begin
+      GreenBoxes += InvBoxes[I];
+      WriteLn('[LepDebug] GREEN  invent[', I, '] ', Tag, ' pixels=', Count, ' ', InvBoxes[I]);
+    end
+    else
+      WriteLn('[LepDebug] plain  invent[', I, '] ', Tag, ' pixels=', Count);
+  end;
+
+  WriteLn('[LepDebug] green slots: ', Length(GreenBoxes), ' / ', Length(InvBoxes));
+
+  // All buttons first, then green invent slots on top
+  Debug(ButtonBoxes);
+  if Length(GreenBoxes) > 0 then
+    Debug(GreenBoxes);
+end.

@@ -1,67 +1,119 @@
-(*
-# Tool GetObject
-Tool to gather tile coordinates. Simply hover the tile you want the coordinate
-of and click with the mouse middle button.
-You can record several tiles at once into an array by click several tiles in
-a row.
-The Tile or TileArray will be printed everytime you add a tile.
+(*!
+  Tool GetObject V2 — capture WalkerV2 map tile coordinates.
 
-To reset the array press space bar for a couple of seconds, maybe even
-a couple of times because Simba is bad at registering user key presses.
+  Middle-click tiles to record (same as the old tool).
+  Herb patches are 2x2 — middle-click all 4 tiles (or just the center).
+  After 2+ clicks it prints the mean center for Coords + a MapCoords hint.
 
-Once the message "Array cleared." shows up you can start again.
+  Uses SRL_DISABLE_REMOTEINPUT so real middle-mouse works.
+  Skips SettingsHandler (needs EIOS symbols that aren't loaded without remote input).
 *)
+
 {$DEFINE SRL_DISABLE_REMOTEINPUT}
-{$I WaspLib/osr.simba}
+{$DEFINE WL_SETTINGSHANDLER_INCLUDED}
+{$I BashLib/osr.simba}
 
 const
-  CHUNKS: array of TRSMapChunk := [Chunk([48,55,50,53], 0)]; //CHUNKS you want to load. Smaller the CHUNKS the faster it is. find from https://map.waspscripts.com/?m=-1&z=2&p=0&x=3116&y=3465
+  // Hosidius farm region — change per location:
+  CHUNKS: array of TRSMapChunk := [
+    Chunk(Box(26, 56, 29, 53), 0)
+  ];
   SCALE = 8;
+
+var
+  Points: TPointArray;
+  LastClickAt: UInt64;
 
 procedure Init();
 begin
-  Map.AddChunks(CHUNKS, SCALE);
+  MM2MS.SetupZoom();
+  Map.SetupChunks(CHUNKS, SCALE);
+  Map.Walker.AdaptiveWalk := True;
+
+  WriteLn('=== getobjectv2 ===');
+  WriteLn('Zoom=', MM2MS.ZoomLevel, '  Player=', Map.Position());
+  WriteLn('Middle-click a tile to record it.');
+  WriteLn('Herb patch = 2x2: click all 4 corners/tiles, then use the printed Center for Coords.');
+  WriteLn('Hold SPACE briefly to clear the list.');
 end;
 
-
-procedure Run();
+procedure PrintPoints();
 var
-  P: TPoint;
-  TPA: TPointArray;
-  Str: String;
+  p, mean: TPoint;
+  i: Int32;
+  str: String;
+  sumX, sumY: Int64;
+  b: TBox;
 begin
-  while True do
+  if Length(Points) = 0 then
   begin
-    Sleep(10);
-    if Keyboard.IsKeyDown(VK_SPACE) then
-    begin
-      TPA := [];
-      WriteLn 'Array cleared.';
-    end;
-
-    if IsMouseButtonDown(MOUSE_MIDDLE) then
-    begin
-      P := (Map.MS2Map(Mouse.Position(), 0));
-      TPA += P;
-
-      if Length(TPA) = 1 then
-        WriteLn('[', P.X, ', ', P.Y, '];')
-      else if Length(TPA) > 1 then
-      begin
-        Str := '';
-
-        for P in TPA do
-          Str += ', [' + ToStr(P.X) + ', ' + ToStr(P.Y) + ']';
-        Str := '[' + Str.After(', ') + '];';
-        Writeln(Str);
-      end;
-    end;
+    WriteLn('No points yet.');
+    Exit;
   end;
+
+  if Length(Points) = 1 then
+  begin
+    p := Points[0];
+    WriteLn('[', p.X, ', ', p.Y, '];');
+    Exit;
+  end;
+
+  str := '';
+  sumX := 0;
+  sumY := 0;
+  for i := 0 to High(Points) do
+  begin
+    p := Points[i];
+    sumX += p.X;
+    sumY += p.Y;
+    if i > 0 then
+      str += ', ';
+    str += '[' + ToStr(p.X) + ', ' + ToStr(p.Y) + ']';
+  end;
+
+  mean := [Round(sumX / Length(Points)), Round(sumY / Length(Points))];
+  b := Points.Bounds();
+
+  WriteLn('Tiles (', Length(Points), '): [', str, '];');
+  WriteLn('Center (Coords): [', mean.X, ', ', mean.Y, '];');
+  WriteLn('MapCoords hint: [', b.X1 - 100, ', ', b.Y1 - 100, ', ', b.X2 + 100, ', ', b.Y2 + 100, ']');
 end;
 
+procedure AddPoint(p: TPoint);
+begin
+  if (Length(Points) > 0) and
+     (Points[High(Points)].X = p.X) and
+     (Points[High(Points)].Y = p.Y) then
+    Exit;
+
+  Points += p;
+  WriteLn('Added [', p.X, ', ', p.Y, ']  (n=', Length(Points), ')');
+  PrintPoints();
+end;
 
 begin
   Init();
   ClearDebug();
-  Run();
+  LastClickAt := 0;
+
+  while True do
+  begin
+    Sleep(10);
+
+    if Keyboard.IsKeyDown(VK_SPACE) then
+    begin
+      Points := [];
+      WriteLn('Array cleared.');
+      Wait(300);
+    end;
+
+    if IsMouseButtonDown(MOUSE_MIDDLE) then
+    begin
+      if GetTickCount() - LastClickAt > 250 then
+      begin
+        LastClickAt := GetTickCount();
+        AddPoint(Map.MS2Map(Mouse.Position(), 0));
+      end;
+    end;
+  end;
 end.

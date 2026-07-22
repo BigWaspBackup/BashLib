@@ -6,7 +6,7 @@ This files contains custom components and methods to be used in forms.
 *)
 {$DEFINE WL_FORMUTILS_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 function TControl.GetScreenDPI(): Int32; static;

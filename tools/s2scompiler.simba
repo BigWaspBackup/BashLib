@@ -17,7 +17,7 @@ input.Replace('.simba', '-compiled.simba')
 ```
 *)
 
-{$I SRL-T/osr.simba}
+{$I SRL-B/osr.simba}
 
 var
   input: String = 'launcher.simba';
@@ -53,7 +53,7 @@ var
 begin
   filepath := content.After(INCLUDE_DIRECTIVES[directiveIndex]).Before('}').Trim();
 
-  if filepath.StartsWith('WaspLib') or filepath.StartsWith('SRL-T') or filepath.StartsWith('SRL') then
+  if filepath.StartsWith('BashLib') or filepath.StartsWith('SRL-B') or filepath.StartsWith('SRL') then
   begin
     if IGNORE_INCLUDES_FOLDER then
       Exit(INCLUDE_DIRECTIVES[directiveIndex].Replace(' ', '_') + filepath + '}');
@@ -69,13 +69,13 @@ begin
     for i := 0 to High(INCLUDE_DIRECTIVES) do
     begin
       Result := Result.Replace(INCLUDE_DIRECTIVES[i] + ' SRL', '{$TEMP_SRL');
-      Result := Result.Replace(INCLUDE_DIRECTIVES[i] + ' WaspLib', '{$TEMP_Wasplib');
+      Result := Result.Replace(INCLUDE_DIRECTIVES[i] + ' BashLib', '{$TEMP_Wasplib');
     end;
 
     for i := 0 to High(INCLUDE_DIRECTIVES) do
       Result := Result.Replace(INCLUDE_DIRECTIVES[i], INCLUDE_DIRECTIVES[i] + ExtractFileDir(filepath) + DirectorySeparator);
 
-    Result := Result.Replace('{$TEMP_SRL', '{$I SRL').Replace('{$TEMP_Wasplib', '{$I WaspLib');
+    Result := Result.Replace('{$TEMP_SRL', '{$I SRL').Replace('{$TEMP_Wasplib', '{$I BashLib');
   end
   else
   begin

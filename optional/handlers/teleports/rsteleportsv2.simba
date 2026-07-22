@@ -1,10 +1,10 @@
 {$DEFINE SKUNK_TELEPORTSV2}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 {$IFNDEF SKUNK_TELEPORT_UTILS}
-  {$I WaspLib/optional/handlers/teleports/rsteleportutils.simba}
+  {$I BashLib/optional/handlers/teleports/rsteleportutils.simba}
 {$ENDIF}
 
 type RSTeleportsV2 = record(TSRLBaseRecord) class var
@@ -281,7 +281,7 @@ begin
   RSTeleportsV2.NEXUS_CAMELOT := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Camelot', [6933, 37963]);
   RSTeleportsV2.NEXUS_SEERS_VILLAGE := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Seers Village', [6816, 37929]);
   RSTeleportsV2.NEXUS_CARRALLANGER := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Carrallangar', [3669, 37067]);
-  RSTeleportsV2.NEXUS_CATHERBY := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Catherby', [3314, 37549]);
+  RSTeleportsV2.NEXUS_CATHERBY := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Catherby', [7164, 36566]);
   RSTeleportsV2.NEXUS_CEMETERY := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Cemetery', [3490, 37713]);
   RSTeleportsV2.NEXUS_DRAYNOR_MANOR := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Draynor Manor', [3620, 37334]);
   RSTeleportsV2.NEXUS_FALADOR := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Falador', [7769, 37211]);
@@ -299,11 +299,11 @@ begin
   RSTeleportsV2.NEXUS_SALVE_GRAVEYARD := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Salve Graveyard', [9634, 37584]);
   RSTeleportsV2.NEXUS_VARROCK := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Varrock', [8752, 36722]);
   RSTeleportsV2.NEXUS_GRAND_EXCHANGE := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Grand Exchange', [8552, 36566]);
-  RSTeleportsV2.NEXUS_TROLL_STRONGHOLD := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Troll Stronghold', [3356, 37373]);
+  RSTeleportsV2.NEXUS_TROLL_STRONGHOLD := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Troll Stronghold', [7280, 35658]);
   RSTeleportsV2.NEXUS_WATCHTOWER := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Watchtower', [6094, 37370]);
   RSTeleportsV2.NEXUS_YANILLE := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Yanille', [6142, 37393]);
   RSTeleportsV2.NEXUS_WATERBIRTH_ISLAND := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Waterbirth Island', [3058, 37337]);
-  RSTeleportsV2.NEXUS_WEISS := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Weiss', [3358, 37394]);
+  RSTeleportsV2.NEXUS_WEISS := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Weiss', [7297, 34691]);
   RSTeleportsV2.NEXUS_WEST_ARDOUGNE := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'West Ardougne', [3012, 37273]);
   RSTeleportsV2.NEXUS_Civitas_Illa_Fortis:= setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Civitas illa Fortis', [2620, 37890]);
   RSTeleportsV2.FARMING_GUILD_CAPE := setupTeleportLocation(ETeleportType.OTHER, ['Farming cape', 'Farming cape(t)'], 'Teleport', [900, 35542]);
@@ -351,7 +351,7 @@ begin
   RSTeleportsV2.BARBARIAN := setupTeleportLocation(ETeleportType.LUNAR_MAGIC, "Barbarian", 75, [3055, 37150]);
   RSTeleportsV2.KHAZARD := setupTeleportLocation(ETeleportType.LUNAR_MAGIC, "Khazard", 78, [3148, 37329]);
   RSTeleportsV2.FISHING_GUILD_LUNAR := setupTeleportLocation(ETeleportType.LUNAR_MAGIC, "Fishing Guild", 85, [3124, 37373]);
-  RSTeleportsV2.CATHERBY := setupTeleportLocation(ETeleportType.LUNAR_MAGIC, "Catherby", 87, [3314, 37549]);
+  RSTeleportsV2.CATHERBY := setupTeleportLocation(ETeleportType.LUNAR_MAGIC, "Catherby", 87, [7164, 36566]);
   RSTeleportsV2.ICE_PLATEAU := setupTeleportLocation(ETeleportType.LUNAR_MAGIC, "Ice Plateau", 89, [3485, 37393]);
   RSTeleportsV2.ARCEUUS_LIBRARY := setupTeleportLocation(ETeleportType.ARCEUUS_MAGIC, "Arceuus Library", 6, [2144, 37320]);
   RSTeleportsV2.DRAYNOR_MANOR := setupTeleportLocation(ETeleportType.ARCEUUS_MAGIC, "Draynor Manor", 17, [3620, 37334]);
@@ -422,8 +422,8 @@ begin
   RSTeleportsV2.WATERBIRTH_ISLAND := setupTeleportLocation(ETeleportType.OTHER, ["Enchanted Lyre"], "Waterbirth Island", [3062, 37338]);
   RSTeleportsV2.NEITIZNOT := setupTeleportLocation(ETeleportType.OTHER, ["Enchanted Lyre"], "Neitiznot", [2848, 37383]);
   RSTeleportsV2.JATIZSO := setupTeleportLocation(ETeleportType.OTHER, ["Enchanted Lyre"], "Jatizso", [2921, 37391]);
-  RSTeleportsV2.WEISS := setupTeleportLocation(ETeleportType.OTHER, ["Icy Basalt"], "Weiss", [3358, 37394]);
-  RSTeleportsV2.TROLL_STRONGHOLD := setupTeleportLocation(ETeleportType.OTHER, ["Stony Basalt"], "Troll Stronghold", [3356, 37373]);
+  RSTeleportsV2.WEISS := setupTeleportLocation(ETeleportType.OTHER, ["Icy basalt"], "Weiss", [7297, 34691]);
+  RSTeleportsV2.TROLL_STRONGHOLD := setupTeleportLocation(ETeleportType.OTHER, ["Stony basalt"], "Troll Stronghold", [7280, 35658]);
   RSTeleportsV2.LUNCH_BY_THE_LANCALLIUMS_HOSIDIUS := setupTeleportLocation(ETeleportType.OTHER, ["Book of the dead", "Kharedst's Memoirs"], "Lunch by the Lancalliums", [2225, 37492]);
   RSTeleportsV2.THE_FISHERS_FLUTE_PISCARILIUS := setupTeleportLocation(ETeleportType.OTHER, ["Book of the dead","Kharedst's Memoirs"], "The Fisher's Flute", [2314, 37628]);
   RSTeleportsV2.HISTORY_AND_HEARSAY_SHAYZIEN := setupTeleportLocation(ETeleportType.OTHER, ["Book of the dead","Kharedst's Memoirs"], "History and Hearsay", [1990, 37456]);
@@ -451,7 +451,7 @@ begin
   RSTeleportsV2.MONASTERY := setupTeleportLocation(ETeleportType.DIARY_ITEM, "Ardougne Cloak", "Monastery", [6328, 37566]);
   RSTeleportsV2.KARAMJA_GLOVES_GEM_MINE := setupTeleportLocation(ETeleportType.DIARY_ITEM, "Karamja Gloves", "Gem Mine", [4212, 39122]);
   RSTeleportsV2.KARAMJA_GLOVES_DURADEL := setupTeleportLocation(ETeleportType.DIARY_ITEM, "Karamja Gloves", "Duradel", []);
-  RSTeleportsV2.FALADOR_FARM_PATCH := setupTeleportLocation(ETeleportType.DIARY_ITEM, "Explorer's Ring", "Teleport", [8120, 37270]);
+  RSTeleportsV2.FALADOR_FARM_PATCH := setupTeleportLocation(ETeleportType.DIARY_ITEM, "Explorer's Ring", "Teleport", [8116, 37210]);
   RSTeleportsV2.AIQ_MUDSKIPPER_POINT := setupTeleportLocation(ETeleportType.FAIRY_RING, "AIQ", [7890, 37374]);
   RSTeleportsV2.AIS_VARLAMORE_AUBURN_VALLEY := setupTeleportLocation(ETeleportType.FAIRY_RING, "AIS", [1620,37134]);
   RSTeleportsV2.AIR_ISLAND_SOUTHEAST_OF_ARDOUGNE := setupTeleportLocation(ETeleportType.FAIRY_RING, "AIR", [6706, 37442]);
@@ -495,7 +495,7 @@ begin
   RSTeleportsV2.DIR_GORAKS_PLANE := setupTeleportLocation(ETeleportType.FAIRY_RING, "DIR", [3832, 36806]);
   RSTeleportsV2.DIQ_PLAYEROWNED_HOUSE := setupTeleportLocation(ETeleportType.FAIRY_RING, "DIQ", [0, 0]);
   RSTeleportsV2.DIS_WIZARDS_TOWER := setupTeleportLocation(ETeleportType.FAIRY_RING, "DIS", [8336, 37390]);
-  RSTeleportsV2.DJP_TOWER_OF_LIFE := setupTeleportLocation(ETeleportType.FAIRY_RING, "DJP", [6538, 37406]);
+  RSTeleportsV2.DJP_TOWER_OF_LIFE := setupTeleportLocation(ETeleportType.FAIRY_RING, "DJP", [6535, 37509]);
   RSTeleportsV2.DJR_CHASM_OF_FIRE := setupTeleportLocation(ETeleportType.FAIRY_RING, "DJR", [1726, 35306]);
   RSTeleportsV2.DKP_SOUTH_OF_MUSA_POINT := setupTeleportLocation(ETeleportType.FAIRY_RING, "DKP", [7506, 38472]);
   RSTeleportsV2.DKR_EDGEVILLE_GRAND_EXCHANGE := setupTeleportLocation(ETeleportType.FAIRY_RING, "DKR", [8422, 36476]);

@@ -5,11 +5,11 @@ The HouseMap is what's responsible for mapping a user's POH (Player owned house)
 
 {$DEFINE WL_HOUSEMAP_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 {$IFNDEF WL_HOUSEUTILS_INCLUDED}
-  {$I WaspLib/optional/handlers/house/houseutils.simba}
+  {$I BashLib/optional/handlers/house/houseutils.simba}
 {$ENDIF}
 
 type
@@ -226,7 +226,7 @@ This box is a box of the following image:
 
 Example:
 ```pascal
-{$I WaspLib/optional/handlers/poh.simba}
+{$I BashLib/optional/handlers/poh.simba}
 begin
   WriteLn POH.Map.GetRoomBitmapBox(EHouseRoom.SUPERIOR_GARDEN);
 end;
@@ -249,7 +249,7 @@ Internal method used to retrieve a bitmap of the {ref}`EHouseRoom` you pass in.
 
 Example:
 ```pascal
-{$I WaspLib/optional/handlers/poh.simba}
+{$I BashLib/optional/handlers/poh.simba}
 var
   bmp: TMufasaBitmap;
 begin

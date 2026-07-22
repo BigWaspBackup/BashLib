@@ -1,0 +1,45 @@
+(*!
+  Example host for BASHFarmRunner + dashboard GUI.
+*)
+
+{$I SRL-B/osr.simba}
+{$I BashLib/osr.simba}
+{$I BashLib/optional/handlers/bashfarm/bashfarmrunner.simba}
+
+var
+  Form: TBASHFarmGUI;
+
+function TBASHFarmRunner.OnStart(): Boolean; override;
+begin
+  if not Bank.IsOpen() then
+  begin
+    if not Banks.WalkOpen() then
+      Exit(False);
+  end;
+
+  if Inventory.Count() > 0 then
+    Bank.DepositAll();
+
+  Result := inherited;
+end;
+
+procedure TBASHFarmRunner.OnComplete(); override;
+begin
+  WriteLn('[Host] Farm run complete — resume main script activity here');
+end;
+
+begin
+  Form.Run();
+
+  if Length(BASHFarmRunner.Patches) = 0 then
+  begin
+    WriteLn('[Host] No patches enabled — exiting');
+    Exit;
+  end;
+
+  // Host bank area — EnsureChunks will AddChunks for enabled farm patches on top.
+  WriteLn('[Host] Loading Deepfin Point map chunk');
+  Map.SetupChunk(ERSChunk.DEEPFIN_POINT);
+
+  BASHFarmRunner.DoFarmRun();
+end.

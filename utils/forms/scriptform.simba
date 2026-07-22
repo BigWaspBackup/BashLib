@@ -1,12 +1,12 @@
 (*
 # ScriptForm
-This file is responsible for creating and managing WaspLib's forms.
+This file is responsible for creating and managing BashLib's forms.
 
 This might be complicated to understand if you are not familiar with pointers and type casting because it heavily relies on both.
 *)
 {$DEFINE WL_SCRIPTFORM_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 (*
@@ -18,12 +18,12 @@ This might be complicated to understand if you are not familiar with pointers an
 {$IFNDEF _WL_CACHE}{$DEFINE _WL_CACHE := ''}{$ENDIF}
 ```
 The first line looks for a credentials.simba file and include it if it exists.
-This is what gives WaspLib scripts access to their accounts through several scripts.
+This is what gives BashLib scripts access to their accounts through several scripts.
 It's important to know that player information is stored in Simba code to compile when the file is included, what this means is that the information is in plain text.
 
 The next lines are unrelated to credentials but related to each other.
 The way **TScriptForm** was made, it assumes a valid SCRIPT_ID and SCRIPT_REVISION have been assigned.
-Because WaspLib is not meant to enforce the usage of https://waspscripts..com, this was added as a way of users being able to use WaspLib regardless of having a script id/revision or not.
+Because BashLib is not meant to enforce the usage of https://waspscripts..com, this was added as a way of users being able to use BashLib regardless of having a script id/revision or not.
 `_WL_CACHE` is an optional opaque build tag injected into watermarked premium downloads; empty when absent.
 *)
 {$IFHASFILE credentials.simba}{$I credentials.simba}{$ENDIF}
@@ -44,7 +44,7 @@ Form: TForm;
 end;
 ```
 
-TScriptForm is the record responsible for handling the WaspLib form.
+TScriptForm is the record responsible for handling the BashLib form.
 *)
   TScriptForm = record
     Size: TPoint;
@@ -350,7 +350,7 @@ function TScriptForm.CreateVideoPanel(owner: TControl): TPanel;
 function TScriptForm.CreateWaspLibSettings(limits: Boolean = True): TTabSheet;
 function TScriptForm.CreateVersionPanel(owner: TControl; colors: TIntegerArray = [$27BA70, $00D8FF, $0000FF]; align: TAlign = alBottom): TPanel;
 ```
-Set of methods used to create pre-configured panels and/or tabs to interact with SRL/WaspLib.
+Set of methods used to create pre-configured panels and/or tabs to interact with SRL/BashLib.
 The methods that return panels require you to specify a **owner** which will be the parent of that TPanel.
 Some panels might also require you to position the panel correctly as you wish. You can either align it or set coordinates.
 
@@ -360,8 +360,8 @@ Very basic example of a full TScriptForm setup:
 
 Example:
 ```pascal
-{$I SRL-T/osr.simba}
-{$I WaspLib/osr.simba}
+{$I SRL-B/osr.simba}
+{$I BashLib/osr.simba}
 
 type
   TMyScriptForm = record(TScriptForm)
@@ -887,7 +887,7 @@ begin
     setBevelWidth(0);
     setHeight(Round(Self.Size.Y / 3.2));
     setWidth(Self.Size.X);
-    SetTooltip('WaspLib Account Manager.');
+    SetTooltip('BashLib Account Manager.');
   end;
 
   fullWidth := Floor(Self.Size.X/2);
@@ -1444,7 +1444,7 @@ begin
     setBevelWidth(0);
     setHeight(y + TControl.AdjustToDPI(40));
     setWidth(Self.Size.X);
-    SetTooltip('WaspLib''s ' + typeStr + ' Settings.');
+    SetTooltip('BashLib''s ' + typeStr + ' Settings.');
   end;
 
   if addInfo then
@@ -1453,7 +1453,7 @@ begin
       Create(Result);
       SetTop(TControl.AdjustToDPI(20));
       SetLeft(space);
-      setCaption('Things to keep in mind about WaspLib''s ' + typeStr +
+      setCaption('Things to keep in mind about BashLib''s ' + typeStr +
                  ' Handler:' + LINEENDING + LINEENDING +
                  '- Auto mode will use anythig it recognizes available. It only recognizes items in the list.' +
                  LINEENDING +
@@ -1615,7 +1615,7 @@ begin
     ComboBox.SetOnChange(@Self._BankOnChange);
   end;
 
-  mapPath := INCLUDEPATH + 'WaspLib' + DIRECTORYSEPARATOR + 'osr' +
+  mapPath := INCLUDEPATH + 'BashLib' + DIRECTORYSEPARATOR + 'osr' +
               DIRECTORYSEPARATOR + 'walker' + DIRECTORYSEPARATOR + 'map.png';
   fileName := SHA1File(mapPath) + '.bmp';
   path := WL_DATAPATH + 'assets' + DIRECTORYSEPARATOR;
@@ -1710,7 +1710,7 @@ begin
     setCaption('');
     setBevelWidth(0);
     setHeight(Round(Self.Size.Y / 7));
-    SetTooltip('WaspLib limit settings.');
+    SetTooltip('BashLib limit settings.');
   end;
 
   fullWidth := Floor(Self.Size.X/2);
@@ -1929,7 +1929,7 @@ begin
       'Record script crashes with simba.'
       + LineEnding +
       'Videos are saved at: ' +
-      AppPath + 'Data' + DirectorySeparator + 'WaspLib' + DirectorySeparator + 'videos' + DirectorySeparator
+      AppPath + 'Data' + DirectorySeparator + 'BashLib' + DirectorySeparator + 'videos' + DirectorySeparator
       + LineEnding +
       'This is a resource intense feature, use it only for debugging purposes.'
     );
@@ -1969,7 +1969,7 @@ function TScriptForm.CreateWaspLibSettings(limits: Boolean = True): TTabSheet;
 var
   riPanel, limitPanel, videoPanel: TPanel;
 begin
-  Self.AddTab('WaspLib Settings');
+  Self.AddTab('BashLib Settings');
   Result := Self.Tabs[High(Self.Tabs)];
 
   videoPanel := Self.CreateVideoPanel(Result);
@@ -2070,8 +2070,8 @@ begin
   _CheckFailed(latestWL  , wlColor);
   _CheckFailed(latestRev, revColor);
 
-  currentSRLT := GetPackageVersion('srl-t');
-  currentWL   := GetPackageVersion('wasplib');
+  currentSRLT := GetPackageVersion('srl-b');
+  currentWL   := GetPackageVersion('bashlib');
   currentRev  := {$macro SCRIPT_REVISION};
 
   _CheckMatch(currentSRLT, latestSRLT, srltColor);
@@ -2089,11 +2089,11 @@ begin
     setAlign(align);
   end;
 
-  pad1 := Max(Max(Length('SRL-T'), Length('WaspLib')), Length('WaspLib')) + 8;
+  pad1 := Max(Max(Length('SRL-B'), Length('BashLib')), Length('BashLib')) + 8;
   pad2 := Max(Max(Length(currentSRLT), Length(currentWL)), Length(currentRev));
 
-  srltPanel := _MakeVersionLabel(Result, 'SRL-T'  , 'Current: ' + currentSRLT, 'Latest: ' + latestSRLT, srltColor, pad1, pad2);
-  wlPanel   := _MakeVersionLabel(Result, 'WaspLib', 'Current: ' + currentWL  , 'Latest: ' + latestWL  , wlColor  , pad1, pad2);
+  srltPanel := _MakeVersionLabel(Result, 'SRL-B'  , 'Current: ' + currentSRLT, 'Latest: ' + latestSRLT, srltColor, pad1, pad2);
+  wlPanel   := _MakeVersionLabel(Result, 'BashLib', 'Current: ' + currentWL  , 'Latest: ' + latestWL  , wlColor  , pad1, pad2);
   revPanel  := _MakeVersionLabel(Result, 'Script' , 'Current: ' + currentRev , 'Latest: ' + latestRev , revColor , pad1, pad2);
 
   srltPanel.SetTop(0);

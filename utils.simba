@@ -4,7 +4,7 @@
 {$IFNDEF SCRIPT_REVISION}{$DEFINE SCRIPT_REVISION := '1'}{$ENDIF}
 
 {$IFNDEF SRL_OSR}
-  {$I SRL-T/osr.simba}
+  {$I SRL-B/osr.simba}
 {$ENDIF}
 
 type
@@ -25,7 +25,7 @@ type
   end;
 
 const
-  WL_DATAPATH = SIMBA_DATA_DIR + 'WaspLib' + DirectorySeparator;
+  WL_DATAPATH = SIMBA_DATA_DIR + 'BashLib' + DirectorySeparator;
 var
   WL: TWaspLib;
   ScriptName: String := ExtractFileName(ScriptFile).Before(ExtractFileExt(ScriptFile));

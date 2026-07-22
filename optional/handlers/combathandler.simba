@@ -9,11 +9,11 @@ for general purpose combat this should be enough!
 
 {$DEFINE WL_COMBAT_HANDLER_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 {$IFNDEF WL_LOOT_HANDLER_INCLUDED}
-  {$I WaspLib/optional/handlers/loothandler.simba}
+  {$I BashLib/optional/handlers/loothandler.simba}
 {$ENDIF}
 
 const

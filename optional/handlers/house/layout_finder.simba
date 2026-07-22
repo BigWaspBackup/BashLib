@@ -1,8 +1,8 @@
 {$DEFINE LAYOUT_FINDER}
 
-{$I WaspLib/osr.simba}
+{$I BashLib/osr.simba}
 {$IFNDEF WL_HOUSEMAP_INCLUDED}
-  {$I WaspLib/optional/handlers/house/houseloader.simba}
+  {$I BashLib/optional/handlers/house/houseloader.simba}
 {$ENDIF}
 
 {.DEFINE DEBUG_LAYOUT_FINDER}

@@ -7,7 +7,7 @@ They also contain template functions and procedures that can be used as is or ov
 
 {$DEFINE WL_BASESCRIPT_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 (*
@@ -214,7 +214,7 @@ end;
 ```pascal
 procedure CheckUpdates(caption: String = 'Updates Available');
 ```
-Checks for updates for SRL-T, WaspLib and the current script.
+Checks for updates for SRL-B, BashLib and the current script.
 *)
 procedure CheckUpdates(caption: String = 'Updates Available');
 var
@@ -233,8 +233,8 @@ begin
   if latestRev = '' then
     latestRev := 'Failed to check...';
 
-  currentSRLT := GetPackageVersion('srl-t');
-  currentWL := GetPackageVersion('wasplib');
+  currentSRLT := GetPackageVersion('srl-b');
+  currentWL := GetPackageVersion('bashlib');
   currentRev := {$macro SCRIPT_REVISION};
 
   isLatestSRLT := currentSRLT = latestSRLT;
@@ -247,10 +247,10 @@ begin
   msg := LINEENDING + 'The following seems to be outdated:' + LINEENDING + LINEENDING;
 
   if not isLatestSRLT then
-    msg += '- SRL-T (Current version: ' + currentSRLT + ' Latest version: ' + latestSRLT + ').' + LINEENDING;
+    msg += '- SRL-B (Current version: ' + currentSRLT + ' Latest version: ' + latestSRLT + ').' + LINEENDING;
 
   if not isLatestWL then
-    msg += '- WaspLib (Current version: ' + currentWL + ' Latest version: ' + latestWL + ').' + LINEENDING;
+    msg += '- BashLib (Current version: ' + currentWL + ' Latest version: ' + latestWL + ').' + LINEENDING;
 
   if not isLatestRev then
     msg += '- Script (Current revision: ' + currentRev + ' Latest revision: ' + latestRev + ').' + LINEENDING;
@@ -475,8 +475,8 @@ end;
 Record that holds common variables for most scripts that use a bank.
 This record inherits from **TBaseWalkerScript** and which inherits from **TBaseScript's**.
 The extra variables that are part of **TBaseBankScript** are:
- - **Self.ScriptBank**: PRSObject pointer that points to our current bank TRSObject, for more info check: https://torwent.github.io/WaspLib/waspobject.html#type-trsobject
- - **Self.ScriptBanker**: PRSNPC pointer that points to our current banker TRSNPC, for more info check: https://torwent.github.io/WaspLib/waspobject.html#type-trsmmdot
+ - **Self.ScriptBank**: PRSObject pointer that points to our current bank TRSObject, for more info check: https://torwent.github.io/BashLib/waspobject.html#type-trsobject
+ - **Self.ScriptBanker**: PRSNPC pointer that points to our current banker TRSNPC, for more info check: https://torwent.github.io/BashLib/waspobject.html#type-trsmmdot
  - **BankTab**: Integer variable used to cache the current bank tab that contains items for our script.
  - **ItemLeftAmount**: Integer variable used to cache items left to make/build/whatever to pre-hover the bank.
  - **HoveringBank**: Boolean variable that holds information if we are currently already hovering the bank. This is so we don't try to rehover the bank and don't need to check the uptext if we already are doing it.

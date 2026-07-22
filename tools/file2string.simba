@@ -6,7 +6,7 @@ no matter how complicated it is.
 The only caveat is that the file can't have double quotes.
 *)
 
-{$I SRL-T/osr.simba}
+{$I SRL-B/osr.simba}
 
 const
   PATH = SIMBA_DATA_DIR + 'wasp-launcher' +

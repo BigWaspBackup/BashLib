@@ -6,7 +6,7 @@ on:
 
 env:
   simba-download: https://github.com/Villavu/Simba/releases/download/simba1400-release/Simba-Win32.exe
-  srl-download: https://github.com/Torwent/SRL-T.git
+  srl-download: https://github.com/Torwent/SRL-B.git
 
 jobs:
   compile:
@@ -22,9 +22,9 @@ jobs:
           curl --retry 5 -L -o ./Simba.exe ${{ env.simba-download }}
           mkdir ./Includes
           git clone ${{ env.srl-download }}
-          mv ./SRL-T/ ./Includes/SRL-T/
-          cp -r ./WaspLib/ ./Includes/WaspLib/
-          echo '{$I SRL-T/osr.simba}{$I WaspLib/optional.simba}' > test.simba
+          mv ./SRL-B/ ./Includes/SRL-B/
+          cp -r ./BashLib/ ./Includes/BashLib/
+          echo '{$I SRL-B/osr.simba}{$I BashLib/optional.simba}' > test.simba
 
       - name: Test Compile Includes
         shell: bash

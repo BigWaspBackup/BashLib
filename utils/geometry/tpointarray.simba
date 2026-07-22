@@ -5,7 +5,7 @@ TPointArray related methods that extend SRL's TPoint functionality.
 
 {$DEFINE WL_TPOINTARRAY_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 // By Nava2

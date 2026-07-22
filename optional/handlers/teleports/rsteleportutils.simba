@@ -1,6 +1,6 @@
 {$DEFINE SKUNK_TELEPORT_UTILS}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 type
@@ -57,13 +57,11 @@ begin
 end;
 
 function setupDiaryTeleportItem(baseItem: TRSItem): TDiaryTeleportItem;
-var
-  i: Int32;
 begin
-  result.baseItem := baseItem;
-  for i in [1..4] do
-    result.numberedItems += baseItem + " " + ToString(i);
-  WriteLn result;
+  Result.baseItem := baseItem;
+  // One range string — Bank/Inventory Find expands via GetArray() in a single search
+  // (not ring 1, fail, ring 2, fail…). Prefer higher diary tier first.
+  Result.numberedItems := [baseItem + ' 4..1'];
 end;
 
 function setupTeleportLocation(teleportType: ETeleportType; destination: String; level: Int32; worldPoint: TPoint; interfaceKey: String = ''): TTeleportLocation;

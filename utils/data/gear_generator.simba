@@ -1,4 +1,4 @@
-{$I SRL-T/osr.simba}
+{$I SRL-B/osr.simba}
 
 const
   PATH = {$macro CURRENT_DIRECTORY} + 'gear.json';

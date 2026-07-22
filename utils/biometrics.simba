@@ -5,7 +5,7 @@ Methods related to biometrics that make your account behave in a unique way.
 
 {$DEFINE WL_BIOMETRICS_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 (*
 ## GenerateUUIDV4

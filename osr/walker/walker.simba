@@ -5,7 +5,7 @@ Extensions to SRL's TRSWalker.
 
 {$DEFINE WL_WALKER_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 var
@@ -22,7 +22,7 @@ TRSHeightMap = record
   MathCache: Double;
 end;
 ```
-TRSHeightMap is the type responsible for handling heights with walker when using WaspLib.
+TRSHeightMap is the type responsible for handling heights with walker when using BashLib.
 This type does not need to be initiated as a variable and it's meant to be used directly with it's static methods.
 
 **Enabled** is used to toggle the TRSHeightMap on/off. By default it will always be on unless there's not a heightmap available for the map you load into walker.
@@ -368,7 +368,7 @@ procedure TRSWalker.InternalSetup(); override;
 ```
 Overrides SRL's Walker.InternalSetup() so it uses WaspWeb as the walker webgraph and so it uses ScreenWalk by default.
 This is an internal Walker method, you probably don't need to call it.
-It also sets up the ScriptWalker pointer which is used for several things in WaspLib like TRSWalkerObjects and Skunk's transport system.
+It also sets up the ScriptWalker pointer which is used for several things in BashLib like TRSWalkerObjects and Skunk's transport system.
 *)
 procedure TRSWalker.InternalSetup(); override;
 begin
@@ -1084,7 +1084,7 @@ function TRSWalker.GetMSPolygonArray(atpa: T2DPointArray): T2DPointArray;
 ```
 This function converts a list of points to their respective points in the minimap.
 This is extremely useful if you want to be sure you are within an area.
-To make a polygon or a polygon array easily you can use Simba/Includes/WaspLib/tools/walkerpolygon.simba.
+To make a polygon or a polygon array easily you can use Simba/Includes/BashLib/tools/walkerpolygon.simba.
 
 This are TRSWalker methods so they will exist both on TRSWalker and TRSWalker.
 

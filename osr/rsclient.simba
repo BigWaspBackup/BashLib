@@ -2,7 +2,7 @@
 # RSClient
 Extensions to TRSClient.
 
-One thing to keep in mind is that WaspLib enforces the use of Remote Input by default.
+One thing to keep in mind is that BashLib enforces the use of Remote Input by default.
 
 To disable it you have to use either of this snippets in your scripts:
 
@@ -15,7 +15,7 @@ end;
 *)
 {$DEFINE WL_RSCLIENT_INCLUDED}
 {$IFNDEF WL_OSR}
-  {$I WaspLib/osr.simba}
+  {$I BashLib/osr.simba}
 {$ENDIF}
 
 procedure TRSClient.Setup(); override;

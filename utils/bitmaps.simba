@@ -1,6 +1,6 @@
 {$DEFINE WL_BITMAPS_INCLUDED}
 {$IFNDEF WL_UTILS}
-  {$I WaspLib/utils.simba}
+  {$I BashLib/utils.simba}
 {$ENDIF}
 
 procedure TMufasaBitmap.HideAccountDetails();
