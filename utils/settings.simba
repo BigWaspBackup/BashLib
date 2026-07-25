@@ -102,6 +102,20 @@ begin
     modified := True;
   end;
 
+  if not Self.Has('stop_at_level') then
+  begin
+    json.Init();
+    Self.Put('stop_at_level', json);
+    modified := True;
+  end;
+
+  if not Self.GetObject('stop_at_level').has('accounts') then
+  begin
+    json.Init();
+    Self.GetObject('stop_at_level').Put('accounts', json);
+    modified := True;
+  end;
+
   //ANTIBAN
   if not Self.Has('antiban') then
   begin

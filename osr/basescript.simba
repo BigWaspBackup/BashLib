@@ -352,6 +352,13 @@ begin
 
   Antiban.Setup();
 
+  StopAtLevel.LoadCurrentAccount();
+  if StopAtLevel.HasActiveGoals() then
+  begin
+    Stats.CacheAll();
+    StopAtLevel.ScheduleNextStatsCache();
+  end;
+
   //wasp-stats
   if not APIClient.Disabled then
     APIClient.Disabled := not WLSettings.GetBoolean('stats');
@@ -422,6 +429,9 @@ if Script.ShouldStop() then
 ```
 *)
 function TBaseScript.ShouldStop(): Boolean;
+var
+  skill: ERSSkill;
+  level, goal: Int32;
 begin;
   if InRange(Self.ActionLimit, 1, Self.TotalActions) then
   begin
@@ -436,6 +446,15 @@ begin;
     SaveScreenshot('ScriptEnding/shouldstop' + Self.Name, True);
     Self.DebugLn('Maximum time reached: ' +
                  ToStr(Round(Self.TimeRunning.ElapsedTime()/ONE_MINUTE)) + '/' + ToStr(Round(Self.TimeLimit/ONE_MINUTE)) + ' mins.');
+    Exit(True);
+  end;
+
+  StopAtLevel.CheckStatsCacheTimer();
+  if StopAtLevel.ShouldStop(skill, level, goal) then
+  begin
+    SaveScreenshot('ScriptEnding/shouldstop' + Self.Name, True);
+    Self.DebugLn('Stop-at-level reached: ' + SKILLNAMES[skill] + ' ' +
+                 ToStr(level) + '/' + ToStr(goal) + '.');
     Exit(True);
   end;
 end;

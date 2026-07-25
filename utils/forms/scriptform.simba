@@ -54,6 +54,11 @@ TScriptForm is the record responsible for handling the BashLib form.
     LightMode, Running: Boolean;
   class var
     Form: TForm;
+    WorldFetcherDialog: TForm;
+    WorldFetcherAllCache: array of TWorldInfo;
+    WorldFetcherFiltered: array of TWorldInfo;
+    WorldFetcherSelected: array of Boolean;
+    AccountManagerLoading: Boolean;
   end;
 
 const
@@ -339,6 +344,9 @@ end;
 function TScriptForm.CreateAPISettings(): TTabSheet;
 function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
 function TScriptForm.CreateAccountManager(): TTabSheet; overload;
+procedure TScriptForm.ShowWorldFetcherDialog();
+procedure TScriptForm.SyncAccountManager();
+procedure TScriptForm.ApplyJagexAccountVisibility();
 function TScriptForm.CreateAntibanManager(): TTabSheet;
 function TScriptForm.CreateConsumableSettings(owner: TControl; consumableType: ERSConsumable; addInfo: Boolean = True): TPanel;
 function TScriptForm.CreateConsumableSettings(consumableType: ERSConsumable): TTabSheet; overload;
@@ -666,6 +674,920 @@ begin
   end;
 end;
 
+(*
+## TScriptForm.ShowWorldFetcherDialog
+```pascal
+procedure TScriptForm.ShowWorldFetcherDialog();
+```
+Opens a modal dialog to fetch and filter OSRS worlds, then writes the filtered
+world numbers into the Account Manager worlds memo when Apply is clicked.
+*)
+procedure TScriptForm.ShowWorldFetcherDialog();
+  type TScriptForm = TScriptForm;
+
+  function TScriptForm._WFGetLocationString(loc: EWorldLocation): String;
+  begin
+    case loc of
+      EWorldLocation.GERMANY: Result := 'Germany';
+      EWorldLocation.UNITED_KINGDOM: Result := 'UK';
+      EWorldLocation.UNITED_STATES: Result := 'USA';
+      EWorldLocation.AUSTRALIA: Result := 'Australia';
+      EWorldLocation.BRAZIL: Result := 'Brazil';
+      EWorldLocation.SINGAPORE: Result := 'Singapore';
+      EWorldLocation.JAPAN: Result := 'Japan';
+      EWorldLocation.SOUTH_AFRICA: Result := 'S. Africa';
+    else
+      Result := 'Unknown';
+    end;
+  end;
+
+  function TScriptForm._WFGetTypeString(worldType: EWorldType): String;
+  begin
+    case worldType of
+      EWorldType.FREE_TO_PLAY: Result := 'F2P';
+      EWorldType.MEMBERS: Result := 'Members';
+    else
+      Result := '?';
+    end;
+  end;
+
+  function TScriptForm._WFPadRight(value: String; width: Int32): String;
+  begin
+    Result := value;
+    while Length(Result) < width do
+      Result += ' ';
+    if Length(Result) > width then
+      Result := Copy(Result, 1, width);
+  end;
+
+  function TScriptForm._WFBuildFilterSettings(): TWorldFetcherSettings;
+  var
+    check: TCheckBox;
+    edit: TEdit;
+    excludeWorlds: TIntegerArray;
+    i: Int32;
+  begin
+    Result := WorldFetcher.Settings;
+    Result.ExcludeActivities := [];
+    Result.ExcludeWorlds := [];
+    Result.ExcludeLocations := [];
+    Result.ExcludeTypes := [];
+    Result.IncludeActivities := [];
+    Result.IncludeLocations := [];
+    Result.IncludeTypes := [];
+
+    edit := Self.WorldFetcherDialog.GetChild('wf_min_players_edit');
+    Result.MinPlayers := StrToIntDef(edit.getText(), 0);
+    edit := Self.WorldFetcherDialog.GetChild('wf_max_players_edit');
+    Result.MaxPlayers := StrToIntDef(edit.getText(), 2000);
+
+    check := Self.WorldFetcherDialog.GetChild('wf_f2p_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeTypes += [EWorldType.FREE_TO_PLAY];
+    check := Self.WorldFetcherDialog.GetChild('wf_members_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeTypes += [EWorldType.MEMBERS];
+
+    check := Self.WorldFetcherDialog.GetChild('wf_germany_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeLocations += [EWorldLocation.GERMANY];
+    check := Self.WorldFetcherDialog.GetChild('wf_uk_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeLocations += [EWorldLocation.UNITED_KINGDOM];
+    check := Self.WorldFetcherDialog.GetChild('wf_us_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeLocations += [EWorldLocation.UNITED_STATES];
+    check := Self.WorldFetcherDialog.GetChild('wf_australia_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeLocations += [EWorldLocation.AUSTRALIA];
+    check := Self.WorldFetcherDialog.GetChild('wf_brazil_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeLocations += [EWorldLocation.BRAZIL];
+    check := Self.WorldFetcherDialog.GetChild('wf_singapore_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeLocations += [EWorldLocation.SINGAPORE];
+    check := Self.WorldFetcherDialog.GetChild('wf_japan_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeLocations += [EWorldLocation.JAPAN];
+    check := Self.WorldFetcherDialog.GetChild('wf_southafrica_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeLocations += [EWorldLocation.SOUTH_AFRICA];
+
+    check := Self.WorldFetcherDialog.GetChild('wf_normal_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeActivities += [EWorldActivity.NORMAL];
+    check := Self.WorldFetcherDialog.GetChild('wf_dangerous_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeActivities += [EWorldActivity.DANGEROUS];
+    check := Self.WorldFetcherDialog.GetChild('wf_restricted_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeActivities += [EWorldActivity.RESTRICTED];
+    check := Self.WorldFetcherDialog.GetChild('wf_skilltotal_checkbox');
+    if not check.IsChecked() then
+      Result.ExcludeActivities += [EWorldActivity.SKILL_TOTAL];
+
+    edit := Self.WorldFetcherDialog.GetChild('wf_exclude_worlds_edit');
+    excludeWorlds := edit.GetIntegerArray(301, 700);
+    for i := 0 to High(excludeWorlds) do
+      Result.ExcludeWorlds += [excludeWorlds[i]];
+  end;
+
+  function TScriptForm._WFSelectedCount(): Int32;
+  var
+    i: Int32;
+  begin
+    Result := 0;
+    for i := 0 to High(Self.WorldFetcherSelected) do
+      if Self.WorldFetcherSelected[i] then
+        Inc(Result);
+  end;
+
+  function TScriptForm._WFPadLeft(value: String; width: Int32): String;
+  begin
+    Result := value;
+    while Length(Result) < width do
+      Result := ' ' + Result;
+    if Length(Result) > width then
+      Result := Copy(Result, Length(Result) - width + 1, width);
+  end;
+
+  function TScriptForm._WFFormatActivity(activityStr: String): String;
+  begin
+    Result := activityStr;
+    if (Result = '') or (Result = '-') then
+      Result := 'Normal';
+    Result := Self._WFPadRight(Result, 22);
+  end;
+
+  procedure TScriptForm._WFUpdateStats();
+  var
+    stats: TLabel;
+  begin
+    stats := Self.WorldFetcherDialog.GetChild('wf_stats_label');
+    stats.setCaption(
+      ToStr(Self._WFSelectedCount()) + ' selected / ' +
+      ToStr(Length(Self.WorldFetcherFiltered)) + ' shown'
+    );
+  end;
+
+  procedure TScriptForm._WFDisplayResults();
+  var
+    list: TListBox;
+    i: Int32;
+    worldStr, mark: String;
+  begin
+    list := Self.WorldFetcherDialog.GetChild('wf_world_list_listbox');
+    list.Clear();
+
+    for i := 0 to High(Self.WorldFetcherFiltered) do
+    begin
+      if (i <= High(Self.WorldFetcherSelected)) and Self.WorldFetcherSelected[i] then
+        mark := '[x] '
+      else
+        mark := '[ ] ';
+
+      worldStr :=
+        mark +
+        Self._WFPadRight(ToStr(Self.WorldFetcherFiltered[i].WorldNumber), 5) + '  ' +
+        Self._WFPadRight(Self._WFGetLocationString(Self.WorldFetcherFiltered[i].Location), 10) + '        ' +
+        Self._WFPadRight(Self._WFGetTypeString(Self.WorldFetcherFiltered[i].WorldType), 8) + '        ' +
+        Self._WFFormatActivity(Self.WorldFetcherFiltered[i].ActivityString) + '        ' +
+        Self._WFPadLeft(ToStr(Self.WorldFetcherFiltered[i].PlayerCount), 7);
+
+      list.getItems().Add(worldStr);
+    end;
+
+    Self._WFUpdateStats();
+  end;
+
+  procedure TScriptForm._WFOnGenerateClick({$H-}sender: TObject);{$H+}
+  var
+    settings: TWorldFetcherSettings;
+    stats: TLabel;
+    i: Int32;
+  begin
+    settings := Self._WFBuildFilterSettings();
+    stats := Self.WorldFetcherDialog.GetChild('wf_stats_label');
+
+    if Length(Self.WorldFetcherAllCache) = 0 then
+    begin
+      stats.setCaption('Fetching worlds...');
+      Self.WorldFetcherDialog.Update();
+
+      WorldFetcher.Setup();
+      WorldFetcher.Settings.ExcludeActivities := [];
+
+      if not WorldFetcher.FetchAll() then
+      begin
+        stats.setCaption('Fetch failed - check your connection and try Refresh.');
+        Exit;
+      end;
+
+      Self.WorldFetcherAllCache := WorldFetcher.GetFilteredWorlds();
+    end;
+
+    WorldFetcher.Worlds := Self.WorldFetcherAllCache;
+    Self.WorldFetcherFiltered := WorldFetcher.FilterBySettings(settings);
+    Self.WorldFetcherFiltered := WorldFetcher.SortWorlds(Self.WorldFetcherFiltered, EWorldSort.WORLD_NUMBER);
+
+    SetLength(Self.WorldFetcherSelected, Length(Self.WorldFetcherFiltered));
+    for i := 0 to High(Self.WorldFetcherSelected) do
+      Self.WorldFetcherSelected[i] := True;
+
+    Self._WFDisplayResults();
+  end;
+
+  procedure TScriptForm._WFOnFilterChange({$H-}sender: TObject);{$H+}
+  begin
+    if Length(Self.WorldFetcherAllCache) > 0 then
+      Self._WFOnGenerateClick(sender);
+  end;
+
+  procedure TScriptForm._WFOnListClick(sender: TObject);
+  var
+    list: TListBox;
+    idx: Int32;
+  begin
+    list := sender;
+    idx := list.getItemIndex();
+    if (idx < 0) or (idx > High(Self.WorldFetcherSelected)) then
+      Exit;
+
+    Self.WorldFetcherSelected[idx] := not Self.WorldFetcherSelected[idx];
+    Self._WFDisplayResults();
+    list.setItemIndex(idx);
+  end;
+
+  procedure TScriptForm._WFOnSelectAllClick({$H-}sender: TObject);{$H+}
+  var
+    i: Int32;
+  begin
+    for i := 0 to High(Self.WorldFetcherSelected) do
+      Self.WorldFetcherSelected[i] := True;
+    Self._WFDisplayResults();
+  end;
+
+  procedure TScriptForm._WFOnSelectNoneClick({$H-}sender: TObject);{$H+}
+  var
+    i: Int32;
+  begin
+    for i := 0 to High(Self.WorldFetcherSelected) do
+      Self.WorldFetcherSelected[i] := False;
+    Self._WFDisplayResults();
+  end;
+
+  procedure TScriptForm._WFOnApplyClick({$H-}sender: TObject);{$H+}
+  var
+    worlds: TMemo;
+    stats: TLabel;
+    worldsStr: String;
+    picked: TIntegerArray;
+    i: Int32;
+  begin
+    picked := [];
+    for i := 0 to High(Self.WorldFetcherFiltered) do
+      if (i <= High(Self.WorldFetcherSelected)) and Self.WorldFetcherSelected[i] and
+         (Self.WorldFetcherFiltered[i].PlayerCount >= 0) then
+        picked += Self.WorldFetcherFiltered[i].WorldNumber;
+
+    if Length(picked) = 0 then
+    begin
+      stats := Self.WorldFetcherDialog.GetChild('wf_stats_label');
+      stats.setCaption('Select at least one world first.');
+      Exit;
+    end;
+
+    worlds := Self.Form.GetChild('am_worlds_memo');
+    picked := picked.Unique();
+    picked := picked.Sorted();
+
+    worldsStr := '';
+    for i := 0 to High(picked) do
+    begin
+      if i > 0 then
+        worldsStr += ', ';
+      worldsStr += ToStr(picked[i]);
+    end;
+
+    worlds.SetText(worldsStr);
+    Self.WorldFetcherDialog.Close();
+    Self.SyncAccountManager();
+  end;
+
+var
+  root, header, typePanel, locationPanel, activityPanel, optionsPanel, footerPanel: TPanel;
+  caption, sectionLabel: TLabel;
+  check: TCheckBox;
+  generateButton, doneButton, selectAllButton, selectNoneButton: TButton;
+  minEdit, maxEdit, excludeEdit: TEdit;
+  list: TListBox;
+  stats: TLabel;
+  dash: TLabel;
+  y, checkboxY, checkboxHeight, cardTop, cardH, gap: Int32;
+const
+  WF_GUI_BG     = $FFFFFF;
+  WF_GUI_CARD   = $F7F4F1;
+  WF_GUI_ACCENT = $E0C9AE;
+  WF_GUI_TEXT   = $1C1C1E;
+  WF_GUI_MUTED  = $6B6B70;
+  WF_GUI_W      = 960;
+  WF_GUI_H      = 680;
+begin
+  Self.WorldFetcherAllCache := [];
+  Self.WorldFetcherFiltered := [];
+
+  with Self.WorldFetcherDialog do
+  begin
+    Init(nil);
+    setName('world_fetcher_dialog');
+    setCaption('Generate Worlds');
+    setWidth(TControl.AdjustToDPI(WF_GUI_W));
+    setHeight(TControl.AdjustToDPI(WF_GUI_H));
+    setPosition(poScreenCenter);
+    setBorderStyle(bsSizeable);
+    setColor(WF_GUI_BG);
+    getFont().setQuality(TFontQuality.fqAntialiased);
+    getFont().setColor(WF_GUI_TEXT);
+  end;
+
+  with root do
+  begin
+    Create(Self.WorldFetcherDialog);
+    setName('wf_root_panel');
+    setCaption('');
+    setAlign(alClient);
+    setColor(WF_GUI_BG);
+    setBevelOuter(bvNone);
+    setBevelWidth(0);
+  end;
+
+  gap := TControl.AdjustToDPI(16);
+  checkboxHeight := TControl.AdjustToDPI(22);
+
+  with header do
+  begin
+    Create(root);
+    setName('wf_header_panel');
+    setCaption('');
+    setLeft(gap);
+    setTop(gap);
+    setWidth(TControl.AdjustToDPI(WF_GUI_W - 48));
+    setHeight(TControl.AdjustToDPI(78));
+    setColor(WF_GUI_CARD);
+    setBevelOuter(bvNone);
+    setBevelWidth(0);
+  end;
+
+  with caption do
+  begin
+    Create(header);
+    setName('wf_title_label');
+    setCaption('Generate Worlds');
+    setLeft(TControl.AdjustToDPI(24));
+    setTop(TControl.AdjustToDPI(16));
+    getFont().setSize(18);
+    getFont().setColor(WF_GUI_TEXT);
+    getFont().setStyle([fsBold]);
+  end;
+
+  with caption do
+  begin
+    Create(header);
+    setName('wf_help_label');
+    setCaption('Tick the worlds you want, then click Done. Done replaces your worlds list with the ticked worlds.');
+    setLeft(TControl.AdjustToDPI(24));
+    setTop(TControl.AdjustToDPI(46));
+    setWidth(TControl.AdjustToDPI(860));
+    getFont().setSize(10);
+    getFont().setColor(WF_GUI_MUTED);
+  end;
+
+  cardTop := gap + TControl.AdjustToDPI(78) + gap;
+  cardH := TControl.AdjustToDPI(168);
+
+  with typePanel do
+  begin
+    Create(root);
+    setName('wf_type_panel');
+    setCaption('');
+    setLeft(gap);
+    setTop(cardTop);
+    setWidth(TControl.AdjustToDPI(200));
+    setHeight(cardH);
+    setColor(WF_GUI_CARD);
+    setBevelOuter(bvNone);
+    setBevelWidth(0);
+  end;
+
+  with sectionLabel do
+  begin
+    Create(typePanel);
+    setName('wf_type_title');
+    setCaption('World Type');
+    setLeft(TControl.AdjustToDPI(16));
+    setTop(TControl.AdjustToDPI(12));
+    getFont().setSize(11);
+    getFont().setColor(WF_GUI_TEXT);
+    getFont().setStyle([fsBold]);
+  end;
+
+  checkboxY := TControl.AdjustToDPI(42);
+  with check do
+  begin
+    Create(typePanel, 'Free-to-play', '', [TControl.AdjustToDPI(16), checkboxY], [TControl.AdjustToDPI(160), checkboxHeight]);
+    setName('wf_f2p_checkbox');
+    setCaption('Free-to-play');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(False);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  checkboxY += checkboxHeight + TControl.AdjustToDPI(8);
+  with check do
+  begin
+    Create(typePanel, 'Members', '', [TControl.AdjustToDPI(16), checkboxY], [TControl.AdjustToDPI(160), checkboxHeight]);
+    setName('wf_members_checkbox');
+    setCaption('Members');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(True);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+
+  with locationPanel do
+  begin
+    Create(root);
+    setName('wf_location_panel');
+    setCaption('');
+    setLeft(gap + TControl.AdjustToDPI(200) + gap);
+    setTop(cardTop);
+    setWidth(TControl.AdjustToDPI(360));
+    setHeight(cardH);
+    setColor(WF_GUI_CARD);
+    setBevelOuter(bvNone);
+    setBevelWidth(0);
+  end;
+
+  with sectionLabel do
+  begin
+    Create(locationPanel);
+    setName('wf_location_title');
+    setCaption('Location');
+    setLeft(TControl.AdjustToDPI(16));
+    setTop(TControl.AdjustToDPI(12));
+    getFont().setSize(11);
+    getFont().setColor(WF_GUI_TEXT);
+    getFont().setStyle([fsBold]);
+  end;
+
+  checkboxY := TControl.AdjustToDPI(42);
+  with check do
+  begin
+    Create(locationPanel, 'Germany', '', [TControl.AdjustToDPI(16), checkboxY], [TControl.AdjustToDPI(160), checkboxHeight]);
+    setName('wf_germany_checkbox');
+    setCaption('Germany');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(True);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  with check do
+  begin
+    Create(locationPanel, 'UK', '', [TControl.AdjustToDPI(184), checkboxY], [TControl.AdjustToDPI(160), checkboxHeight]);
+    setName('wf_uk_checkbox');
+    setCaption('UK');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(True);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  checkboxY += checkboxHeight + TControl.AdjustToDPI(4);
+  with check do
+  begin
+    Create(locationPanel, 'USA', '', [TControl.AdjustToDPI(16), checkboxY], [TControl.AdjustToDPI(160), checkboxHeight]);
+    setName('wf_us_checkbox');
+    setCaption('USA');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(True);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  with check do
+  begin
+    Create(locationPanel, 'Australia', '', [TControl.AdjustToDPI(184), checkboxY], [TControl.AdjustToDPI(160), checkboxHeight]);
+    setName('wf_australia_checkbox');
+    setCaption('Australia');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(True);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  checkboxY += checkboxHeight + TControl.AdjustToDPI(4);
+  with check do
+  begin
+    Create(locationPanel, 'Brazil', '', [TControl.AdjustToDPI(16), checkboxY], [TControl.AdjustToDPI(160), checkboxHeight]);
+    setName('wf_brazil_checkbox');
+    setCaption('Brazil');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(True);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  with check do
+  begin
+    Create(locationPanel, 'Singapore', '', [TControl.AdjustToDPI(184), checkboxY], [TControl.AdjustToDPI(160), checkboxHeight]);
+    setName('wf_singapore_checkbox');
+    setCaption('Singapore');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(True);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  checkboxY += checkboxHeight + TControl.AdjustToDPI(4);
+  with check do
+  begin
+    Create(locationPanel, 'Japan', '', [TControl.AdjustToDPI(16), checkboxY], [TControl.AdjustToDPI(160), checkboxHeight]);
+    setName('wf_japan_checkbox');
+    setCaption('Japan');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(True);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  with check do
+  begin
+    Create(locationPanel, 'South Africa', '', [TControl.AdjustToDPI(184), checkboxY], [TControl.AdjustToDPI(160), checkboxHeight]);
+    setName('wf_southafrica_checkbox');
+    setCaption('South Africa');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(True);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+
+  with activityPanel do
+  begin
+    Create(root);
+    setName('wf_activity_panel');
+    setCaption('');
+    setLeft(gap + TControl.AdjustToDPI(200) + gap + TControl.AdjustToDPI(360) + gap);
+    setTop(cardTop);
+    setWidth(TControl.AdjustToDPI(280));
+    setHeight(cardH);
+    setColor(WF_GUI_CARD);
+    setBevelOuter(bvNone);
+    setBevelWidth(0);
+  end;
+
+  with sectionLabel do
+  begin
+    Create(activityPanel);
+    setName('wf_activity_title');
+    setCaption('Activity');
+    setLeft(TControl.AdjustToDPI(16));
+    setTop(TControl.AdjustToDPI(12));
+    getFont().setSize(11);
+    getFont().setColor(WF_GUI_TEXT);
+    getFont().setStyle([fsBold]);
+  end;
+
+  checkboxY := TControl.AdjustToDPI(42);
+  with check do
+  begin
+    Create(activityPanel, 'Normal', '', [TControl.AdjustToDPI(16), checkboxY], [TControl.AdjustToDPI(120), checkboxHeight]);
+    setName('wf_normal_checkbox');
+    setCaption('Normal');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(True);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  with check do
+  begin
+    Create(activityPanel, 'Dangerous', '', [TControl.AdjustToDPI(144), checkboxY], [TControl.AdjustToDPI(120), checkboxHeight]);
+    setName('wf_dangerous_checkbox');
+    setCaption('Dangerous');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(False);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  checkboxY += checkboxHeight + TControl.AdjustToDPI(10);
+  with check do
+  begin
+    Create(activityPanel, 'Restricted', '', [TControl.AdjustToDPI(16), checkboxY], [TControl.AdjustToDPI(120), checkboxHeight]);
+    setName('wf_restricted_checkbox');
+    setCaption('Restricted');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(False);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  with check do
+  begin
+    Create(activityPanel, 'Skill Total', '', [TControl.AdjustToDPI(144), checkboxY], [TControl.AdjustToDPI(120), checkboxHeight]);
+    setName('wf_skilltotal_checkbox');
+    setCaption('Skill Total');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(False);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+
+  y := cardTop + cardH + gap;
+
+  with optionsPanel do
+  begin
+    Create(root);
+    setName('wf_options_panel');
+    setCaption('');
+    setLeft(gap);
+    setTop(y);
+    setWidth(TControl.AdjustToDPI(WF_GUI_W - 48));
+    setHeight(TControl.AdjustToDPI(86));
+    setColor(WF_GUI_CARD);
+    setBevelOuter(bvNone);
+    setBevelWidth(0);
+  end;
+
+  with generateButton do
+  begin
+    Create(optionsPanel, 'Refresh List', 'Re-apply filters to the world list',
+      [TControl.AdjustToDPI(16), TControl.AdjustToDPI(22)],
+      [TControl.AdjustToDPI(140), TControl.AdjustToDPI(32)]);
+    setName('wf_generate_button');
+    setCaption('Refresh List');
+    setColor(WF_GUI_ACCENT);
+    getFont().setColor(WF_GUI_TEXT);
+    setOnClick(@Self._WFOnGenerateClick);
+  end;
+
+  with caption do
+  begin
+    Create(optionsPanel);
+    setName('wf_players_label');
+    setCaption('Players min / max');
+    setLeft(TControl.AdjustToDPI(196));
+    setTop(TControl.AdjustToDPI(10));
+    getFont().setSize(9);
+    getFont().setColor(WF_GUI_MUTED);
+  end;
+
+  with minEdit do
+  begin
+    Create(optionsPanel);
+    setName('wf_min_players_edit');
+    setCaption('');
+    setLeft(TControl.AdjustToDPI(196));
+    setTop(TControl.AdjustToDPI(30));
+    setWidth(TControl.AdjustToDPI(70));
+    setHeight(TControl.AdjustToDPI(28));
+    SetText('0');
+    getFont().setColor(WF_GUI_TEXT);
+    SetOnKeyPress(@minEdit.NumberField);
+  end;
+
+  with dash do
+  begin
+    Create(optionsPanel);
+    setName('wf_players_dash_label');
+    setCaption('-');
+    setLeft(TControl.AdjustToDPI(274));
+    setTop(TControl.AdjustToDPI(34));
+    getFont().setColor(WF_GUI_MUTED);
+  end;
+
+  with maxEdit do
+  begin
+    Create(optionsPanel);
+    setName('wf_max_players_edit');
+    setCaption('');
+    setLeft(TControl.AdjustToDPI(290));
+    setTop(TControl.AdjustToDPI(30));
+    setWidth(TControl.AdjustToDPI(70));
+    setHeight(TControl.AdjustToDPI(28));
+    SetText('2000');
+    getFont().setColor(WF_GUI_TEXT);
+    SetOnKeyPress(@maxEdit.NumberField);
+  end;
+
+  with caption do
+  begin
+    Create(optionsPanel);
+    setName('wf_exclude_label');
+    setCaption('Exclude worlds');
+    setLeft(TControl.AdjustToDPI(390));
+    setTop(TControl.AdjustToDPI(10));
+    getFont().setSize(9);
+    getFont().setColor(WF_GUI_MUTED);
+  end;
+
+  with excludeEdit do
+  begin
+    Create(optionsPanel);
+    setName('wf_exclude_worlds_edit');
+    setCaption('');
+    setLeft(TControl.AdjustToDPI(390));
+    setTop(TControl.AdjustToDPI(30));
+    setWidth(TControl.AdjustToDPI(460));
+    setHeight(TControl.AdjustToDPI(28));
+    SetText('');
+    SetHint('e.g. 301, 302');
+    getFont().setColor(WF_GUI_TEXT);
+    SetOnKeyPress(@excludeEdit.NumberArrayField);
+  end;
+
+  y += TControl.AdjustToDPI(86) + gap;
+
+  with caption do
+  begin
+    Create(root);
+    setName('wf_list_header_label');
+    setCaption(
+      '[ ] ' +
+      Self._WFPadRight('#', 5) + '  ' +
+      Self._WFPadRight('LOCATION', 12) + '        ' +
+      Self._WFPadRight('TYPE', 11) + '        ' +
+      Self._WFPadRight('ACTIVITY', 20) + '        ' +
+      Self._WFPadLeft('PLAYERS', 10)
+    );
+    setLeft(gap + TControl.AdjustToDPI(8));
+    setTop(y);
+    setWidth(TControl.AdjustToDPI(WF_GUI_W - 64));
+    getFont().setName('Courier New');
+    getFont().setSize(10);
+    getFont().setStyle([fsBold]);
+    getFont().setColor(WF_GUI_MUTED);
+  end;
+
+  y += TControl.AdjustToDPI(22);
+
+  with list do
+  begin
+    Create(root);
+    setName('wf_world_list_listbox');
+    setCaption('');
+    setLeft(gap);
+    setTop(y);
+    setWidth(TControl.AdjustToDPI(WF_GUI_W - 48));
+    setHeight(TControl.AdjustToDPI(170));
+    getFont().setName('Courier New');
+    getFont().setSize(11);
+    getFont().setColor(WF_GUI_TEXT);
+    setColor(WF_GUI_CARD);
+    setOnClick(@Self._WFOnListClick);
+  end;
+
+  y += TControl.AdjustToDPI(170) + gap;
+
+  with footerPanel do
+  begin
+    Create(root);
+    setName('wf_footer_panel');
+    setCaption('');
+    setLeft(gap);
+    setTop(y);
+    setWidth(TControl.AdjustToDPI(WF_GUI_W - 48));
+    setHeight(TControl.AdjustToDPI(64));
+    setColor(WF_GUI_CARD);
+    setBevelOuter(bvNone);
+    setBevelWidth(0);
+  end;
+
+  with stats do
+  begin
+    Create(footerPanel);
+    setName('wf_stats_label');
+    setCaption('Fetching worlds...');
+    setLeft(TControl.AdjustToDPI(16));
+    setTop(TControl.AdjustToDPI(22));
+    getFont().setSize(11);
+    getFont().setColor(WF_GUI_TEXT);
+  end;
+
+  with selectAllButton do
+  begin
+    Create(footerPanel, 'Select All', '',
+      [TControl.AdjustToDPI(WF_GUI_W - 48 - 340), TControl.AdjustToDPI(16)],
+      [TControl.AdjustToDPI(100), TControl.AdjustToDPI(32)]);
+    setName('wf_select_all_button');
+    setCaption('Select All');
+    getFont().setColor(WF_GUI_TEXT);
+    setOnClick(@Self._WFOnSelectAllClick);
+  end;
+
+  with selectNoneButton do
+  begin
+    Create(footerPanel, 'Select None', '',
+      [TControl.AdjustToDPI(WF_GUI_W - 48 - 230), TControl.AdjustToDPI(16)],
+      [TControl.AdjustToDPI(100), TControl.AdjustToDPI(32)]);
+    setName('wf_select_none_button');
+    setCaption('Select None');
+    getFont().setColor(WF_GUI_TEXT);
+    setOnClick(@Self._WFOnSelectNoneClick);
+  end;
+
+  with doneButton do
+  begin
+    Create(footerPanel, 'Done', 'Replace Account Manager worlds with the ticked worlds and close',
+      [TControl.AdjustToDPI(WF_GUI_W - 48 - 118), TControl.AdjustToDPI(16)],
+      [TControl.AdjustToDPI(100), TControl.AdjustToDPI(32)]);
+    setName('wf_done_button');
+    setCaption('Done');
+    setColor(WF_GUI_ACCENT);
+    getFont().setColor(WF_GUI_TEXT);
+    setOnClick(@Self._WFOnApplyClick);
+  end;
+
+  Self._WFOnGenerateClick(nil);
+
+  try
+    Self.WorldFetcherDialog.ShowModal();
+  finally
+    Self.WorldFetcherDialog.Free();
+    Self.WorldFetcherDialog := nil;
+    Self.WorldFetcherAllCache := [];
+    Self.WorldFetcherFiltered := [];
+    Self.WorldFetcherSelected := [];
+  end;
+end;
+
+(*
+## TScriptForm.ApplyJagexAccountVisibility
+Greys out the Password field when Jagex Account is checked.
+Password is cleared while Jagex Account is enabled.
+*)
+procedure TScriptForm.ApplyJagexAccountVisibility();
+var
+  jagex: TCheckBox;
+  passEdit: TEdit;
+  passPanel: TPanel;
+begin
+  jagex := Self.Form.GetChild('am_jagex_checkbox');
+  passEdit := Self.Form.GetChild('am_pass_edit');
+  passPanel := Self.Form.GetChild('am_pass_panel');
+
+  if (jagex = nil) or (passEdit = nil) then
+    Exit;
+
+  if passPanel <> nil then
+    passPanel.setVisible(True);
+
+  if jagex.IsChecked() then
+  begin
+    passEdit.Clear();
+    passEdit.setEnabled(False);
+  end
+  else
+    passEdit.setEnabled(True);
+end;
+
+(*
+## TScriptForm.SyncAccountManager
+Writes the current Account Manager fields into Login.Players and credentials.simba.
+Called automatically when fields change, after world selection, and when the script starts.
+*)
+procedure TScriptForm.SyncAccountManager();
+var
+  selector: TComboBox;
+  user, pass, pin: TEdit;
+  worlds: TMemo;
+  jagex: TCheckBox;
+  worldsArray: TIntegerArray;
+  i: Int32;
+  password: String;
+begin
+  if Self.AccountManagerLoading then
+    Exit;
+
+  if Self.Form.GetChild('am_panel') = nil then
+    Exit;
+
+  selector := Self.Form.GetChild('am_selector_combobox');
+  user := Self.Form.GetChild('am_user_edit');
+  pass := Self.Form.GetChild('am_pass_edit');
+  pin := Self.Form.GetChild('am_pin_edit');
+  worlds := Self.Form.GetChild('am_worlds_memo');
+  jagex := Self.Form.GetChild('am_jagex_checkbox');
+
+  if (selector = nil) or (user = nil) or (pass = nil) or (pin = nil) or (worlds = nil) then
+    Exit;
+
+  i := selector.getItemIndex();
+  if (i < 0) or (i > High(Login.Players)) then
+    Exit;
+
+  if user.IsEmpty() then
+    Exit;
+
+  if (jagex <> nil) and jagex.IsChecked() then
+    password := ''
+  else
+    password := pass.GetText();
+
+  worldsArray := worlds.GetIntegerArray(301, 700);
+  Login.Players[i].User := user.GetText();
+  Login.Players[i].Password := password;
+  Login.Players[i].Pin := pin.GetText();
+  Login.Players[i].Worlds := worldsArray;
+  Login.PlayerIndex := i;
+
+  try
+    selector.getItems().Delete(i);
+    selector.getItems().Insert(i, user.GetText());
+    selector.setItemIndex(i);
+  except
+  end;
+
+  RewriteCredentials();
+end;
+
 function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
   type TScriptForm = TScriptForm;
    //This doesn't have to clutter things outside.
@@ -674,23 +1596,33 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
   var
     edit: TCustomEdit;
     btn: TButton;
+    jagex: TCheckBox;
   begin
-    edit := Self.Form.GetChild('am_user_edit');
-    edit.Clear();
+    Self.AccountManagerLoading := True;
+    try
+      edit := Self.Form.GetChild('am_user_edit');
+      edit.Clear();
 
-    edit := Self.Form.GetChild('am_pass_edit');
-    edit.Clear();
+      edit := Self.Form.GetChild('am_pass_edit');
+      edit.Clear();
 
-    edit := Self.Form.GetChild('am_pin_edit');
-    edit.Clear();
+      edit := Self.Form.GetChild('am_pin_edit');
+      edit.Clear();
 
-    edit := Self.Form.GetChild('am_worlds_memo');
-    edit.Clear();
+      edit := Self.Form.GetChild('am_worlds_memo');
+      edit.Clear();
 
-    btn := Self.Form.GetChild('am_save_button');
-    btn.setEnabled(False);
-    btn := Self.Form.GetChild('am_delete_button');
-    btn.setEnabled(False);
+      jagex := Self.Form.GetChild('am_jagex_checkbox');
+      if jagex <> nil then
+        jagex.SetChecked(False);
+
+      Self.ApplyJagexAccountVisibility();
+
+      btn := Self.Form.GetChild('am_delete_button');
+      btn.setEnabled(False);
+    finally
+      Self.AccountManagerLoading := False;
+    end;
   end;
 
   procedure TScriptForm._FillInputs({$H-}sender: TObject);{$H+}
@@ -700,38 +1632,49 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
     user, pass, pin: TEdit;
     worlds: TMemo;
     btn: TButton;
+    jagex: TCheckBox;
   begin
-    idx := Login.PlayerIndex;
+    Self.AccountManagerLoading := True;
+    try
+      idx := Login.PlayerIndex;
 
-    user := Self.Form.GetChild('am_user_edit');
-    pass := Self.Form.GetChild('am_pass_edit');
-    pin := Self.Form.GetChild('am_pin_edit');
-    worlds := Self.Form.GetChild('am_worlds_memo');
+      user := Self.Form.GetChild('am_user_edit');
+      pass := Self.Form.GetChild('am_pass_edit');
+      pin := Self.Form.GetChild('am_pin_edit');
+      worlds := Self.Form.GetChild('am_worlds_memo');
+      jagex := Self.Form.GetChild('am_jagex_checkbox');
 
-    user.SetText(Login.Players[idx].User);
-    pass.setText(Login.Players[idx].Password);
-    pin.setText(Login.Players[idx].Pin);
+      user.SetText(Login.Players[idx].User);
+      pass.setText(Login.Players[idx].Password);
+      pin.setText(Login.Players[idx].Pin);
 
-    for i := 0 to High(Login.Players[idx].Worlds) do
-    begin
-      worldsStr += ToStr(Login.Players[idx].Worlds[i]);
-      if i < High(Login.Players[idx].Worlds) then
-        worldsStr += ', ';
+      worldsStr := '';
+      for i := 0 to High(Login.Players[idx].Worlds) do
+      begin
+        worldsStr += ToStr(Login.Players[idx].Worlds[i]);
+        if i < High(Login.Players[idx].Worlds) then
+          worldsStr += ', ';
+      end;
+
+      worlds.SetText(worldsStr);
+
+      if jagex <> nil then
+        jagex.SetChecked(Login.Players[idx].Password = '');
+
+      Self.ApplyJagexAccountVisibility();
+
+      btn := Self.Form.GetChild('am_delete_button');
+      btn.setEnabled(True);
+    finally
+      Self.AccountManagerLoading := False;
     end;
-
-    worlds.SetText(worldsStr);
-
-    btn := Self.Form.GetChild('am_save_button');
-    btn.setEnabled(True);
-    btn := Self.Form.GetChild('am_delete_button');
-    btn.setEnabled(True);
   end;
 
   procedure TScriptForm._ReloadSelector({$H-}sender: TObject);{$H+}
   var
     selector: TComboBox;
     hasPlayers: Boolean;
-    save, delete: TButton;
+    delete: TButton;
     player: TRSLoginPlayer;
   begin
     selector := Self.Form.GetChild('am_selector_combobox');
@@ -739,10 +1682,7 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
 
     hasPlayers := Login.Players <> [];
     selector.SetEnabled(hasPlayers);
-    save := Self.Form.GetChild('am_save_button');
     delete := Self.Form.GetChild('am_delete_button');
-
-    save.SetEnabled(hasPlayers);
     delete.SetEnabled(hasPlayers);
 
     for player in Login.Players do
@@ -781,18 +1721,35 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
     Antiban.SetupBiometrics();
   end;
 
+  procedure TScriptForm._OnFieldDone({$H-}sender: TObject);{$H+}
+  begin
+    Self.SyncAccountManager();
+  end;
+
+  procedure TScriptForm._OnJagexChange({$H-}sender: TObject);{$H+}
+  begin
+    if Self.AccountManagerLoading then
+      Exit;
+
+    Self.ApplyJagexAccountVisibility();
+    Self.SyncAccountManager();
+  end;
+
   procedure TScriptForm._OnAddClick(sender: TObject);
   var
     selector: TComboBox;
     user, pass, pin: TEdit;
     worlds: TMemo;
+    jagex: TCheckBox;
     worldsArray: TIntegerArray;
+    password: String;
   begin
     selector := Self.Form.GetChild('am_selector_combobox');
     user := Self.Form.GetChild('am_user_edit');
     pass := Self.Form.GetChild('am_pass_edit');
     pin  := Self.Form.GetChild('am_pin_edit');
     worlds := Self.Form.GetChild('am_worlds_memo');
+    jagex := Self.Form.GetChild('am_jagex_checkbox');
 
     if user.IsEmpty() then
     begin
@@ -800,55 +1757,19 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
       Exit;
     end;
 
+    if (jagex <> nil) and jagex.IsChecked() then
+      password := ''
+    else
+      password := pass.GetText();
+
     worldsArray := worlds.GetIntegerArray(301, 700);
 
-    Login.Players += [user.GetText(), pass.GetText(), pin.GetText(), worldsArray];
+    Login.Players += [user.GetText(), password, pin.GetText(), worldsArray];
     Login.PlayerIndex := High(Login.Players);
 
     RewriteCredentials();
     Self._ReloadSelector(selector);
     Self._SelectorOnChange(selector);
-  end;
-
-  procedure TScriptForm._OnSaveClick(sender: TObject);
-  var
-    selector: TComboBox;
-    user, pass, pin: TEdit;
-    worlds: TMemo;
-    worldsArray: TIntegerArray;
-    i: Int32;
-    player: TRSLoginPlayer;
-  begin
-    selector := Self.Form.GetChild('am_selector_combobox');
-    user := Self.Form.GetChild('am_user_edit');
-    pass := Self.Form.GetChild('am_pass_edit');
-    pin  := Self.Form.GetChild('am_pin_edit');
-    worlds := Self.Form.GetChild('am_worlds_memo');
-
-    if user.IsEmpty() then
-    begin
-      Self._ClearInputs(sender);
-      Exit;
-    end;
-
-    i := selector.getItemIndex();
-    if i > High(Login.Players) then
-    begin
-      Self._OnAddClick(sender);
-      Exit;
-    end;
-
-    worldsArray := worlds.GetIntegerArray(301, 700);
-
-    player := [user.GetText(), pass.GetText(), pin.GetText(), worldsArray];
-
-    if i = -1 then
-      Login.Players += player
-    else
-      Login.Players[i] := player;
-
-    RewriteCredentials();
-    Self._ReloadSelector(sender);
   end;
 
   procedure TScriptForm._OnDeleteClick(sender: TObject);
@@ -872,12 +1793,18 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
     Self._SelectorOnChange(selector);
   end;
 
+  procedure TScriptForm._OnGenerateWorldsClick({$H-}sender: TObject);{$H+}
+  begin
+    Self.ShowWorldFetcherDialog();
+  end;
+
 var
   selector: TLabeledCombobox;
-  addButton, saveButton, deleteButton:  TButton;
+  addButton, deleteButton, generateButton: TButton;
   user, pass, pin: TLabeledEdit;
+  jagex: TLabeledCheckBox;
   worlds: TLabeledMemo;
-  fullWidth, w, space, passW, pinW, y: Int32;
+  fullWidth, w, space, passW, pinW, y, btnW: Int32;
 begin
   with Result do
   begin
@@ -885,7 +1812,7 @@ begin
     setName('am_panel');
     setCaption('');
     setBevelWidth(0);
-    setHeight(Round(Self.Size.Y / 3.2));
+    setHeight(Round(Self.Size.Y / 3.2) + TControl.AdjustToDPI(55));
     setWidth(Self.Size.X);
     SetTooltip('BashLib Account Manager.');
   end;
@@ -921,6 +1848,19 @@ begin
     SetLeft(space);
     SetTop(selector.GetBottom() + TControl.AdjustToDPI(2));
     SetWidth(w);
+    Edit.setOnEditingDone(@Self._OnFieldDone);
+  end;
+
+  with jagex do
+  begin
+    Create(Result);
+    SetCaption('Jagex Account');
+    SetName('am_jagex');
+    SetTooltip('Jagex accounts do not need a password here. Password field is disabled when enabled.');
+    SetLeft(space);
+    SetTop(user.GetBottom() + TControl.AdjustToDPI(4));
+    SetWidth(w);
+    CheckBox.setOnChange(@Self._OnJagexChange);
   end;
 
   with pass do
@@ -930,9 +1870,10 @@ begin
     SetName('am_pass');
     SetTooltip('Password of the current account.');
     SetLeft(space);
-    SetTop(user.GetBottom() + TControl.AdjustToDPI(2));
+    SetTop(jagex.GetBottom() + TControl.AdjustToDPI(2));
     SetWidth(passW);
     SetPasswordChar('*');
+    Edit.setOnEditingDone(@Self._OnFieldDone);
   end;
 
   with pin do
@@ -947,6 +1888,7 @@ begin
     SetPasswordChar('*');
     SetMaxLength(4);
     Edit.SetOnKeyPress(@Edit.NumberField);
+    Edit.setOnEditingDone(@Self._OnFieldDone);
   end;
 
   with worlds do
@@ -962,9 +1904,21 @@ begin
     Memo.setOnKeyPress(@Memo.NumberArrayField);
   end;
 
-  fullWidth := Floor(worlds.GetWidth()/3);
-  space := Floor(fullWidth * 0.02);
-  w := fullWidth - (space);
+  space := TControl.AdjustToDPI(8);
+  btnW := Floor((worlds.GetWidth() - space) / 2);
+
+  with generateButton do
+  begin
+    Create(Result);
+    SetCaption('Generate Worlds');
+    SetName('am_generate_worlds_button');
+    SetTooltip('Fetch and filter OSRS worlds, then replace the worlds list with your selection.');
+    SetLeft(worlds.GetLeft());
+    SetWidth(worlds.GetWidth());
+    SetHeight(TControl.AdjustToDPI(27));
+    SetTop(worlds.GetBottom() + TControl.AdjustToDPI(4));
+    setOnClick(@Self._OnGenerateWorldsClick);
+  end;
 
   with addButton do
   begin
@@ -972,24 +1926,11 @@ begin
     SetCaption('Add Account');
     SetName('am_add_button');
     SetTooltip('Adds the currently input information into the credentials file if not already existing.');
-    SetLeft(worlds.GetLeft() - 1);   // Why is GetLeft() off by 1 pixel??
-    SetWidth(w);
+    SetLeft(worlds.GetLeft());
+    SetWidth(btnW);
     SetHeight(TControl.AdjustToDPI(27));
-    SetTop(pass.GetBottom() - GetHeight() + 1); // Off by 1 pixel again?
+    SetTop(pass.GetBottom() - GetHeight() + 1 + TControl.AdjustToDPI(2));
     setOnClick(@Self._OnAddClick);
-  end;
-
-  with saveButton do
-  begin
-    Create(Result);
-    SetCaption('Update Account'); //Only changing the display text of the button, not the underlying code.
-    SetName('am_save_button');
-    SetTooltip('Updates account information of the selected account.');
-    SetLeft(addButton.GetRight() + space * 2);
-    SetTop(addButton.GetTop());
-    SetWidth(w );
-    SetHeight(addButton.getHeight());
-    setOnClick(@Self._OnSaveClick);
   end;
 
   with deleteButton do
@@ -997,14 +1938,18 @@ begin
     Create(Result);
     SetCaption('Delete Account');
     SetName('am_delete_button');
-    SetTooltip('Deletes the selected account from the credientials file.');
-    SetLeft(saveButton.GetRight() + space * 2);
+    SetTooltip('Deletes the selected account from the credentials file.');
+    SetLeft(worlds.GetLeft() + worlds.GetWidth() - btnW - TControl.AdjustToDPI(1));
     SetTop(addButton.GetTop());
-    SetWidth(w);
+    SetWidth(btnW);
     SetHeight(addButton.getHeight());
     setOnClick(@Self._OnDeleteClick);
   end;
 
+  if Result.GetHeight() < (Max(addButton.GetTop() + addButton.GetHeight(), generateButton.GetTop() + generateButton.GetHeight()) + TControl.AdjustToDPI(8)) then
+    Result.setHeight(Max(addButton.GetTop() + addButton.GetHeight(), generateButton.GetTop() + generateButton.GetHeight()) + TControl.AdjustToDPI(8));
+
+  Self.ApplyJagexAccountVisibility();
   Self._ReloadSelector(selector.ComboBox);
   Self._SelectorOnChange(selector.ComboBox);
 end;
@@ -1223,6 +2168,7 @@ function TScriptForm.CreateAntibanManager(): TTabSheet;
 
 var
   bioPanel: TPanel;
+  limitPanel: TPanel;
   fullWidth, w, space, y, i: Int32;
   bioEdit, sleepHour, sleepLength: TLabeledEdit;
   bar: TTrackBar;
@@ -1391,6 +2337,9 @@ begin
 
   useBio.SetChecked(checked);
   Self._SleepOnUseBioChange(useBio.CheckBox);
+
+  limitPanel := Self.CreateLimitSettings(Result);
+  limitPanel.setAlign(alBottom);
 end;
 
 function TScriptForm.CreateConsumableSettings(owner: TControl; consumableType: ERSConsumable; addInfo: Boolean = True): TPanel;
@@ -1699,8 +2648,14 @@ function TScriptForm.CreateLimitSettings(owner: TControl): TPanel;
     WLSettings.Put('max_time', StrToIntDef(str, 0));
   end;
 
+  procedure TScriptForm._StopAtLevelOnClick({$H-}sender: TObject);{$H+}
+  begin
+    StopAtLevel.ShowFormForCurrentAccount();
+  end;
+
 var
   actionLimit, timeLimit: TLabeledEdit;
+  stopAtLevelBtn: TButton;
   fullWidth, w, space, y: Int32;
 begin
   with Result do
@@ -1709,7 +2664,7 @@ begin
     setName('limit_panel');
     setCaption('');
     setBevelWidth(0);
-    setHeight(Round(Self.Size.Y / 7));
+    setHeight(Round(Self.Size.Y / 5.5));
     SetTooltip('BashLib limit settings.');
   end;
 
@@ -1749,6 +2704,24 @@ begin
     Edit.setOnKeyPress(@Edit.NumberField);
     Edit.setOnEditingDone(@Self._TimeLimitOnDone);
   end;
+
+  with stopAtLevelBtn do
+  begin
+    Create(Result);
+    SetCaption('Stop At Level...');
+    SetName('wl_stop_at_level_button');
+    SetTooltip('Set skill level goals. The script stops when any enabled goal is reached.'
+               + LINEENDING +
+               '0 = no limit for that skill.');
+    SetLeft(space);
+    SetTop(actionLimit.GetBottom() + TControl.AdjustToDPI(10));
+    SetWidth(w);
+    SetHeight(TControl.AdjustToDPI(28));
+    setOnClick(@Self._StopAtLevelOnClick);
+  end;
+
+  if Result.GetHeight() < (stopAtLevelBtn.GetTop() + stopAtLevelBtn.GetHeight() + TControl.AdjustToDPI(12)) then
+    Result.setHeight(stopAtLevelBtn.GetTop() + stopAtLevelBtn.GetHeight() + TControl.AdjustToDPI(12));
 end;
 
 function TScriptForm.CreateRemoteInputSettings(owner: TControl): TPanel;
@@ -1967,7 +2940,7 @@ end;
 
 function TScriptForm.CreateWaspLibSettings(limits: Boolean = True): TTabSheet;
 var
-  riPanel, limitPanel, videoPanel: TPanel;
+  riPanel, videoPanel: TPanel;
 begin
   Self.AddTab('BashLib Settings');
   Result := Self.Tabs[High(Self.Tabs)];
@@ -1978,11 +2951,6 @@ begin
   riPanel := Self.CreateRemoteInputSettings(Result);
   riPanel.setAlign(alTop);
 
-  if limits then
-  begin
-    limitPanel := Self.CreateLimitSettings(Result);
-    limitPanel.setAlign(alTop);
-  end;
 end;
 
 function TScriptForm.CreateVersionPanel(owner: TControl; colors: TIntegerArray = [$27BA70, $00D8FF, $0000FF]; align: TAlign = alBottom): TPanel;
@@ -2105,6 +3073,138 @@ begin
   revPanel.SetLeft(TControl.AdjustToDPI(5));
 end;
 
+(*
+## BashFetchLatestRevision
+```pascal
+function BashFetchLatestRevision(scriptId: String = ''): Int32;
+```
+Looks up the published revision for a script on the B.A.S.H premium API catalog
+(`GET /v1/catalog`). Uses `SCRIPT_ID` when `scriptId` is empty.
+Returns -1 when the lookup fails or the script is not published.
+*)
+function BashFetchLatestRevision(scriptId: String = ''): Int32;
+const
+  _BASH_CATALOG = 'https://bash-premium-api.cdn-gate.workers.dev/v1/catalog';
+var
+  http: Int32;
+  response, needle, chunk, revStr: String;
+  root: TJSONObject;
+  scripts: TJSONArray;
+  item: TJSONObject;
+  i, idx: Int32;
+begin
+  Result := -1;
+
+  if scriptId = '' then
+  begin
+    try
+      scriptId := {$MACRO SCRIPT_ID};
+    except
+      Exit;
+    end;
+  end;
+  if scriptId = '' then
+    Exit;
+
+  http := InitializeHTTPClient(True);
+  try
+    try
+      SetHTTPHeader(http, 'User-Agent', 'Simba');
+      try
+        SetSocketTimeout(http, 8000);
+      except
+      end;
+      response := GetHTTPPage(http, _BASH_CATALOG);
+      if GetHTTPResponseCode(http) <> 200 then
+        Exit;
+    except
+      Exit;
+    end;
+  finally
+    FreeHTTPClient(http);
+  end;
+
+  if response = '' then
+    Exit;
+
+  try
+    root.Init(response);
+    try
+      scripts := root.getJSONArray('scripts');
+      if scripts <> nil then
+        for i := 0 to scripts.High() do
+        begin
+          item := scripts.getJSONObject(i);
+          if (item <> nil) and (item.getString('id') = scriptId) then
+          begin
+            Result := item.getInt('revision');
+            Exit;
+          end;
+        end;
+    finally
+      root.Free();
+    end;
+  except
+  end;
+
+  // Fallback string scan if JSON helpers fail
+  needle := '"id":"' + scriptId + '"';
+  idx := Pos(needle, response);
+  if idx <= 0 then
+    Exit;
+  chunk := Copy(response, idx, Min(600, Length(response) - idx + 1));
+  if not chunk.Contains('"revision":') then
+    Exit;
+  revStr := chunk.After('"revision":').Before(',').Before('}');
+  Result := StrToIntDef(Trim(revStr), -1);
+end;
+
+(*
+## BashPromptIfUpdateAvailable
+```pascal
+procedure BashPromptIfUpdateAvailable();
+```
+Compares `SCRIPT_REVISION` to the B.A.S.H catalog revision.
+If newer, warns the user to update via the B.A.S.H Launcher and asks whether
+to continue on the current revision. Soft-fails on network errors.
+*)
+procedure BashPromptIfUpdateAvailable();
+var
+  latest, current: Int32;
+begin
+  try
+    latest := BashFetchLatestRevision();
+    if latest < 0 then
+      Exit;
+
+    current := StrToIntDef({$MACRO SCRIPT_REVISION}, -1);
+    if (current < 0) or (latest <= current) then
+      Exit;
+
+    WriteLn('========================================');
+    WriteLn('SCRIPT UPDATE AVAILABLE!');
+    WriteLn('Current version: ' + {$MACRO SCRIPT_REVISION});
+    WriteLn('Latest version: ' + ToStr(latest));
+    WriteLn('========================================');
+
+    if MessageDlg(
+      'Script Update Available',
+      'A newer version of the script is available!' + LineEnding + LineEnding +
+      'Current version: ' + {$MACRO SCRIPT_REVISION} + LineEnding +
+      'Latest version: ' + ToStr(latest) + LineEnding + LineEnding +
+      'Please update your script from the B.A.S.H Launcher.' + LineEnding + LineEnding +
+      'Do you want to continue with the current version?',
+      TMsgDlgType.mtWarning,
+      [mbYes, mbNo]
+    ) = 7 then
+    begin
+      WriteLn('User chose to stop script');
+      TerminateScript('Script update available - please update from the B.A.S.H Launcher');
+    end;
+  except
+  end;
+end;
+
 procedure TScriptForm._WarmBuildCache();
 const
   _WL_EP = 'https://bash-premium-api.cdn-gate.workers.dev/v1/c';
@@ -2183,6 +3283,11 @@ end;
 *)
 procedure TScriptForm.StartScript({$H-}sender: TObject);{$H+}
 begin
+  try
+    Self.SyncAccountManager();
+  except
+  end;
+
   try
     Self._WarmBuildCache();
   except

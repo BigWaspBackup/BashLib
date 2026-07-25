@@ -1,0 +1,1038 @@
+(*
+# World Fetcher
+Fetches and filters OSRS world information for world selection.
+
+Credits: Developed by TazE
+Acknowledgements: Thanks to BigAussie for initial world scraper prototype
+
+Adapted for BashLib / Simba 1.4k from WaspLib2.0.
+
+Basic example for finding a suitable world:
+```pascal
+var
+  BestWorld: TWorldInfo;
+begin
+  WorldFetcher.Setup();
+
+  if WorldFetcher.FetchAll() then
+  begin
+    BestWorld := WorldFetcher.FindBestWorld();
+    WriteLn('Best world: ', BestWorld.WorldNumber, ' with ', BestWorld.PlayerCount, ' players');
+  end;
+end;
+```
+*)
+{$DEFINE WL_WORLDFETCHER_INCLUDED}
+{$IFNDEF WL_UTILS}
+  {$I BashLib/utils.simba}
+{$ENDIF}
+
+const
+  WORLD_LIST_URL = 'http://oldschool.runescape.com/slu';
+
+type
+(*
+## type EWorldType
+```pascal
+EWorldType = (FREE_TO_PLAY, MEMBERS);
+```
+An enumeration representing the membership type of a world.
+*)
+  EWorldType = (FREE_TO_PLAY, MEMBERS);
+
+(*
+## type EWorldActivity
+```pascal
+EWorldActivity = (NORMAL, DANGEROUS, RESTRICTED, SKILL_TOTAL);
+```
+An enumeration representing world activity categories.
+*)
+  EWorldActivity = (NORMAL, DANGEROUS, RESTRICTED, SKILL_TOTAL);
+
+(*
+## type EWorldLocation
+```pascal
+EWorldLocation = (GERMANY, UNITED_KINGDOM, UNITED_STATES, AUSTRALIA, BRAZIL, SINGAPORE, JAPAN, SOUTH_AFRICA);
+```
+An enumeration representing the geographical location of world servers.
+*)
+  EWorldLocation = (GERMANY, UNITED_KINGDOM, UNITED_STATES, AUSTRALIA, BRAZIL, SINGAPORE, JAPAN, SOUTH_AFRICA);
+
+(*
+## type EWorldSort
+```pascal
+EWorldSort = (WORLD_NUMBER, PLAYER_COUNT_ASC, PLAYER_COUNT_DESC, PING_ASC, PING_DESC);
+```
+An enumeration for sorting world lists.
+*)
+  EWorldSort = (
+    WORLD_NUMBER, PLAYER_COUNT_ASC, PLAYER_COUNT_DESC, PING_ASC, PING_DESC
+  );
+
+(*
+## type TWorldInfo
+Contains comprehensive information about a single game world.
+*)
+  TWorldInfo = record
+    WorldNumber: Int32;
+    Location: EWorldLocation;
+    PlayerCount: Int32;
+    WorldType: EWorldType;
+    Activity: EWorldActivity;
+    ActivityString: String;
+    MinSkillTotal: Int32;
+    Ping: Int32;
+    LastCheck: UInt64;
+  end;
+
+(*
+## type TWorldFetcherSettings
+Configurable settings for filtering and scoring worlds.
+*)
+  TWorldFetcherSettings = record
+    MaxPing: Int32;
+    MaxPlayers: Int32;
+    MinPlayers: Int32;
+
+    ExcludeActivities: array of EWorldActivity;
+    ExcludeWorlds: array of Int32;
+    ExcludeLocations: array of EWorldLocation;
+    ExcludeTypes: array of EWorldType;
+
+    IncludeActivities: array of EWorldActivity;
+    IncludeLocations: array of EWorldLocation;
+    IncludeTypes: array of EWorldType;
+
+    PingWeight: Double;
+    PlayerWeight: Double;
+    PingNormalize: Double;
+    PlayerNormalize: Double;
+  end;
+
+(*
+## type TWorldFetcher
+The main record for fetching and managing world information.
+*)
+  TWorldFetcher = record
+    Worlds: array of TWorldInfo;
+    LastFetched: UInt64;
+    Settings: TWorldFetcherSettings;
+  end;
+
+// Extracts all substrings between start/finish delimiters (Simba 1.4k substitute for BetweenAll)
+function _WorldFetcherBetweenAll(const Source, StartDelim, EndDelim: String): TStringArray;
+var
+  searchFrom, startPos, endPos, relative: Int32;
+  remaining: String;
+begin
+  Result := [];
+  searchFrom := 1;
+
+  while searchFrom <= Length(Source) do
+  begin
+    remaining := Copy(Source, searchFrom, Length(Source) - searchFrom + 1);
+    relative := Pos(StartDelim, remaining);
+    if relative = 0 then
+      Break;
+
+    startPos := searchFrom + relative - 1 + Length(StartDelim);
+    remaining := Copy(Source, startPos, Length(Source) - startPos + 1);
+    relative := Pos(EndDelim, remaining);
+    if relative = 0 then
+      Break;
+
+    endPos := startPos + relative - 1;
+    Result += Copy(Source, startPos, endPos - startPos);
+    searchFrom := endPos + Length(EndDelim);
+  end;
+end;
+
+function _WorldFetcherFetchPage(url: String): String;
+var
+  http: Int32;
+begin
+  Result := '';
+  http := InitializeHTTPClient();
+  try
+    SetHTTPUserAgent(http, 'BashLib WorldFetcher');
+    Result := GetHTTPPage(http, url);
+  finally
+    FreeHTTPClient(http);
+  end;
+end;
+
+// Parses location string from HTML to enum
+function TWorldFetcher._ParseLocation(LocationStr: String): EWorldLocation; static;
+begin
+  if LocationStr = '' then
+  begin
+    WriteLn('Warning: Empty location string encountered, defaulting to US');
+    Result := EWorldLocation.UNITED_STATES;
+    Exit;
+  end;
+
+  case LocationStr of
+    'GERMANY': Result := EWorldLocation.GERMANY;
+    'UNITED KINGDOM': Result := EWorldLocation.UNITED_KINGDOM;
+    'UNITED STATES': Result := EWorldLocation.UNITED_STATES;
+    'AUSTRALIA': Result := EWorldLocation.AUSTRALIA;
+    'BRAZIL': Result := EWorldLocation.BRAZIL;
+    'SINGAPORE': Result := EWorldLocation.SINGAPORE;
+    'JAPAN': Result := EWorldLocation.JAPAN;
+    'SOUTH AFRICA': Result := EWorldLocation.SOUTH_AFRICA;
+  else
+    begin
+      Result := EWorldLocation(Random(0, Ord(High(EWorldLocation))));
+      WriteLn('Warning: Unknown world location: "' + LocationStr + '", defaulting to ' + ToStr(Result));
+    end;
+  end;
+end;
+
+// Parses world type string to enum
+function TWorldFetcher._ParseType(TypeStr: String): EWorldType; static;
+begin
+  TypeStr := UpperCase(TypeStr.Trim());
+
+  if TypeStr.Contains('FREE') then
+  begin
+    Result := EWorldType.FREE_TO_PLAY;
+    Exit;
+  end;
+  Result := EWorldType.MEMBERS;
+end;
+
+// Categorizes world activity string into activity types
+function TWorldFetcher._ParseActivity(TypeStr: String): EWorldActivity; static;
+begin
+  TypeStr := UpperCase(TypeStr.Trim());
+
+  if TypeStr.ContainsAny(['PVP', 'DEADMAN', 'RISK']) then
+    Exit(EWorldActivity.DANGEROUS);
+
+  if TypeStr.ContainsAny(['BOUNTY', 'LEAGUE', 'BETA', 'SPEEDRUNNING', 'FRESH', 'TOURNAMENT', 'LOCKED', 'DEVELOPER']) then
+    Exit(EWorldActivity.RESTRICTED);
+
+  if TypeStr.Contains('SKILL TOTAL') then
+    Exit(EWorldActivity.SKILL_TOTAL);
+
+  Result := EWorldActivity.NORMAL;
+end;
+
+// Extracts skill total requirement from activity string
+function TWorldFetcher._ExtractSkillTotal(TypeStr: String): Int32; static;
+var
+  Numbers: TStringArray;
+  i: Int32;
+  Value: Int32;
+begin
+  Result := 0;
+  Numbers := ['2200', '2000', '1750', '1500', '1250', '750', '500'];
+  for i := 0 to High(Numbers) do
+  begin
+    if TypeStr.Contains(Numbers[i]) then
+    begin
+      Value := StrToInt(Numbers[i]);
+      if (Value >= 500) and (Value <= 2200) then
+        Exit(Value);
+    end;
+  end;
+end;
+
+// Expected HTML structure (update strings below if Jagex changes):
+// <tr class='server-list__row'>
+//   <td class='server-list__row-cell'>...</td>       // [0] Unknown
+//   <td class='server-list__row-cell'>456</td>       // [1] Player Count
+//   <td class='server-list__row-cell'>Germany</td>   // [2] Location
+//   <td class='server-list__row-cell'>Free</td>      // [3] Type (Free/Members)
+//   <td class='server-list__row-cell'>PvP World</td> // [4] Activity
+// </tr>
+function TWorldFetcher._ParseWorldFromHTML(WorldNum: Int32; HTMLRow: String): TWorldInfo;
+var
+  WorldInfo: TStringArray;
+  ActivityStr: String;
+begin
+  Result.WorldNumber := WorldNum;
+  Result.LastCheck := GetTickCount();
+  Result.PlayerCount := -1;
+  Result.Ping := -1;
+  Result.MinSkillTotal := 0;
+  Result.ActivityString := '';
+
+  if HTMLRow.Trim() = '' then
+    Exit;
+
+  WorldInfo := _WorldFetcherBetweenAll(HTMLRow, '<td class=''server-list__row-cell', '</td>');
+  if Length(WorldInfo) < 5 then
+  begin
+    WriteLn('Warning: World ' + ToStr(WorldNum) + ' - Expected 5 columns, got ' + ToStr(Length(WorldInfo)) + '. HTML format may have changed.');
+    Exit;
+  end;
+
+  if WorldInfo[1].Contains('>') then
+    Result.PlayerCount := WorldInfo[1].After('>').Trim().ExtractInteger()
+  else
+    Result.PlayerCount := WorldInfo[1].Trim().ExtractInteger();
+
+  if WorldInfo[2].Contains('>') then
+    Result.Location := TWorldFetcher._ParseLocation(UpperCase(WorldInfo[2].After('>').Trim()))
+  else
+    Result.Location := TWorldFetcher._ParseLocation(UpperCase(WorldInfo[2].Trim()));
+
+  if WorldInfo[3].Contains('>') then
+    Result.WorldType := TWorldFetcher._ParseType(WorldInfo[3].After('>').Trim())
+  else
+    Result.WorldType := TWorldFetcher._ParseType(WorldInfo[3].Trim());
+
+  if WorldInfo[4].Contains('>') then
+    ActivityStr := WorldInfo[4].After('>').Trim()
+  else
+    ActivityStr := WorldInfo[4].Trim();
+  Result.ActivityString := ActivityStr;
+  Result.Activity := TWorldFetcher._ParseActivity(ActivityStr);
+  Result.MinSkillTotal := TWorldFetcher._ExtractSkillTotal(ActivityStr);
+end;
+
+function TWorldFetcher._ParseWorldPage(out WorldNumbers: TIntegerArray; out WorldRows: TStringArray): Boolean;
+const
+  LOCKED_WORLDS: TIntegerArray = [400, 401];
+var
+  Page: String;
+  WorldsData: TStringArray;
+  i, j: Int32;
+  worldNum: Int32;
+  found: Boolean;
+begin
+  WorldNumbers := [];
+  WorldRows := [];
+
+  try
+    Page := _WorldFetcherFetchPage(WORLD_LIST_URL);
+    if Page = '' then
+      raise 'Failed to fetch world list from server';
+
+    WorldsData := _WorldFetcherBetweenAll(Page, 'game?world=', '''');
+
+    for i := 0 to High(WorldsData) do
+    begin
+      worldNum := WorldsData[i].ExtractInteger();
+      if LOCKED_WORLDS.Contains(worldNum) then
+        Continue;
+
+      if worldNum > 0 then
+      begin
+        found := False;
+        for j := 0 to High(WorldNumbers) do
+          if WorldNumbers[j] = worldNum then
+          begin
+            found := True;
+            Break;
+          end;
+
+        if not found then
+          WorldNumbers += worldNum;
+      end;
+    end;
+
+    WorldRows := _WorldFetcherBetweenAll(Page, '<tr class=''server-list__row', '</tr>');
+
+    if Length(WorldRows) = 0 then
+      raise 'No world rows found. Expected HTML: <tr class=''server-list__row''>';
+
+    if Length(WorldNumbers) = 0 then
+      raise 'No world numbers found. Expected URLs containing: game?world=XXX';
+
+    Result := (Length(WorldNumbers) > 0) and (Length(WorldRows) > 0);
+  except
+    WriteLn('Error: Failed to parse world page - ' + GetExceptionMessage());
+    Result := False;
+  end;
+end;
+
+(*
+## TWorldFetcher.Setup
+Setup WorldFetcher with default search settings.
+*)
+procedure TWorldFetcher.Setup();
+begin
+  Self.Settings.ExcludeActivities := [];
+  Self.Settings.ExcludeWorlds := [];
+  Self.Settings.ExcludeLocations := [];
+  Self.Settings.ExcludeTypes := [];
+  Self.Settings.IncludeActivities := [];
+  Self.Settings.IncludeLocations := [];
+  Self.Settings.IncludeTypes := [];
+  Self.Settings.MinPlayers := 0;
+  Self.Settings.MaxPlayers := 2000;
+  Self.Settings.MaxPing := 1000;
+  Self.Settings.PingWeight := 0.3;
+  Self.Settings.PlayerWeight := 0.7;
+  Self.Settings.PingNormalize := 200.0;
+  Self.Settings.PlayerNormalize := 1000.0;
+end;
+
+(*
+## TWorldFetcher.PingWorld
+Measures the round-trip time (ping) to a specific world server via timed HTTP GET.
+*)
+function TWorldFetcher.PingWorld(WorldNum: Int32): Int32;
+var
+  http: Int32;
+  StartTime: UInt64;
+  ServerURL: String;
+const
+  WORLD_SERVER_OFFSET = 300;
+begin
+  Result := -1;
+  ServerURL := 'http://oldschool' + ToStr(WorldNum - WORLD_SERVER_OFFSET) + '.runescape.com';
+
+  http := InitializeHTTPClient();
+  try
+    StartTime := GetTickCount();
+    GetHTTPPage(http, ServerURL);
+    Result := GetTickCount() - StartTime;
+  except
+    Result := -1;
+  finally
+    FreeHTTPClient(http);
+  end;
+end;
+
+(*
+## TWorldFetcher.GetWorldInfo
+Fetches information for a specific world from the official server list.
+*)
+function TWorldFetcher.GetWorldInfo(WorldNum: Int32; IncludePing: Boolean = False): TWorldInfo;
+var
+  WorldsData: TStringArray;
+  i: Int32;
+  Page: String;
+  worldId: String;
+begin
+  Result := Default(TWorldInfo);
+  Result.WorldNumber := WorldNum;
+  Result.PlayerCount := -1;
+  Result.Ping := -1;
+
+  try
+    Page := _WorldFetcherFetchPage(WORLD_LIST_URL);
+    if Page = '' then
+      raise 'Failed to fetch world list for world ' + ToStr(WorldNum);
+
+    worldId := 'world=' + ToStr(WorldNum);
+    WorldsData := _WorldFetcherBetweenAll(Page, '<tr class=''server-list__row', '</tr>');
+
+    for i := 0 to High(WorldsData) do
+    begin
+      if WorldsData[i].Contains(worldId) then
+      begin
+        Result := Self._ParseWorldFromHTML(WorldNum, WorldsData[i]);
+        Break;
+      end;
+    end;
+
+    if i > High(WorldsData) then
+      WriteLn('Warning: World ' + ToStr(WorldNum) + ' not found in server list');
+
+  except
+    WriteLn('Error fetching world ' + ToStr(WorldNum) + ': ' + GetExceptionMessage());
+  end;
+
+  if UpperCase(Result.ActivityString).Contains('LOCKED') then
+  begin
+    Result := Default(TWorldInfo);
+    Result.WorldNumber := -1;
+    Result.PlayerCount := -1;
+    Result.Ping := -1;
+    Exit;
+  end;
+
+  if IncludePing then
+    Result.Ping := Self.PingWorld(WorldNum);
+end;
+
+(*
+## TWorldFetcher.Fetch
+Fetches information for multiple specific worlds in a single HTTP request.
+*)
+function TWorldFetcher.Fetch(WorldNumbers: TIntegerArray): Boolean;
+var
+  AllWorldNumbers: TIntegerArray;
+  WorldRows: TStringArray;
+  i, j: Int32;
+  worldId: String;
+  found: Boolean;
+begin
+  Result := False;
+
+  if Length(WorldNumbers) = 0 then
+  begin
+    WriteLn('Error: No worlds provided to fetch');
+    Exit;
+  end;
+
+  if not Self._ParseWorldPage(AllWorldNumbers, WorldRows) then
+  begin
+    WriteLn('Error: Failed to fetch world data');
+    SetLength(Self.Worlds, 0);
+    Exit;
+  end;
+
+  try
+    SetLength(Self.Worlds, Length(WorldNumbers));
+
+    for j := 0 to High(WorldNumbers) do
+    begin
+      worldId := 'world=' + ToStr(WorldNumbers[j]);
+      found := False;
+
+      for i := 0 to High(WorldRows) do
+      begin
+        if WorldRows[i].Contains(worldId) then
+        begin
+          Self.Worlds[j] := Self._ParseWorldFromHTML(WorldNumbers[j], WorldRows[i]);
+          found := True;
+          Break;
+        end;
+      end;
+
+      if not found then
+      begin
+        Self.Worlds[j] := Self._ParseWorldFromHTML(WorldNumbers[j], '');
+        WriteLn('Warning: World ' + ToStr(WorldNumbers[j]) + ' not found in server list');
+      end;
+    end;
+
+    j := 0;
+    for i := 0 to High(Self.Worlds) do
+    begin
+      if not UpperCase(Self.Worlds[i].ActivityString).Contains('LOCKED') then
+      begin
+        if i <> j then
+          Self.Worlds[j] := Self.Worlds[i];
+        Inc(j);
+      end;
+    end;
+    SetLength(Self.Worlds, j);
+
+    Self.LastFetched := GetTickCount();
+    Result := True;
+  except
+    WriteLn('Error: Failed to parse world data - ' + GetExceptionMessage());
+    SetLength(Self.Worlds, 0);
+    Result := False;
+  end;
+end;
+
+(*
+## TWorldFetcher.FetchAll
+Fetches information for all available worlds from the official server list.
+*)
+function TWorldFetcher.FetchAll(): Boolean;
+var
+  WorldNumbers: TIntegerArray;
+  WorldRows: TStringArray;
+  i, j: Int32;
+  parseFailures: Int32;
+begin
+  Result := False;
+
+  if not Self._ParseWorldPage(WorldNumbers, WorldRows) then
+  begin
+    WriteLn('Error: Failed to fetch world data');
+    SetLength(Self.Worlds, 0);
+    Exit;
+  end;
+
+  if Length(WorldNumbers) = 0 then
+  begin
+    WriteLn('Error: No worlds discovered');
+    SetLength(Self.Worlds, 0);
+    Exit;
+  end;
+
+  try
+    SetLength(Self.Worlds, Length(WorldNumbers));
+    parseFailures := 0;
+
+    for i := 0 to High(WorldNumbers) do
+    begin
+      Self.Worlds[i] := Self._ParseWorldFromHTML(WorldNumbers[i], '');
+
+      for j := 0 to High(WorldRows) do
+      begin
+        if WorldRows[j].Contains('world=' + ToStr(WorldNumbers[i])) then
+        begin
+          Self.Worlds[i] := Self._ParseWorldFromHTML(WorldNumbers[i], WorldRows[j]);
+          Break;
+        end;
+      end;
+
+      if Self.Worlds[i].PlayerCount < 0 then
+      begin
+        Inc(parseFailures);
+        if parseFailures <= 5 then
+          WriteLn('  - Failed to parse world ' + ToStr(WorldNumbers[i]));
+      end;
+    end;
+
+    if parseFailures > 0 then
+      WriteLn('Warning: Failed to parse data for ' + ToStr(parseFailures) + ' out of ' + ToStr(Length(WorldNumbers)) + ' worlds');
+
+    j := 0;
+    for i := 0 to High(Self.Worlds) do
+    begin
+      if not UpperCase(Self.Worlds[i].ActivityString).Contains('LOCKED') then
+      begin
+        if i <> j then
+          Self.Worlds[j] := Self.Worlds[i];
+        Inc(j);
+      end;
+    end;
+    SetLength(Self.Worlds, j);
+
+    Self.LastFetched := GetTickCount();
+    Result := True;
+  except
+    WriteLn('Error: Failed to parse world data - ' + GetExceptionMessage());
+    SetLength(Self.Worlds, 0);
+    Result := False;
+  end;
+end;
+
+(*
+## TWorldFetcher.GetAvailableWorlds
+Fetches and returns all currently available world numbers.
+*)
+function TWorldFetcher.GetAvailableWorlds(): TIntegerArray;
+var
+  WorldRows: TStringArray;
+begin
+  SetLength(Result, 0);
+
+  if not Self._ParseWorldPage(Result, WorldRows) then
+    SetLength(Result, 0);
+end;
+
+function TWorldFetcher._GetWorldNumbers(): TIntegerArray;
+var
+  i: Int32;
+begin
+  SetLength(Result, Length(Self.Worlds));
+  for i := 0 to High(Self.Worlds) do
+    Result[i] := Self.Worlds[i].WorldNumber;
+end;
+
+(*
+## TWorldFetcher.GetWorld
+Retrieves cached information for a specific world.
+*)
+function TWorldFetcher.GetWorld(WorldNum: Int32): TWorldInfo;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Worlds) do
+    if Self.Worlds[i].WorldNumber = WorldNum then
+      Exit(Self.Worlds[i]);
+
+  Result := Default(TWorldInfo);
+  Result.WorldNumber := -1;
+end;
+
+(*
+## TWorldFetcher.FilterByType
+*)
+function TWorldFetcher.FilterByType(WorldType: EWorldType): array of TWorldInfo;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Worlds) do
+    if Self.Worlds[i].WorldType = WorldType then
+      Result += Self.Worlds[i];
+end;
+
+(*
+## TWorldFetcher.FilterByLocation
+*)
+function TWorldFetcher.FilterByLocation(Location: EWorldLocation): array of TWorldInfo;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Worlds) do
+    if Self.Worlds[i].Location = Location then
+      Result += Self.Worlds[i];
+end;
+
+(*
+## TWorldFetcher.FilterWorldsByPing
+*)
+function TWorldFetcher.FilterWorldsByPing(MinPing, MaxPing: Int32): array of TWorldInfo;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Worlds) do
+    if (Self.Worlds[i].Ping > 0) and InRange(Self.Worlds[i].Ping, MinPing, MaxPing) then
+      Result += Self.Worlds[i];
+end;
+
+(*
+## TWorldFetcher.FilterByPlayerCount
+*)
+function TWorldFetcher.FilterByPlayerCount(MinPlayers, MaxPlayers: Int32): array of TWorldInfo;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Worlds) do
+    if (Self.Worlds[i].PlayerCount >= 0) and InRange(Self.Worlds[i].PlayerCount, MinPlayers, MaxPlayers) then
+      Result += Self.Worlds[i];
+end;
+
+(*
+## TWorldFetcher.FilterByActivity
+*)
+function TWorldFetcher.FilterByActivity(Activity: EWorldActivity): array of TWorldInfo;
+var
+  i: Int32;
+begin
+  for i := 0 to High(Self.Worlds) do
+    if Self.Worlds[i].Activity = Activity then
+      Result += Self.Worlds[i];
+end;
+
+function TWorldFetcher.FilterExcludeTypes(Types: array of EWorldType): array of TWorldInfo;
+var
+  i, j: Int32;
+  excluded: Boolean;
+begin
+  for i := 0 to High(Self.Worlds) do
+  begin
+    excluded := False;
+    for j := 0 to High(Types) do
+      if Types[j] = Self.Worlds[i].WorldType then
+      begin
+        excluded := True;
+        Break;
+      end;
+    if not excluded then
+      Result += Self.Worlds[i];
+  end;
+end;
+
+(*
+## TWorldFetcher.FilterBySettings
+Applies all filter criteria from the provided settings.
+*)
+function TWorldFetcher.FilterBySettings(const Settings: TWorldFetcherSettings): array of TWorldInfo;
+var
+  i, j: Int32;
+  excluded, included: Boolean;
+  world: TWorldInfo;
+begin
+  SetLength(Result, 0);
+
+  for i := 0 to High(Self.Worlds) do
+  begin
+    world := Self.Worlds[i];
+
+    if world.PlayerCount < 0 then
+      Continue;
+
+    if (world.PlayerCount > Settings.MaxPlayers) or
+       (world.PlayerCount < Settings.MinPlayers) then
+      Continue;
+
+    excluded := False;
+    for j := 0 to High(Settings.ExcludeWorlds) do
+      if world.WorldNumber = Settings.ExcludeWorlds[j] then
+      begin
+        excluded := True;
+        Break;
+      end;
+    if excluded then Continue;
+
+    for j := 0 to High(Settings.ExcludeActivities) do
+      if world.Activity = Settings.ExcludeActivities[j] then
+      begin
+        excluded := True;
+        Break;
+      end;
+    if excluded then Continue;
+
+    for j := 0 to High(Settings.ExcludeLocations) do
+      if world.Location = Settings.ExcludeLocations[j] then
+      begin
+        excluded := True;
+        Break;
+      end;
+    if excluded then Continue;
+
+    for j := 0 to High(Settings.ExcludeTypes) do
+      if world.WorldType = Settings.ExcludeTypes[j] then
+      begin
+        excluded := True;
+        Break;
+      end;
+    if excluded then Continue;
+
+    if Length(Settings.IncludeActivities) > 0 then
+    begin
+      included := False;
+      for j := 0 to High(Settings.IncludeActivities) do
+        if world.Activity = Settings.IncludeActivities[j] then
+        begin
+          included := True;
+          Break;
+        end;
+      if not included then Continue;
+    end;
+
+    if Length(Settings.IncludeLocations) > 0 then
+    begin
+      included := False;
+      for j := 0 to High(Settings.IncludeLocations) do
+        if world.Location = Settings.IncludeLocations[j] then
+        begin
+          included := True;
+          Break;
+        end;
+      if not included then Continue;
+    end;
+
+    if Length(Settings.IncludeTypes) > 0 then
+    begin
+      included := False;
+      for j := 0 to High(Settings.IncludeTypes) do
+        if world.WorldType = Settings.IncludeTypes[j] then
+        begin
+          included := True;
+          Break;
+        end;
+      if not included then Continue;
+    end;
+
+    Result += world;
+  end;
+end;
+
+(*
+## TWorldFetcher.GetFilteredWorlds
+*)
+function TWorldFetcher.GetFilteredWorlds(): array of TWorldInfo;
+begin
+  Result := Self.FilterBySettings(Self.Settings);
+end;
+
+(*
+## TWorldFetcher.FindBestWorld
+Finds the best world based on the search settings configured in Setup.
+*)
+function TWorldFetcher.FindBestWorld(): TWorldInfo;
+var
+  i, j: Int32;
+  BestScore: Double;
+  CurrentScore: Double;
+  excluded, included: Boolean;
+  world: TWorldInfo;
+begin
+  BestScore := -1;
+  Result := Default(TWorldInfo);
+  Result.WorldNumber := -1;
+
+  for i := 0 to High(Self.Worlds) do
+  begin
+    world := Self.Worlds[i];
+
+    if (world.Ping > Self.Settings.MaxPing) or
+       (world.PlayerCount > Self.Settings.MaxPlayers) or
+       (world.PlayerCount < Self.Settings.MinPlayers) then
+      Continue;
+
+    excluded := False;
+    for j := 0 to High(Self.Settings.ExcludeWorlds) do
+      if world.WorldNumber = Self.Settings.ExcludeWorlds[j] then
+      begin
+        excluded := True;
+        Break;
+      end;
+    if excluded then Continue;
+
+    for j := 0 to High(Self.Settings.ExcludeActivities) do
+      if world.Activity = Self.Settings.ExcludeActivities[j] then
+      begin
+        excluded := True;
+        Break;
+      end;
+    if excluded then Continue;
+
+    for j := 0 to High(Self.Settings.ExcludeLocations) do
+      if world.Location = Self.Settings.ExcludeLocations[j] then
+      begin
+        excluded := True;
+        Break;
+      end;
+    if excluded then Continue;
+
+    for j := 0 to High(Self.Settings.ExcludeTypes) do
+      if world.WorldType = Self.Settings.ExcludeTypes[j] then
+      begin
+        excluded := True;
+        Break;
+      end;
+    if excluded then Continue;
+
+    if Length(Self.Settings.IncludeActivities) > 0 then
+    begin
+      included := False;
+      for j := 0 to High(Self.Settings.IncludeActivities) do
+        if world.Activity = Self.Settings.IncludeActivities[j] then
+        begin
+          included := True;
+          Break;
+        end;
+      if not included then Continue;
+    end;
+
+    if Length(Self.Settings.IncludeLocations) > 0 then
+    begin
+      included := False;
+      for j := 0 to High(Self.Settings.IncludeLocations) do
+        if world.Location = Self.Settings.IncludeLocations[j] then
+        begin
+          included := True;
+          Break;
+        end;
+      if not included then Continue;
+    end;
+
+    if Length(Self.Settings.IncludeTypes) > 0 then
+    begin
+      included := False;
+      for j := 0 to High(Self.Settings.IncludeTypes) do
+        if world.WorldType = Self.Settings.IncludeTypes[j] then
+        begin
+          included := True;
+          Break;
+        end;
+      if not included then Continue;
+    end;
+
+    CurrentScore := (world.Ping / Self.Settings.PingNormalize) * Self.Settings.PingWeight +
+                    (world.PlayerCount / Self.Settings.PlayerNormalize) * Self.Settings.PlayerWeight;
+
+    if (BestScore < 0) or (CurrentScore < BestScore) then
+    begin
+      BestScore := CurrentScore;
+      Result := world;
+    end;
+  end;
+end;
+
+(*
+## TWorldFetcher.FindLowestPingWorld
+*)
+function TWorldFetcher.FindLowestPingWorld(): TWorldInfo;
+var
+  i: Int32;
+  BestPing: Int32;
+begin
+  BestPing := High(Int32);
+  Result := Default(TWorldInfo);
+  Result.WorldNumber := -1;
+
+  if Length(Self.Worlds) = 0 then
+  begin
+    WriteLn('Error: No worlds available to find lowest ping');
+    Exit;
+  end;
+
+  for i := 0 to High(Self.Worlds) do
+    if (Self.Worlds[i].Ping > 0) and (Self.Worlds[i].Ping < BestPing) then
+    begin
+      BestPing := Self.Worlds[i].Ping;
+      Result := Self.Worlds[i];
+    end;
+
+  if Result.WorldNumber = -1 then
+    WriteLn('Warning: No worlds with valid ping found');
+end;
+
+(*
+## TWorldFetcher.FindLowestPlayerWorld
+*)
+function TWorldFetcher.FindLowestPlayerWorld(): TWorldInfo;
+var
+  i: Int32;
+  LowestCount: Int32;
+begin
+  LowestCount := High(Int32);
+  Result := Default(TWorldInfo);
+  Result.WorldNumber := -1;
+
+  if Length(Self.Worlds) = 0 then
+  begin
+    WriteLn('Error: No worlds available to find lowest player count');
+    Exit;
+  end;
+
+  for i := 0 to High(Self.Worlds) do
+    if (Self.Worlds[i].PlayerCount >= 0) and (Self.Worlds[i].PlayerCount < LowestCount) then
+    begin
+      LowestCount := Self.Worlds[i].PlayerCount;
+      Result := Self.Worlds[i];
+    end;
+
+  if Result.WorldNumber = -1 then
+    WriteLn('Warning: No worlds with valid player count found');
+end;
+
+(*
+## TWorldFetcher.SortWorlds
+Sorts an array of worlds according to the specified criteria.
+*)
+function TWorldFetcher.SortWorlds(Worlds: array of TWorldInfo; worldSort: EWorldSort): array of TWorldInfo;
+var
+  Weights, Indices: TIntegerArray;
+  i: Int32;
+  sortUp: Boolean;
+  temp: array of TWorldInfo;
+begin
+  Result := Copy(Worlds);
+  if Length(Result) <= 1 then
+    Exit;
+
+  SetLength(Weights, Length(Result));
+  SetLength(Indices, Length(Result));
+
+  for i := 0 to High(Result) do
+  begin
+    Indices[i] := i;
+
+    if (worldSort = EWorldSort.WORLD_NUMBER) then
+      Weights[i] := Result[i].WorldNumber
+    else if (worldSort = EWorldSort.PLAYER_COUNT_ASC) or (worldSort = EWorldSort.PLAYER_COUNT_DESC) then
+      Weights[i] := Result[i].PlayerCount
+    else if (worldSort = EWorldSort.PING_ASC) or (worldSort = EWorldSort.PING_DESC) then
+    begin
+      if Result[i].Ping = -1 then
+        Weights[i] := High(Int32)
+      else
+        Weights[i] := Result[i].Ping;
+    end;
+  end;
+
+  sortUp := (worldSort = EWorldSort.WORLD_NUMBER) or
+            (worldSort = EWorldSort.PLAYER_COUNT_ASC) or
+            (worldSort = EWorldSort.PING_ASC);
+
+  Indices.WeightedSort(Weights, 0, High(Indices), sortUp);
+
+  temp := Copy(Result);
+  for i := 0 to High(Indices) do
+    Result[i] := temp[Indices[i]];
+end;
+
+(*
+## var WorldFetcher
+Global instance of TWorldFetcher for convenient access to world fetching functionality.
+*)
+var
+  {$H-}WorldFetcher: TWorldFetcher;{$H+}

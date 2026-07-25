@@ -1,0 +1,537 @@
+(*
+# Stop At Level
+Shared skill-level stop goals for BashLib scripts.
+
+Configure via the Limit Settings "Stop At Level..." button, or call
+`StopAtLevel.ShowForm(username)` from a custom form.
+Runtime checking is wired into `TBaseScript.ShouldStop()`.
+*)
+{$DEFINE WL_STOPATLEVEL_INCLUDED}
+{$IFNDEF WL_UTILS}
+  {$I BashLib/utils.simba}
+{$ENDIF}
+
+type
+  TStopAtLevel = record
+    Goals: array [ERSSkill] of Int32;
+    AvailableSkills: array of ERSSkill;
+    SaveBetweenSessions: Boolean;
+    NextStatsCacheTime: UInt64;
+    IconsReady: Boolean;
+  end;
+
+const
+  STOP_AT_LEVEL_GRID: array of ERSSkill := [
+    ERSSkill.ATTACK,       ERSSkill.HITPOINTS,    ERSSkill.MINING,
+    ERSSkill.STRENGTH,     ERSSkill.AGILITY,      ERSSkill.SMITHING,
+    ERSSkill.DEFENCE,      ERSSkill.HERBLORE,     ERSSkill.FISHING,
+    ERSSkill.RANGE,        ERSSkill.THIEVING,     ERSSkill.COOKING,
+    ERSSkill.PRAYER,       ERSSkill.CRAFTING,     ERSSkill.FIREMAKING,
+    ERSSkill.MAGIC,        ERSSkill.FLETCHING,    ERSSkill.WOODCUTTING,
+    ERSSkill.RUNECRAFTING, ERSSkill.SLAYER,       ERSSkill.FARMING,
+    ERSSkill.CONSTRUCTION, ERSSkill.HUNTER,       ERSSkill.SAILING
+  ];
+
+  STOP_AT_LEVEL_MAX = 99;
+
+var
+  StopAtLevel: TStopAtLevel;
+  StopAtLevelEdits: array of TEdit;
+  StopAtLevelIcons: array of TImage;
+  StopAtLevelNameLabels: array of TLabel;
+
+function TStopAtLevel.GetIconURL(skill: ERSSkill): String;
+var
+  name: String;
+begin
+  name := SKILLNAMES[skill];
+  if skill = ERSSkill.RANGE then
+    name := 'Ranged';
+  Result := 'https://oldschool.runescape.wiki/images/' + name + '_icon.png';
+end;
+
+function TStopAtLevel.GetIconDir(): String;
+begin
+  Result := WL_DATAPATH + 'skillicons' + DirectorySeparator;
+end;
+
+function TStopAtLevel.GetIconPath(skill: ERSSkill): String;
+begin
+  Result := Self.GetIconDir() + SKILLNAMES[skill] + '.png';
+end;
+
+function TStopAtLevel.NormalizeUsername(username: String): String;
+begin
+  if username = '' then
+    Result := 'NoUserNameSelected'
+  else
+    Result := username;
+end;
+
+function TStopAtLevel.GetCurrentUsername(): String;
+begin
+  if (Login.PlayerIndex < 0) or (Login.PlayerIndex > High(Login.Players)) then
+    Result := 'NoUserNameSelected'
+  else
+    Result := Self.NormalizeUsername(Login.Players[Login.PlayerIndex].User);
+end;
+
+procedure TStopAtLevel.SetAvailableSkills(skills: array of ERSSkill);
+begin
+  Self.AvailableSkills := skills;
+end;
+
+function TStopAtLevel.IsSkillAvailable(skill: ERSSkill): Boolean;
+var
+  i: Int32;
+begin
+  if Length(Self.AvailableSkills) = 0 then
+    Exit(True);
+
+  for i := 0 to High(Self.AvailableSkills) do
+    if Self.AvailableSkills[i] = skill then
+      Exit(True);
+end;
+
+procedure TStopAtLevel.EnsureIcons();
+var
+  i: Int32;
+  skill: ERSSkill;
+  path, dir: String;
+begin
+  if Self.IconsReady then
+    Exit;
+  Self.IconsReady := True;
+
+  if not DirectoryExists(WL_DATAPATH) then
+    CreateDirectory(WL_DATAPATH);
+
+  dir := Self.GetIconDir();
+  if not DirectoryExists(dir) then
+    CreateDirectory(dir);
+
+  for i := 0 to High(STOP_AT_LEVEL_GRID) do
+  begin
+    skill := STOP_AT_LEVEL_GRID[i];
+    path := Self.GetIconPath(skill);
+    if FileExists(path) then
+      Continue;
+
+    try
+      DownloadToFile(Self.GetIconURL(skill), path, False);
+    except
+    end;
+  end;
+end;
+
+procedure TStopAtLevel.EnsureSettings();
+var
+  root, accounts: TJSONObject;
+begin
+  if not WLSettings.Has('stop_at_level') then
+  begin
+    root.Init();
+    accounts.Init();
+    root.Put('accounts', accounts);
+    WLSettings.Put('stop_at_level', root);
+    Exit;
+  end;
+
+  if not WLSettings.GetObject('stop_at_level').has('accounts') then
+  begin
+    accounts.Init();
+    WLSettings.GetObject('stop_at_level').Put('accounts', accounts);
+    WLSettings.SaveConfig();
+  end;
+end;
+
+function TStopAtLevel.GetAccountObject(username: String; createIfMissing: Boolean): TJSONObject;
+var
+  accounts, acc: TJSONObject;
+begin
+  Self.EnsureSettings();
+  username := Self.NormalizeUsername(username);
+  accounts := WLSettings.GetObject('stop_at_level').getJSONObject('accounts');
+
+  if accounts.has(username) then
+    Exit(accounts.getJSONObject(username));
+
+  if not createIfMissing then
+    Exit(nil);
+
+  acc.Init();
+  accounts.Put(username, acc);
+  WLSettings.SaveConfig();
+  Result := accounts.getJSONObject(username);
+end;
+
+procedure TStopAtLevel.ClearGoals();
+var
+  i: Int32;
+  skill: ERSSkill;
+begin
+  for i := 0 to High(STOP_AT_LEVEL_GRID) do
+  begin
+    skill := STOP_AT_LEVEL_GRID[i];
+    Self.Goals[skill] := 0;
+  end;
+end;
+
+procedure TStopAtLevel.Load(username: String);
+var
+  i: Int32;
+  skill: ERSSkill;
+  acc: TJSONObject;
+  key: String;
+begin
+  username := Self.NormalizeUsername(username);
+  Self.EnsureSettings();
+  acc := Self.GetAccountObject(username, False);
+
+  if acc = nil then
+  begin
+    Self.SaveBetweenSessions := False;
+    Exit;
+  end;
+
+  if acc.has('save_between_sessions') then
+    Self.SaveBetweenSessions := acc.getBoolean('save_between_sessions')
+  else
+    Self.SaveBetweenSessions := False;
+
+  if not Self.SaveBetweenSessions then
+    Exit;
+
+  for i := 0 to High(STOP_AT_LEVEL_GRID) do
+  begin
+    skill := STOP_AT_LEVEL_GRID[i];
+    key := SKILLNAMES[skill];
+    if acc.has(key) then
+      Self.Goals[skill] := acc.getInt(key)
+    else
+      Self.Goals[skill] := 0;
+
+    if Self.Goals[skill] < 0 then
+      Self.Goals[skill] := 0;
+    if Self.Goals[skill] > STOP_AT_LEVEL_MAX then
+      Self.Goals[skill] := STOP_AT_LEVEL_MAX;
+  end;
+end;
+
+procedure TStopAtLevel.LoadCurrentAccount();
+begin
+  Self.Load(Self.GetCurrentUsername());
+end;
+
+procedure TStopAtLevel.Save(username: String);
+var
+  i: Int32;
+  skill: ERSSkill;
+  acc: TJSONObject;
+begin
+  username := Self.NormalizeUsername(username);
+  acc := Self.GetAccountObject(username, True);
+
+  acc.Put('save_between_sessions', Self.SaveBetweenSessions);
+
+  if Self.SaveBetweenSessions then
+  begin
+    for i := 0 to High(STOP_AT_LEVEL_GRID) do
+    begin
+      skill := STOP_AT_LEVEL_GRID[i];
+      acc.Put(SKILLNAMES[skill], Self.Goals[skill]);
+    end;
+  end;
+
+  WLSettings.SaveConfig();
+end;
+
+function TStopAtLevel.GetRandomStatsCacheDelay(): UInt64;
+begin
+  Result := RandomRange(5 * ONE_MINUTE, 20 * ONE_MINUTE);
+end;
+
+procedure TStopAtLevel.ScheduleNextStatsCache();
+begin
+  Self.NextStatsCacheTime := GetTickCount() + Self.GetRandomStatsCacheDelay();
+end;
+
+procedure TStopAtLevel.CheckStatsCacheTimer();
+begin
+  if not Self.HasActiveGoals() then
+    Exit;
+
+  if Self.NextStatsCacheTime = 0 then
+    Self.ScheduleNextStatsCache();
+
+  if GetTickCount() < Self.NextStatsCacheTime then
+    Exit;
+
+  Stats.CacheAll();
+  Self.ScheduleNextStatsCache();
+end;
+
+function TStopAtLevel.ShouldStop(out skill: ERSSkill; out level, goal: Int32): Boolean;
+var
+  i, lvl: Int32;
+  s: ERSSkill;
+begin
+  Result := False;
+  skill := ERSSkill.ATTACK;
+  level := 0;
+  goal := 0;
+
+  if not Self.HasActiveGoals() then
+    Exit;
+
+  for i := 0 to High(STOP_AT_LEVEL_GRID) do
+  begin
+    s := STOP_AT_LEVEL_GRID[i];
+    if not Self.IsSkillAvailable(s) then
+      Continue;
+    if Self.Goals[s] <= 0 then
+      Continue;
+
+    lvl := Stats.GetLevel(s, True);
+    if lvl <= 0 then
+      lvl := Stats.GetLevel(s, False);
+
+    if (lvl > 0) and (lvl >= Self.Goals[s]) then
+    begin
+      skill := s;
+      level := lvl;
+      goal := Self.Goals[s];
+      Exit(True);
+    end;
+  end;
+end;
+
+function TStopAtLevel.HasActiveGoals(): Boolean;
+var
+  i: Int32;
+  skill: ERSSkill;
+begin
+  for i := 0 to High(STOP_AT_LEVEL_GRID) do
+  begin
+    skill := STOP_AT_LEVEL_GRID[i];
+    if not Self.IsSkillAvailable(skill) then
+      Continue;
+    if Self.Goals[skill] > 0 then
+      Exit(True);
+  end;
+end;
+
+procedure TStopAtLevel.WriteReport();
+var
+  i, goal, current: Int32;
+  skill: ERSSkill;
+begin
+  if not Self.HasActiveGoals() then
+    Exit;
+
+  WriteLn('   Stop at level enabled:');
+
+  for i := 0 to High(STOP_AT_LEVEL_GRID) do
+  begin
+    skill := STOP_AT_LEVEL_GRID[i];
+    if not Self.IsSkillAvailable(skill) then
+      Continue;
+
+    goal := Self.Goals[skill];
+    if goal <= 0 then
+      Continue;
+
+    current := Stats.GetLevel(skill, True);
+    if current > 0 then
+      WriteLn('     ' + PadR(SKILLNAMES[skill], 12) + ToStr(current) + '/' + ToStr(goal))
+    else
+      WriteLn('     ' + PadR(SKILLNAMES[skill], 12) + '-> ' + ToStr(goal));
+  end;
+end;
+
+procedure StopAtLevelFieldChanged(sender: TObject);
+var
+  edit: TEdit;
+  value: Int32;
+  text: String;
+begin
+  edit := TEdit(sender);
+  text := edit.GetText();
+  if text = '' then
+    Exit;
+
+  value := StrToIntDef(text, 0);
+  if value < 0 then
+    value := 0;
+  if value > STOP_AT_LEVEL_MAX then
+    value := STOP_AT_LEVEL_MAX;
+
+  if IntToStr(value) <> text then
+    edit.SetText(IntToStr(value));
+end;
+
+procedure StopAtLevelCloseClicked(sender: TObject);
+begin
+  TForm(TButton(sender).GetParent()).Close();
+end;
+
+procedure TStopAtLevel.ShowForm(username: String);
+var
+  form: TForm;
+  lblA, lblB: TLabel;
+  saveCheck: TCheckBox;
+  closeButton: TButton;
+  i, row, col, cellW, cellH, gridLeft, gridTop, x, y, iconSize, gridBottom: Int32;
+  skill: ERSSkill;
+  path: String;
+begin
+  username := Self.NormalizeUsername(username);
+  Self.Load(username);
+  Self.EnsureIcons();
+
+  cellW := TControl.AdjustToDPI(120);
+  cellH := TControl.AdjustToDPI(34);
+  iconSize := TControl.AdjustToDPI(26);
+  gridLeft := TControl.AdjustToDPI(20);
+  gridTop := TControl.AdjustToDPI(90);
+  gridBottom := gridTop + cellH * 8;
+
+  with form do
+  begin
+    Init(nil);
+    SetCaption('Stop at level');
+    SetBounds(0, 0, gridLeft * 2 + cellW * 3, gridBottom + TControl.AdjustToDPI(80));
+    SetPosition(poScreenCenter);
+  end;
+
+  with lblA do
+  begin
+    Init(form);
+    SetParent(form);
+    SetLeft(TControl.AdjustToDPI(20));
+    SetTop(TControl.AdjustToDPI(15));
+    SetWidth(TControl.AdjustToDPI(360));
+    SetCaption('Configure level for script to stop at.');
+  end;
+
+  with lblB do
+  begin
+    Init(form);
+    SetParent(form);
+    SetLeft(TControl.AdjustToDPI(20));
+    SetTop(TControl.AdjustToDPI(35));
+    SetWidth(TControl.AdjustToDPI(360));
+    SetCaption('Enter 0 for any skill you do not want to stop at a level for.');
+  end;
+
+  SetLength(StopAtLevelIcons, Length(STOP_AT_LEVEL_GRID));
+  SetLength(StopAtLevelEdits, Length(STOP_AT_LEVEL_GRID));
+  SetLength(StopAtLevelNameLabels, Length(STOP_AT_LEVEL_GRID));
+
+  for i := 0 to High(STOP_AT_LEVEL_GRID) do
+  begin
+    skill := STOP_AT_LEVEL_GRID[i];
+    row := i div 3;
+    col := i mod 3;
+    x := gridLeft + col * cellW;
+    y := gridTop + row * cellH;
+
+    path := Self.GetIconPath(skill);
+    if FileExists(path) then
+    begin
+      StopAtLevelIcons[i].Create(form);
+      StopAtLevelIcons[i].SetBounds(x, y, iconSize, iconSize);
+      StopAtLevelIcons[i].SetStretch(True);
+      StopAtLevelIcons[i].SetProportional(True);
+      try
+        StopAtLevelIcons[i].LoadFromFile(path);
+      except
+      end;
+
+      if not Self.IsSkillAvailable(skill) then
+        StopAtLevelIcons[i].SetEnabled(False);
+    end
+    else
+    begin
+      StopAtLevelNameLabels[i].Create(form);
+      StopAtLevelNameLabels[i].SetBounds(x, y + TControl.AdjustToDPI(5), iconSize + TControl.AdjustToDPI(8), iconSize);
+      StopAtLevelNameLabels[i].SetCaption(Copy(SKILLNAMES[skill], 1, 3));
+
+      if not Self.IsSkillAvailable(skill) then
+      begin
+        StopAtLevelNameLabels[i].SetFontColor($808080);
+        StopAtLevelNameLabels[i].SetEnabled(False);
+      end;
+    end;
+
+    StopAtLevelEdits[i].Create(form);
+    StopAtLevelEdits[i].SetBounds(x + iconSize + TControl.AdjustToDPI(6), y + TControl.AdjustToDPI(2), TControl.AdjustToDPI(50), iconSize);
+    StopAtLevelEdits[i].SetMaxLength(2);
+    StopAtLevelEdits[i].SetOnKeyPress(@StopAtLevelEdits[i].NumberField);
+    StopAtLevelEdits[i].SetOnChange(@StopAtLevelFieldChanged);
+
+    if Self.IsSkillAvailable(skill) then
+    begin
+      StopAtLevelEdits[i].SetText(IntToStr(Self.Goals[skill]));
+      StopAtLevelEdits[i].SetHint(SKILLNAMES[skill]);
+    end
+    else
+    begin
+      StopAtLevelEdits[i].SetText('0');
+      StopAtLevelEdits[i].SetEnabled(False);
+      StopAtLevelEdits[i].SetFontColor($808080);
+      StopAtLevelEdits[i].SetHint(SKILLNAMES[skill] + ' - not trainable in this activity');
+    end;
+  end;
+
+  with saveCheck do
+  begin
+    Init(form);
+    SetParent(form);
+    SetLeft(TControl.AdjustToDPI(20));
+    SetTop(gridBottom + TControl.AdjustToDPI(8));
+    SetWidth(TControl.AdjustToDPI(280));
+    SetCaption('Remember stop-at-level between sessions');
+    SetChecked(Self.SaveBetweenSessions);
+    SetHint('When enabled, stop-at-level goals are saved and restored next run.');
+  end;
+
+  with closeButton do
+  begin
+    Init(form);
+    SetParent(form);
+    SetCaption('Save and Close');
+    SetWidth(TControl.AdjustToDPI(120));
+    SetHeight(TControl.AdjustToDPI(28));
+    SetLeft((form.GetWidth() - TControl.AdjustToDPI(120)) div 2);
+    SetTop(gridBottom + TControl.AdjustToDPI(38));
+    SetOnClick(@StopAtLevelCloseClicked);
+  end;
+
+  form.ShowModal();
+
+  Self.SaveBetweenSessions := saveCheck.IsChecked();
+
+  for i := 0 to High(STOP_AT_LEVEL_GRID) do
+  begin
+    skill := STOP_AT_LEVEL_GRID[i];
+    if not Self.IsSkillAvailable(skill) then
+    begin
+      Self.Goals[skill] := 0;
+      Continue;
+    end;
+
+    Self.Goals[skill] := StrToIntDef(StopAtLevelEdits[i].GetText(), 0);
+    if Self.Goals[skill] < 0 then
+      Self.Goals[skill] := 0;
+    if Self.Goals[skill] > STOP_AT_LEVEL_MAX then
+      Self.Goals[skill] := STOP_AT_LEVEL_MAX;
+  end;
+
+  Self.Save(username);
+end;
+
+procedure TStopAtLevel.ShowFormForCurrentAccount();
+begin
+  Self.ShowForm(Self.GetCurrentUsername());
+end;
