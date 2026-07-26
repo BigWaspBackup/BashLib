@@ -1,12 +1,7 @@
 (*!
   Tool GetObject V2 — capture WalkerV2 map tile coordinates.
 
-  Middle-click tiles to record (same as the old tool).
-  Herb patches are 2x2 — middle-click all 4 tiles (or just the center).
-  After 2+ clicks it prints the mean center for Coords + a MapCoords hint.
-
-  Uses SRL_DISABLE_REMOTEINPUT so real middle-mouse works.
-  Skips SettingsHandler (needs EIOS symbols that aren't loaded without remote input).
+  Middle-click tiles to record
 *)
 
 {$DEFINE SRL_DISABLE_REMOTEINPUT}
@@ -14,7 +9,6 @@
 {$I BashLib/osr.simba}
 
 const
-  // Hosidius farm region — change per location:
   CHUNKS: array of TRSMapChunk := [
     Chunk(Box(26, 56, 29, 53), 0)
   ];
@@ -33,7 +27,6 @@ begin
   WriteLn('=== getobjectv2 ===');
   WriteLn('Zoom=', MM2MS.ZoomLevel, '  Player=', Map.Position());
   WriteLn('Middle-click a tile to record it.');
-  WriteLn('Herb patch = 2x2: click all 4 corners/tiles, then use the printed Center for Coords.');
   WriteLn('Hold SPACE briefly to clear the list.');
 end;
 

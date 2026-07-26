@@ -54,8 +54,10 @@ However, this is not really recommended. You should include only the files you r
 {$IFNDEF XJ_STUDENT_FARM_RUNNER}        {$I optional/handlers/farmrunnerupdate.simba}
 {$IFNDEF CJ_BIRDHOUSE_RUNNER}           {$I optional/handlers/birdhouserunner.simba}
 {$IFNDEF BASH_FARM_RUNNER}              {$I optional/handlers/bashfarm/bashfarmrunner.simba}
+{$IFNDEF WL_AICHAT_INCLUDED}            {$I optional/handlers/aichat.simba}
 
 
+{$ELSE}{$ENDIF}
 {$ELSE}{$ENDIF}
 {$ELSE}{$ENDIF}
 {$ELSE}{$ENDIF}

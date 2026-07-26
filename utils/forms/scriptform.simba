@@ -1812,7 +1812,7 @@ begin
     setName('am_panel');
     setCaption('');
     setBevelWidth(0);
-    setHeight(Round(Self.Size.Y / 3.2) + TControl.AdjustToDPI(55));
+    setHeight(Round(Self.Size.Y / 3.2) + TControl.AdjustToDPI(25));
     setWidth(Self.Size.X);
     SetTooltip('BashLib Account Manager.');
   end;

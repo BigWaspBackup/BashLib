@@ -828,6 +828,113 @@ begin
 end;
 
 (*
+## SettingsHandler.GetActiveRuneLiteProfile()
+```pascal
+function TSettingsHandler.GetActiveRuneLiteProfile(out name, profileFile: String): Boolean;
+```
+Reads profiles.json and returns the currently active RuneLite profile
+(name + properties filename), regardless of whether it is a BASH profile.
+*)
+function TSettingsHandler.GetActiveRuneLiteProfile(out name, profileFile: String): Boolean;
+var
+  path, jsonContent, idStr: String;
+  profilesJson: TJSONObject;
+  profilesArray: TJSONArray;
+  profileEntry: TJSONObject;
+  i, profileCount: Int32;
+  isActive: Boolean;
+begin
+  Result := False;
+  name := '';
+  profileFile := '';
+
+  if Self.Name = '' then
+    Self.Setup();
+
+  path := Self.GetProfilesPath();
+  jsonContent := ReadFileContents(path + DirectorySeparator + 'profiles.json');
+  if jsonContent = '' then
+    Exit;
+
+  try
+    profilesJson.Init(jsonContent);
+  except
+    Exit;
+  end;
+
+  try
+    try
+      profilesArray := profilesJson.getJSONArray('profiles');
+    except
+      Exit;
+    end;
+
+    profileCount := profilesArray.length();
+    for i := 0 to profileCount - 1 do
+    begin
+      try
+        profileEntry := profilesArray.getJSONObject(i);
+        isActive := False;
+        try
+          isActive := profileEntry.getBoolean('active');
+        except
+          try
+            isActive := profileEntry.getString('active') = 'true';
+          except
+          end;
+        end;
+
+        if not isActive then
+          Continue;
+
+        name := profileEntry.getString('name');
+        try
+          idStr := ToStr(profileEntry.getInt('id'));
+        except
+          idStr := profileEntry.getString('id');
+        end;
+        profileFile := name + '-' + idStr + '.properties';
+
+        if FileExists(path + DirectorySeparator + profileFile) then
+        begin
+          Self.ActiveProfile := name;
+          Self.ActiveProfileFile := profileFile;
+          Exit(True);
+        end;
+      except
+      end;
+    end;
+  finally
+    profilesJson.Free();
+  end;
+end;
+
+(*
+## SettingsHandler.IsBashProfileActive()
+```pascal
+function TSettingsHandler.IsBashProfileActive(out activeName: String): Boolean;
+```
+Returns True when the active RuneLite profile looks like a BASH-installed
+profile (8-character non-default name).
+*)
+function TSettingsHandler.IsBashProfileActive(out activeName: String): Boolean;
+var
+  profileFile: String;
+begin
+  Result := False;
+  activeName := '';
+
+  if not Self.GetActiveRuneLiteProfile(activeName, profileFile) then
+    Exit;
+
+  // BASH launcher profiles use an 8-character name (same convention as Wasp).
+  if (Length(activeName) <> 8) or (LowerCase(activeName) = 'default') then
+    Exit;
+
+  Result := True;
+end;
+
+(*
 ## SettingsHandler.CheckGPUPlugin()
 ```pascal
 procedure TSettingsHandler.CheckGPUPlugin();

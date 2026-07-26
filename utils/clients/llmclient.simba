@@ -1,0 +1,562 @@
+(*
+# LLM Client
+Reusable multi-provider HTTP client for Gemini, Groq, OpenAI, DeepSeek, and local Ollama.
+Free of game OCR/typing — scripts call `LLMClient.Chat(user, message)`.
+*)
+
+{$DEFINE WL_LLMCLIENT_INCLUDED}
+{$IFNDEF WL_UTILS}
+  {$I BashLib/utils.simba}
+{$ENDIF}
+
+type
+  ELLMService = (llmLocal, llmDeepSeek, llmOpenAI, llmGroq, llmGemini);
+
+  TLLMClient = record
+    Service: ELLMService;
+    Model: String;
+    SystemMessage: String;
+    APIKey: String;
+    Port: Integer;
+    MaxCharacters: Integer;
+    MaxMessages: Integer;
+    MaxAttempts: Integer;
+    Memory: Boolean;
+    Enabled: Boolean;
+    IsSetup: Boolean;
+    DebugMode: Boolean;
+    LastHTTPCode: Integer;
+    LastError: String;
+    Client: THTTPClient;
+    ClientURL: String;
+    MemoryPath: String;
+  end;
+
+function TLLMClient.ServiceName(): String;
+begin
+  case Self.Service of
+    ELLMService.llmLocal: Result := 'Local';
+    ELLMService.llmDeepSeek: Result := 'DeepSeek';
+    ELLMService.llmOpenAI: Result := 'ChatGPT';
+    ELLMService.llmGroq: Result := 'Groq';
+    ELLMService.llmGemini: Result := 'Gemini';
+  else
+    Result := 'Gemini';
+  end;
+end;
+
+procedure TLLMClient.SetServiceFromName(name: String);
+begin
+  case LowerCase(name) of
+    'local', 'ollama': Self.Service := ELLMService.llmLocal;
+    'deepseek': Self.Service := ELLMService.llmDeepSeek;
+    'chatgpt', 'openai': Self.Service := ELLMService.llmOpenAI;
+    'groq': Self.Service := ELLMService.llmGroq;
+  else
+    Self.Service := ELLMService.llmGemini;
+  end;
+end;
+
+function TLLMClient.DefaultModel(): String;
+begin
+  case Self.Service of
+    ELLMService.llmLocal: Result := 'granite4.1:3b';
+    ELLMService.llmDeepSeek: Result := 'deepseek-chat';
+    ELLMService.llmOpenAI: Result := 'gpt-4o-mini';
+    ELLMService.llmGroq: Result := 'llama-3.3-70b-versatile';
+    ELLMService.llmGemini: Result := 'gemini-3.5-flash-lite';
+  else
+    Result := 'gemini-3.5-flash-lite';
+  end;
+end;
+
+function TLLMClient.ResolveModel(): String;
+begin
+  if Self.Model <> '' then
+    Result := Self.Model
+  else
+    Result := Self.DefaultModel();
+end;
+
+function TLLMClient.BuildURL(): String;
+begin
+  case Self.Service of
+    ELLMService.llmLocal:
+      Result := 'http://127.0.0.1:' + IntToStr(Self.Port) + '/api/chat';
+    ELLMService.llmDeepSeek:
+      Result := 'https://api.deepseek.com/chat/completions';
+    ELLMService.llmOpenAI:
+      Result := 'https://api.openai.com/v1/chat/completions';
+    ELLMService.llmGroq:
+      Result := 'https://api.groq.com/openai/v1/chat/completions';
+    ELLMService.llmGemini:
+      Result := 'https://generativelanguage.googleapis.com/v1beta/models/' +
+                Self.ResolveModel() + ':generateContent';
+  else
+    Result := '';
+  end;
+end;
+
+procedure TLLMClient.ApplyHeaders();
+begin
+  if not Self.Client.IsSetup then
+    Exit;
+
+  SetHTTPHeader(Self.Client.Client, 'Content-Type', 'application/json');
+
+  case Self.Service of
+    ELLMService.llmGemini:
+      begin
+        if Self.APIKey <> '' then
+          SetHTTPHeader(Self.Client.Client, 'x-goog-api-key', Self.APIKey);
+      end;
+    ELLMService.llmLocal:
+      begin
+        // Local Ollama typically needs no auth
+      end;
+  else
+    begin
+      if Self.APIKey <> '' then
+        SetHTTPHeader(Self.Client.Client, 'Authorization', 'Bearer ' + Self.APIKey);
+    end;
+  end;
+end;
+
+procedure TLLMClient.EnsureClient();
+var
+  url: String;
+begin
+  url := Self.BuildURL();
+  if url = '' then
+    Exit;
+
+  if Self.Client.IsSetup and (Self.ClientURL = url) then
+  begin
+    Self.ApplyHeaders();
+    Exit;
+  end;
+
+  if Self.Client.IsSetup then
+    Self.Client.Free();
+
+  Self.Client.Init('LLMClient', url, False);
+  Self.ClientURL := url;
+  Self.ApplyHeaders();
+end;
+
+procedure TLLMClient.Setup();
+begin
+  if Self.IsSetup then
+    Exit;
+
+  if Self.Port <= 0 then
+    Self.Port := 11434;
+  if Self.MaxCharacters <= 0 then
+    Self.MaxCharacters := 80;
+  if Self.MaxMessages <= 0 then
+    Self.MaxMessages := 20;
+  if Self.MaxAttempts <= 0 then
+    Self.MaxAttempts := 3;
+  if Self.SystemMessage = '' then
+    Self.SystemMessage := 'You are a real human player in Old School RuneScape. Keep replies short and casual.';
+
+  Self.MemoryPath := WL_DATAPATH + 'cache' + DirectorySeparator + 'LLM' + DirectorySeparator + 'chats';
+  ForceDirectories(Self.MemoryPath);
+
+  Self.IsSetup := True;
+  Self.Enabled := True;
+  Self.EnsureClient();
+end;
+
+procedure TLLMClient.Configure(service: ELLMService; apiKey: String; model: String = ''; systemMessage: String = '');
+begin
+  Self.Service := service;
+  Self.APIKey := apiKey;
+  Self.Model := model;
+  if systemMessage <> '' then
+    Self.SystemMessage := systemMessage;
+  if not Self.IsSetup then
+    Self.Setup()
+  else
+    Self.EnsureClient();
+end;
+
+procedure TLLMClient.ConfigureFromName(serviceName, apiKey: String; model: String = ''; systemMessage: String = '');
+begin
+  Self.SetServiceFromName(serviceName);
+  Self.Configure(Self.Service, apiKey, model, systemMessage);
+end;
+
+function TLLMClient.MemoryFile(user: String): String;
+begin
+  Result := Self.MemoryPath + DirectorySeparator + LowerCase(user.Trim()) + '.json';
+end;
+
+function TLLMClient.LoadMemory(user: String): TJSONArray;
+var
+  path, content: String;
+  root: TJSONObject;
+  messages: TJSONArray;
+  msg: TJSONObject;
+  i: Integer;
+begin
+  Result.Init();
+  if not Self.Memory then
+    Exit;
+
+  path := Self.MemoryFile(user);
+  if not FileExists(path) then
+    Exit;
+
+  try
+    content := ReadFileContents(path);
+    if content = '' then
+      Exit;
+
+    root.Init(content);
+    if root.has('messages') then
+    begin
+      messages := root.getJSONArray('messages');
+      for i := 0 to messages.Length() - 1 do
+      begin
+        msg := messages.getJSONObject(i);
+        if msg.has('role') and msg.has('content') then
+          Result.Put(Self.MakeRoleMessage(msg.getString('role'), msg.getString('content')));
+      end;
+    end;
+    root.Free();
+  except
+    Result.Free();
+    Result.Init();
+  end;
+end;
+
+procedure TLLMClient.SaveMemory(user: String; messages: TJSONArray);
+var
+  path: String;
+  trimmed: TJSONArray;
+  root, msg: TJSONObject;
+  i, startIdx: Integer;
+begin
+  if not Self.Memory then
+    Exit;
+
+  path := Self.MemoryFile(user);
+  trimmed.Init();
+
+  startIdx := 0;
+  if (Self.MaxMessages > 0) and (messages.Length() > Self.MaxMessages) then
+    startIdx := messages.Length() - Self.MaxMessages;
+
+  for i := startIdx to messages.Length() - 1 do
+  begin
+    msg := messages.getJSONObject(i);
+    if msg.has('role') and msg.has('content') then
+      trimmed.Put(Self.MakeRoleMessage(msg.getString('role'), msg.getString('content')));
+  end;
+
+  root.Init();
+  root.Put('messages', trimmed);
+
+  try
+    WriteFileContents(path, root.ToString(0), False);
+  except
+    WriteLn('[LLMClient] Failed to save chat memory: ' + path);
+  end;
+
+  root.Free();
+end;
+
+function TLLMClient.MakeRoleMessage(role, content: String): TJSONObject;
+begin
+  Result.Init();
+  Result.Put('role', role);
+  Result.Put('content', content.Trim());
+end;
+
+function TLLMClient.BuildSystemPrompt(user: String): String;
+begin
+  Result := Self.SystemMessage +
+            ' Your messages should never exceed ' + IntToStr(Self.MaxCharacters) +
+            ' characters. Be concise.' +
+            ' The user you are talking to is "' + user +
+            '". Avoid referring to them by name unless natural.';
+end;
+
+function TLLMClient.BuildOpenAIPayload(user, message: String; history: TJSONArray): TJSONObject;
+var
+  messages: TJSONArray;
+  i: Integer;
+  histMsg: TJSONObject;
+  role, content: String;
+begin
+  Result.Init();
+  messages.Init();
+
+  messages.Put(Self.MakeRoleMessage('system', Self.BuildSystemPrompt(user)));
+
+  for i := 0 to history.Length() - 1 do
+  begin
+    histMsg := history.getJSONObject(i);
+    role := histMsg.getString('role');
+    content := histMsg.getString('content');
+    if (role = 'user') or (role = 'assistant') then
+      messages.Put(Self.MakeRoleMessage(role, content));
+  end;
+
+  messages.Put(Self.MakeRoleMessage('user', message));
+
+  Result.Put('model', Self.ResolveModel());
+  Result.Put('messages', messages);
+  Result.Put('stream', False);
+end;
+
+function TLLMClient.BuildGeminiPayload(user, message: String; history: TJSONArray): TJSONObject;
+var
+  contents, parts, systemParts: TJSONArray;
+  contentObj, partObj, systemObj: TJSONObject;
+  i: Integer;
+  histMsg: TJSONObject;
+  role, content, geminiRole: String;
+begin
+  Result.Init();
+
+  systemParts.Init();
+  partObj.Init();
+  partObj.Put('text', Self.BuildSystemPrompt(user));
+  systemParts.Put(partObj);
+  systemObj.Init();
+  systemObj.Put('parts', systemParts);
+  Result.Put('system_instruction', systemObj);
+
+  contents.Init();
+
+  for i := 0 to history.Length() - 1 do
+  begin
+    histMsg := history.getJSONObject(i);
+    role := histMsg.getString('role');
+    content := histMsg.getString('content');
+    if role = 'assistant' then
+      geminiRole := 'model'
+    else if role = 'user' then
+      geminiRole := 'user'
+    else
+      Continue;
+
+    parts.Init();
+    partObj.Init();
+    partObj.Put('text', content);
+    parts.Put(partObj);
+
+    contentObj.Init();
+    contentObj.Put('role', geminiRole);
+    contentObj.Put('parts', parts);
+    contents.Put(contentObj);
+  end;
+
+  parts.Init();
+  partObj.Init();
+  partObj.Put('text', message.Trim());
+  parts.Put(partObj);
+  contentObj.Init();
+  contentObj.Put('role', 'user');
+  contentObj.Put('parts', parts);
+  contents.Put(contentObj);
+
+  Result.Put('contents', contents);
+end;
+
+function TLLMClient.BuildLocalPayload(user, message: String; history: TJSONArray): TJSONObject;
+begin
+  // Ollama /api/chat uses the same messages array shape as OpenAI chat
+  Result := Self.BuildOpenAIPayload(user, message, history);
+end;
+
+function TLLMClient.ParseOpenAIResponse(jsonResponse: String): String;
+var
+  root, choice, messageObj: TJSONObject;
+  choices: TJSONArray;
+begin
+  Result := '';
+  try
+    root.Init(jsonResponse);
+    if root.has('choices') then
+    begin
+      choices := root.getJSONArray('choices');
+      if choices.Length() > 0 then
+      begin
+        choice := choices.getJSONObject(0);
+        if choice.has('message') then
+        begin
+          messageObj := choice.getJSONObject('message');
+          if messageObj.has('content') then
+            Result := messageObj.getString('content').Trim();
+        end;
+      end;
+    end
+    else if root.has('message') then
+    begin
+      // Ollama style
+      messageObj := root.getJSONObject('message');
+      if messageObj.has('content') then
+        Result := messageObj.getString('content').Trim();
+    end;
+  except
+    Result := '';
+  finally
+    root.Free();
+  end;
+end;
+
+function TLLMClient.ParseGeminiResponse(jsonResponse: String): String;
+var
+  root, candidate, content, part: TJSONObject;
+  candidates, parts: TJSONArray;
+begin
+  Result := '';
+  try
+    root.Init(jsonResponse);
+    if not root.has('candidates') then
+      Exit;
+    candidates := root.getJSONArray('candidates');
+    if candidates.Length() = 0 then
+      Exit;
+    candidate := candidates.getJSONObject(0);
+    if not candidate.has('content') then
+      Exit;
+    content := candidate.getJSONObject('content');
+    if not content.has('parts') then
+      Exit;
+    parts := content.getJSONArray('parts');
+    if parts.Length() = 0 then
+      Exit;
+    part := parts.getJSONObject(0);
+    if part.has('text') then
+      Result := part.getString('text').Trim();
+  except
+    Result := '';
+  finally
+    root.Free();
+  end;
+end;
+
+function TLLMClient.ParseResponse(jsonResponse: String): String;
+begin
+  case Self.Service of
+    ELLMService.llmGemini: Result := Self.ParseGeminiResponse(jsonResponse);
+  else
+    Result := Self.ParseOpenAIResponse(jsonResponse);
+  end;
+end;
+
+function TLLMClient.Chat(user, message: String): String;
+var
+  history: TJSONArray;
+  payload: TJSONObject;
+  request, response: String;
+  attempt: Integer;
+  memUser, memAssistant: TJSONObject;
+begin
+  Result := '';
+  Self.LastError := '';
+  Self.LastHTTPCode := 0;
+
+  if not Self.IsSetup then
+    Self.Setup();
+
+  if not Self.Enabled then
+  begin
+    Self.LastError := 'LLMClient is disabled';
+    Exit;
+  end;
+
+  if (Self.Service <> ELLMService.llmLocal) and (Self.APIKey = '') then
+  begin
+    Self.LastError := 'API key is empty';
+    Exit;
+  end;
+
+  user := user.Trim();
+  message := message.Trim();
+  if message = '' then
+    Exit;
+
+  history := Self.LoadMemory(user);
+
+  try
+    case Self.Service of
+      ELLMService.llmGemini: payload := Self.BuildGeminiPayload(user, message, history);
+      ELLMService.llmLocal: payload := Self.BuildLocalPayload(user, message, history);
+    else
+      payload := Self.BuildOpenAIPayload(user, message, history);
+    end;
+
+    request := payload.ToString(0);
+    if Self.DebugMode then
+      WriteLn('[LLMClient] Request: ' + request);
+
+    for attempt := 1 to Self.MaxAttempts do
+    begin
+      Self.EnsureClient();
+      response := Self.Client.POST('', request, False, False);
+      Self.LastHTTPCode := Self.Client.GetHTTPCode();
+
+      if Self.DebugMode then
+        WriteLn('[LLMClient] Attempt ' + IntToStr(attempt) + ' HTTP ' + IntToStr(Self.LastHTTPCode));
+
+      if Self.LastHTTPCode <> 200 then
+      begin
+        Self.LastError := 'HTTP ' + IntToStr(Self.LastHTTPCode) + ': ' + response;
+        Continue;
+      end;
+
+      Result := Self.ParseResponse(response);
+      if Result = '' then
+      begin
+        Self.LastError := 'Failed to parse LLM response';
+        Continue;
+      end;
+
+      if (Self.MaxCharacters > 0) and (Length(Result) > Self.MaxCharacters) then
+        Result := Copy(Result, 1, Self.MaxCharacters);
+
+      Break;
+    end;
+
+    if (Result <> '') and Self.Memory then
+    begin
+      memUser := Self.MakeRoleMessage('user', message);
+      memAssistant := Self.MakeRoleMessage('assistant', Result);
+      history.Put(memUser);
+      history.Put(memAssistant);
+      Self.SaveMemory(user, history);
+    end;
+  finally
+    payload.Free();
+    history.Free();
+  end;
+end;
+
+function TLLMClient.TestConnection(): Boolean;
+var
+  reply: String;
+  prevMemory: Boolean;
+begin
+  Result := False;
+  prevMemory := Self.Memory;
+  Self.Memory := False;
+
+  try
+    reply := Self.Chat('test', 'Respond with exactly: OK');
+    Result := (Self.LastHTTPCode = 200) and (reply <> '');
+    if Result then
+      WriteLn('[LLMClient] API test PASSED (' + Self.ServiceName() + ')')
+    else
+      WriteLn('[LLMClient] API test FAILED: ' + Self.LastError);
+  finally
+    Self.Memory := prevMemory;
+  end;
+end;
+
+var
+  LLMClient: TLLMClient;
