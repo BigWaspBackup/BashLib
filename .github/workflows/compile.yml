@@ -6,7 +6,7 @@ on:
 
 env:
   simba-download: https://github.com/Villavu/Simba/releases/download/simba1400-release/Simba-Win32.exe
-  srl-download: https://github.com/Torwent/SRL-B.git
+  srl-download: https://github.com/BigWaspBackup/SRL-B.git
 
 jobs:
   compile:
