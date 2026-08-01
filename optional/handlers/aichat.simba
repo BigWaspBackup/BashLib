@@ -29,7 +29,7 @@ if AIChatbot.Enabled then
 // No ProcessMessages call needed - DoAntiban handles it.
 ```
 
-TScriptForm scripts can use `Form.CreateAIChatSettings()` instead of BuildSettings.
+TScriptForm scripts can use `Form.CreateAIChatSettings()` instead of BuildSettings
 *)
 
 {$DEFINE WL_AICHAT_INCLUDED}
