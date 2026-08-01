@@ -746,7 +746,7 @@ begin
       if not started then
       begin
         started := True;
-        stall.Init(1500);
+        stall.Init(1900);
       end
       else
         stall.Restart();
@@ -938,7 +938,6 @@ begin
       Continue;
     end;
 
-    { We already know the patch is empty (Inspect / Harvested). Find + click - no uptext loop. }
     if Length(Self.TPA) > 0 then
       clickAt := SRL.RandomPoint(Self.TPA.Mean, MainScreen.NormalizeDistance(15))
     else
@@ -962,6 +961,7 @@ begin
       8000
     ) then
     begin
+      Wait(Random(600, 1000));
       Inventory.SetSelectedSlot(-1);
       Self.Planted := True;
       Self.Harvested := False;
@@ -976,7 +976,7 @@ end;
 
 function TBASHFarmPatch.Compost(): Boolean;
 var
-  slot, i, attempt, beforeStack: Int32;
+  slot, i, attempt, beforeStack, maxTries: Int32;
   clicked: Boolean;
   isBottomless: Boolean;
   waitMs: Int32;
@@ -984,7 +984,6 @@ var
 begin
   Result := False;
   slot := -1;
-  clicked := False;
 
   if Self.Composted then
     Exit(True);
@@ -1001,6 +1000,10 @@ begin
 
   Result := False;
   isBottomless := Self.CompostItem = 'Bottomless compost bucket';
+  if isBottomless then
+    maxTries := 1
+  else
+    maxTries := 3;
 
   for 1 to 2 do
     if Inventory.FindItem(Self.CompostItem, slot) then
@@ -1015,63 +1018,70 @@ begin
       Exit(False);
   end;
 
-  beforeStack := Inventory.CountItemStack(Self.CompostItem);
-  XPBar.Read();
-  XPBar.EarnedXP();
-
   WriteLn('[BASHFarm] Composting ', Self.Data.Name);
 
-  for attempt := 1 to 4 do
+  for attempt := 1 to maxTries do
   begin
-    if not Inventory.SetSelectedSlot(slot) then
-      Continue;
+    if not Inventory.FindItem(Self.CompostItem, slot) then
+      Break;
 
-    if not Self.Find() then
+    beforeStack := Inventory.CountItemStack(Self.CompostItem);
+    XPBar.Read();
+    XPBar.EarnedXP();
+    clicked := False;
+
+    for 1 to 4 do
     begin
-      Self.WalkFind();
-      Continue;
+      if not Inventory.SetSelectedSlot(slot) then
+        Continue;
+
+      if not Self.Find() then
+      begin
+        Self.WalkFind();
+        Continue;
+      end;
+
+      if Length(Self.TPA) > 0 then
+        Mouse.Move(SRL.RandomPoint(Self.TPA.Mean, MainScreen.NormalizeDistance(15)))
+      else
+        Mouse.Move(SRL.RandomPoint(Self.SearchBox.Center(), MainScreen.NormalizeDistance(10)));
+
+      Mouse.Click(MOUSE_LEFT);
+      clicked := True;
+      Break;
     end;
 
-    { Already planted - click patch with compost selected, no uptext polling. }
-    if Length(Self.TPA) > 0 then
-      Mouse.Move(SRL.RandomPoint(Self.TPA.Mean, MainScreen.NormalizeDistance(15)))
-    else
-      Mouse.Move(SRL.RandomPoint(Self.SearchBox.Center(), MainScreen.NormalizeDistance(10)));
+    if not clicked then
+      Continue;
 
-    Mouse.Click(MOUSE_LEFT);
-    clicked := True;
-    Break;
-  end;
+    if not MainScreen.DidRedClick() then
+      Continue;
 
-  if not clicked then
-  begin
-    Inventory.SetSelectedSlot(-1);
-    Exit(False);
-  end;
+    waitMs := Self.WalkWaitMs(5000);
+    Result := WaitUntil(
+      XPBar.EarnedXP() or
+      Chat.FindMessage('already been') or
+      Chat.FindMessage('treat the') or
+      Chat.FindMessage('This patch has already'),
+      35,
+      waitMs
+    );
 
-  if not MainScreen.DidRedClick() then
-  begin
-    Inventory.SetSelectedSlot(-1);
-    Exit(False);
-  end;
-
-  waitMs := Self.WalkWaitMs(5000);
-  Result := WaitUntil(
-    XPBar.EarnedXP() or
-    Chat.FindMessage('already been') or
-    Chat.FindMessage('treat the') or
-    Chat.FindMessage('This patch has already'),
-    35,
-    waitMs
-  );
-
-  if (not Result) and (not isBottomless) and (Inventory.CountItemStack(Self.CompostItem) < beforeStack) then
-  begin
-    Result := WaitUntil(XPBar.EarnedXP(), 35, 2500);
-    if not Result then
+    if (not Result) and (not isBottomless) and (Inventory.CountItemStack(Self.CompostItem) < beforeStack) then
     begin
-      Result := True;
+      Result := WaitUntil(XPBar.EarnedXP(), 35, 2500);
+      if not Result then
+        Result := True;
     end;
+
+    if Result then
+      Break;
+
+    if isBottomless or (Inventory.CountItemStack(Self.CompostItem) < beforeStack) then
+      Break;
+
+    if attempt < maxTries then
+      WriteLn('[BASHFarm] Compost not applied on ', Self.Data.Name, ' - retry ', attempt, '/', maxTries);
   end;
 
   Self.Composted := Result;
@@ -2196,11 +2206,7 @@ begin
             Exit;
           end
           else
-          begin
-            Inc(Self.FailCount);
-            if Self.FailCount >= 3 then
-              Self.SkipPatch('Failed to compost');
-          end;
+            Self.SkipPatch('Failed to compost');
         end;
       EBASHPatchState.GROWING, EBASHPatchState.COMPLETE:
         begin
