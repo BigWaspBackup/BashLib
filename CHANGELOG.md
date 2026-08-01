@@ -1,3 +1,12 @@
+## [8.2.3](https://github.com/BigWaspBackup/BashLib/compare/v8.2.2...v8.2.3) (2026-08-01)
+
+
+### Bug Fixes
+
+* Added compost retrys if fails, Improved timing for compost. ([6dcc3f8](https://github.com/BigWaspBackup/BashLib/commit/6dcc3f8476d55577ef5cb32d7111b8cc10a370f5))
+
+
+
 ## [8.2.2](https://github.com/BigWaspBackup/BashLib/compare/v8.2.1...v8.2.2) (2026-08-01)
 
 
@@ -8,10 +17,6 @@
 
 
 ## [8.2.1](https://github.com/BigWaspBackup/BashLib/compare/v8.2.0...v8.2.1) (2026-08-01)
-
-
-
-## [8.1.2](https://github.com/BigWaspBackup/BashLib/compare/v8.1.1...v8.1.2) (2026-07-25)
 
 
 
