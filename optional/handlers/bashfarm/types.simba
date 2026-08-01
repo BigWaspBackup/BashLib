@@ -46,7 +46,6 @@ type
     LLETYA_FRUIT,
     GUILD_FRUIT,
 
-    // --- Stubs (coords TBD; not in GUI yet) ---
     HARMONY_ISLAND_ALLOT,
     PRIF_FLOWER,
     PRIF_ALLOT_N,
@@ -128,8 +127,7 @@ type
     NOT_FOUND,
     NOTE_ITEMS,
     COMPLETE,
-    SKIP,
-    FAILED
+    SKIP
   );
 
   EBASHCompostMethod = (
@@ -160,8 +158,8 @@ type
     FarmerName: String;
     FarmerColor: TCTS2Color;
     Chunks: array of TRSMapChunk;
-    Outline: TPointArray; // polygon (≈6 verts) OR soil tiles (4=herb/flower, >8=allotment)
-    CompostBinCoords: TPoint; // [0,0] = no bin at this site; shared per location when set
+    Outline: TPointArray;
+    CompostBinCoords: TPoint;
   end;
 
   TBASHFarmPatch = record
@@ -174,16 +172,19 @@ type
     TPA: TPointArray;
     SearchBox: TBox;
     Harvested, Planted, Composted, Skip, Complete, DontClear: Boolean;
-    UseResurrectCrop, UseFertileSoil, UseCurePlant: Boolean;
+    UseFertileSoil: Boolean;
     FailCount: Int32;
+
+    CombatHpWatch: Boolean;
+    CombatStartHp: Int32;
   end;
 
   TBASHJournalEntry = record
     PatchId: EBASHFarmPatch;
     PatchType: EBASHPatchType;
     PlantedItem: String;
-    PlantedAt: Int32;       // unix seconds
-    ExpectedReadyAt: Int32; // unix seconds
+    PlantedAt: Int32;
+    ExpectedReadyAt: Int32;
     LastObservedState: EBASHJournalState;
     ContractTag: String;
   end;
@@ -203,6 +204,12 @@ type
   end;
 
 const
+  BASH_PATCH_TYPE_NAMES: TStringArray = [
+    'Herb', 'Flower', 'Allotment', 'Tree', 'Fruit', 'Bush', 'Cactus',
+    'Anima', 'Hops', 'Seaweed', 'Coral', 'Grape', 'Mushroom',
+    'Belladonna', 'Calquat', 'Crystal', 'Celastrus'
+  ];
+
   BASH_FARM_GRIMY_HERBS: TRSItemArray = [
     'Grimy guam leaf', 'Grimy marrentill',
     'Grimy tarromin', 'Grimy harralander',
@@ -229,3 +236,5 @@ const
     'Grimy cadantine', 'Grimy lantadyme',
     'Grimy dwarf weed', 'Grimy torstol'
   ];
+
+{$I BashLib/optional/handlers/bashcommon.simba}

@@ -347,7 +347,8 @@ function TScriptForm.CreateAccountManager(): TTabSheet; overload;
 procedure TScriptForm.ShowWorldFetcherDialog();
 procedure TScriptForm.SyncAccountManager();
 procedure TScriptForm.ApplyJagexAccountVisibility();
-function TScriptForm.CreateAntibanManager(): TTabSheet;
+function TScriptForm.CreateAntibanManager(owner: TControl): TPanel;
+function TScriptForm.CreateAntibanManager(): TTabSheet; overload;
 function TScriptForm.CreateConsumableSettings(owner: TControl; consumableType: ERSConsumable; addInfo: Boolean = True): TPanel;
 function TScriptForm.CreateConsumableSettings(consumableType: ERSConsumable): TTabSheet; overload;
 function TScriptForm.CreateBankSettings(): TTabSheet;
@@ -1961,7 +1962,7 @@ begin
   Self.CreateAccountManager(Result);
 end;
 
-function TScriptForm.CreateAntibanManager(): TTabSheet;
+function TScriptForm.CreateAntibanManager(owner: TControl): TPanel;
   type TScriptForm = TScriptForm;
 
   procedure TScriptForm._BioHashOnChange(sender: TObject);
@@ -2178,17 +2179,31 @@ var
   str: String;
   combobox: TComboBox;
   checked: Boolean;
+  ownerW, ownerH: Int32;
 begin
-  Self.AddTab('Antiban Manager');
-  Result := Self.Tabs[High(Self.Tabs)];
+  with Result do
+  begin
+    Create(owner);
+    SetName('ab_manager_panel');
+    setCaption('');
+    setBevelWidth(0);
+    setAlign(alClient);
+  end;
 
   combobox := Self.Form.GetChild('am_selector_combobox');
   if combobox = nil then Antiban.SetupBiometrics();
 
-  fullWidth := Self.Size.X;
+  ownerW := owner.GetWidth();
+  if ownerW <= 0 then
+    ownerW := Self.Size.X;
+  ownerH := owner.GetHeight();
+  if ownerH <= 0 then
+    ownerH := Self.Size.Y;
+
+  fullWidth := ownerW;
   space := Floor(fullWidth * 0.1);
   w := fullWidth - (space * 2);
-  y := Floor(Self.Size.Y/6);
+  y := Floor(ownerH / 6);
 
   with bioPanel do
   begin
@@ -2228,10 +2243,10 @@ begin
     SetText(FormatFloat('0.000000000000000', BioHash));
   end;
 
-  fullWidth := Floor(Self.Size.X / 2.8);
+  fullWidth := Floor(ownerW / 2.8);
   space := Floor(fullWidth * 0.3);
   w := fullWidth - (space * 2);
-  y := Floor(Self.Size.Y/6);
+  y := Floor(ownerH / 6);
 
   arr := ['Camera', 'Mouse', 'Chat', 'GameTabs', 'Bank'];
   with antibanGroup do
@@ -2340,6 +2355,13 @@ begin
 
   limitPanel := Self.CreateLimitSettings(Result);
   limitPanel.setAlign(alBottom);
+end;
+
+function TScriptForm.CreateAntibanManager(): TTabSheet; overload;
+begin
+  Self.AddTab('Antiban Manager');
+  Result := Self.Tabs[High(Self.Tabs)];
+  Self.CreateAntibanManager(Result);
 end;
 
 function TScriptForm.CreateConsumableSettings(owner: TControl; consumableType: ERSConsumable; addInfo: Boolean = True): TPanel;
@@ -2938,7 +2960,7 @@ begin
   end;
 end;
 
-function TScriptForm.CreateWaspLibSettings(limits: Boolean = True): TTabSheet;
+function TScriptForm.CreateWaspLibSettings({$H-}limits: Boolean = True): TTabSheet; {$H+}
 var
   riPanel, videoPanel: TPanel;
 begin

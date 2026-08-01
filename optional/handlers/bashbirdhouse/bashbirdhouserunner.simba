@@ -1,0 +1,1417 @@
+{$DEFINE BASH_BIRDHOUSE_RUNNER}
+
+{$IFNDEF WL_OSR}
+  {$I BashLib/osr.simba}
+{$ENDIF}
+{$IFNDEF ANDREW_MUSHTREE_INCLUDED}
+  {$I BashLib/optional/interfaces/mainscreen/mushtree.simba}
+{$ENDIF}
+{$IFNDEF SKUNK_UNIVERSAL_TRANSPORTV2}
+  {$I BashLib/optional/handlers/teleports/transportv2.simba}
+{$ENDIF}
+
+{$I BashLib/optional/handlers/bashbirdhouse/config.simba}
+{$I BashLib/optional/handlers/bashcommon.simba}
+
+{$SCOPEDENUMS ON}
+type
+  EBASHBirdHouseLog = (
+    REGULAR_LOGS, OAK_LOGS, WILLOW_LOGS, TEAK_LOGS, MAPLE_LOGS,
+    MAHOGANY_LOGS, YEW_LOGS, MAGIC_LOGS, REDWOOD_LOGS
+  );
+
+  EBASHBirdHouseState = (
+    DO_NOTHING, NAVIGATING, CLICK_MUSHROOM,
+    USE_MUSHROOM, INTERACT_BIRDHOUSES
+  );
+
+  EBASHBirdHouseSpot = (UNKNOWN, EMPTY_SPACE, NEEDS_RESET, READY_TO_FILL);
+
+  EBASHMushroomLocation = (HILL_HOUSE, VERD_VALLEY, SHROOM_MEADOW);
+
+  TBASHBirdHouse = record
+    BirdhouseObject: TRSObjectV2;
+    IsFilled: Boolean;
+  end;
+
+  TBASHMushroom = record
+    Mushroom: TRSObjectV2;
+    Location: EBASHMushroomLocation;
+  end;
+{$SCOPEDENUMS OFF}
+
+  PBASHBirdHouse = ^TBASHBirdHouse;
+
+  TBASHBirdHouseRunner = record
+    LogType, SuggestedLogType: EBASHBirdHouseLog;
+    Seed: TRSItem;
+    BirdHousesFilled: Int8;
+    TaskInterval: UInt32;
+
+    CurrentBirdHouse: PBASHBirdHouse;
+    CurrentBirdHouseIndex: Int32;
+    HasRunFinished, ShouldTeleport, AlwaysUseBestLog,
+    IsDisabled, TerminateOnNoLogs, Initialized: Boolean;
+
+    Transport: TUniversalTransportV2;
+    ScriptIntervalTimer, NextRunSpewTimer: TCountdown;
+    MushIndex: Int8;
+    RunsCompleted: Int32;
+    NestsLooted: Int32;
+    RunStartXp, TotalXPEarned: UInt64;
+    Mushrooms: array [0..2] of TBASHMushroom;
+    BirdHouses: array [0..3] of TBASHBirdHouse;
+    State: EBASHBirdHouseState;
+  end;
+
+var
+  BASHBirdHouseRunner: TBASHBirdHouseRunner;
+function TBASHMushroom.GetMushButton(): ERSMushTreeLocation;
+begin
+  case Self.Location of
+    EBASHMushroomLocation.HILL_HOUSE: Result := ERSMushTreeLocation.VERDANT_VALLEY;
+    EBASHMushroomLocation.VERD_VALLEY: Result := ERSMushTreeLocation.MUSHROOM_MEADOW;
+    EBASHMushroomLocation.SHROOM_MEADOW: Result := ERSMushTreeLocation.HOUSE_ON_THE_HILL;
+  end;
+end;
+
+function TBASHBirdHouseRunner.GetNewRunInterval(): UInt64;
+begin
+  Result := Round(Random(Self.TaskInterval * 1.043598435, Self.TaskInterval * 1.35));
+end;
+
+function TBASHBirdHouseRunner.MainScreenPercentBlack(): Int32;
+var
+  area, black: Int32;
+begin
+  area := MainScreen.Bounds.Area();
+  if area < 1 then
+    Exit(0);
+
+  black := SRL.CountColor(CTS0(0, 2), MainScreen.Bounds);
+  Result := Round((black * 100) / area);
+end;
+
+function TBASHBirdHouseRunner.GetBirdHouseSpace(): TPointArray;
+const
+  SPACE_COLOR: TCTS2Color := CTS2(3162461, 1, 0.01, 0.01);
+var
+  ATPA: T2DPointArray;
+  msC: TPoint := Mainscreen.Center;
+begin
+  SRL.FindColors(Result, SPACE_COLOR, Mainscreen.Bounds);
+  Result := Result.Grow(3);
+  ATPA := Result.Cluster(10);
+  ATPA := ATPA.SortFrom(msC);
+
+  if ATPA.Len() < 1 then
+    Result := []
+  else
+    Result := ATPA[0];
+end;
+
+function TBASHBirdHouseRunner.GetLogString(log: EBASHBirdHouseLog): String;
+begin
+  case log of
+    EBASHBirdHouseLog.REGULAR_LOGS: Result := 'Logs';
+    EBASHBirdHouseLog.OAK_LOGS: Result := 'Oak logs';
+    EBASHBirdHouseLog.WILLOW_LOGS: Result := 'Willow logs';
+    EBASHBirdHouseLog.TEAK_LOGS: Result := 'Teak logs';
+    EBASHBirdHouseLog.MAPLE_LOGS: Result := 'Maple logs';
+    EBASHBirdHouseLog.MAHOGANY_LOGS: Result := 'Mahogany logs';
+    EBASHBirdHouseLog.YEW_LOGS: Result := 'Yew logs';
+    EBASHBirdHouseLog.MAGIC_LOGS: Result := 'Magic logs';
+    EBASHBirdHouseLog.REDWOOD_LOGS: Result := 'Redwood logs';
+  end;
+end;
+
+function TBASHBirdHouseRunner.GetBirdhouseItem(log: EBASHBirdHouseLog): TRSItem;
+begin
+  case log of
+    EBASHBirdHouseLog.REGULAR_LOGS: Result := 'Bird house';
+    EBASHBirdHouseLog.OAK_LOGS: Result := 'Oak bird house';
+    EBASHBirdHouseLog.WILLOW_LOGS: Result := 'Willow bird house';
+    EBASHBirdHouseLog.TEAK_LOGS: Result := 'Teak bird house';
+    EBASHBirdHouseLog.MAPLE_LOGS: Result := 'Maple bird house';
+    EBASHBirdHouseLog.MAHOGANY_LOGS: Result := 'Mahogany bird house';
+    EBASHBirdHouseLog.YEW_LOGS: Result := 'Yew bird house';
+    EBASHBirdHouseLog.MAGIC_LOGS: Result := 'Magic bird house';
+    EBASHBirdHouseLog.REDWOOD_LOGS: Result := 'Redwood bird house';
+  end;
+end;
+
+function TBASHBirdHouseRunner.GetWithdrawList(): TRSBankItemArray;
+begin
+  Result += TRSBankItem.Setup('Chisel', 1, False);
+  Result += TRSBankItem.Setup('Hammer', 1, False);
+  Result += TRSBankItem.Setup(Self.GetLogString(Self.LogType), 4, False);
+  Result += TRSBankItem.Setup(Self.Seed, 40, False);
+end;
+
+function TBASHBirdHouseRunner.BankHasAll(items: TRSItemArray): Boolean;
+var
+  tempBox: TBox;
+  i: Int32;
+  tempItem: TRSBankItem;
+begin
+  for i := 0 to High(items) do
+  begin
+    tempItem.Item := items[i];
+    if not Bank.FindItem(tempItem, tempBox) then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+function TBASHBirdHouseRunner.HasTools(): Boolean;
+var
+  tools: TRSItemArray;
+  i: Int32;
+begin
+  if Inventory.GetSelectedSlot() <> -1 then
+    Inventory.SetSelectedSlot(-1);
+
+  if not Inventory.ContainsItem(Self.GetBirdhouseItem(Self.LogType)) then
+  begin
+    if not Inventory.ContainsItem(Self.GetLogString(Self.LogType)) then
+    begin
+      WriteLn('[BASHBirdHouse] Missing birdhouse or log');
+      Exit(False);
+    end;
+
+    tools := ['Chisel', 'Hammer'];
+    for i := 0 to High(tools) do
+    begin
+      if not Inventory.ContainsItem(tools[i]) then
+      begin
+        WriteLn('[BASHBirdHouse] Missing item: ' + ToStr(tools[i]));
+        Exit(False);
+      end;
+    end;
+  end;
+
+  Result := Inventory.CountItemStack(Self.Seed) >= 10;
+  if not Result then
+    WriteLn('[BASHBirdHouse] Not enough seeds left to fill a birdhouse');
+end;
+
+procedure TBASHBirdHouseRunner.SetupBirdHouses();
+var
+  i: Int32;
+  pts: TPointArray;
+  commonFinder: TRSObjectFinder;
+  coordinates: array [0..3] of TPoint;
+begin
+  coordinates[0] := Point(10956, 35410);
+  coordinates[1] := Point(10976, 35386);
+  coordinates[2] := Point(10612, 34902);
+  coordinates[3] := Point(10620, 35170);
+
+  commonFinder.ColorClusters += [CTS2(1789275, 5, 0.10, 0.69), CTS2(6201021, 8, 0.03, 1.40), 20];
+  commonFinder.ColorClusters += [CTS2(5074823, 15, 0.05, 0.33), CTS2(8561589, 7, 0.04, 1.08), 20];
+  commonFinder.ColorClusters += [CTS2(2314071, 7, 0.06, 0.42), CTS2(3366502, 7, 0.06, 1.61), 20];
+  commonFinder.ColorClusters += [CTS2(3495271, 9, 0.12, 0.20), CTS2(6848914, 4, 0.31, 0.40), 20];
+  commonFinder.ColorClusters += [CTS2(2378868, 8, 0.14, 0.18), CTS2(2710661, 5, 0.08, 0.36), 20];
+  commonFinder.ColorClusters += [CTS2(1065831, 3, 0.15, 1.31), CTS2(3425125, 4, 0.10, 0.33), 20];
+  commonFinder.ColorClusters += [CTS2(11332, 3, 0.08, 0.01), CTS2(476757, 7, 0.19, 2.44), 20];
+  commonFinder.ColorClusters += [CTS2(7962919, 9, 0.03, 0.29), CTS2(10922399, 14, 0.12, 0.17), 20];
+  commonFinder.ColorClusters += [CTS2(604522, 8, 0.22, 2.05), CTS2(4154261, 6, 0.05, 0.13), 20];
+  commonFinder.ClusterDistance := 10;
+
+  for i := 0 to High(coordinates) do
+  begin
+    pts := [];
+    pts += coordinates[i];
+    Self.BirdHouses[i].BirdhouseObject.SetupEx([0.8, 0.8, 5], pts);
+    Self.BirdHouses[i].BirdhouseObject.SetupUpText(['act', 'irdHouse', 'Space', 'house']);
+    Self.BirdHouses[i].BirdhouseObject.Finder := commonFinder;
+    Self.BirdHouses[i].BirdhouseObject.Finder.Colors += [
+      CTS2(1191511, 8, 0.24, 4.86), CTS2(5266787, 21, 0.06, 0.15)
+    ];
+    Self.BirdHouses[i].BirdhouseObject.Walker := @Map.Walker;
+    Self.BirdHouses[i].IsFilled := False;
+  end;
+end;
+
+procedure TBASHBirdHouseRunner.SetupMushrooms();
+var
+  i: Int32;
+  pts: TPointArray;
+  coordinates: array [0..2] of TPoint;
+  locs: array [0..2] of EBASHMushroomLocation;
+begin
+  coordinates[0] := Point(24017, 34907);
+  coordinates[1] := Point(10938, 35404);
+  coordinates[2] := Point(10602, 34944);
+
+  locs[0] := EBASHMushroomLocation.HILL_HOUSE;
+  locs[1] := EBASHMushroomLocation.VERD_VALLEY;
+  locs[2] := EBASHMushroomLocation.SHROOM_MEADOW;
+
+  for i := 0 to High(coordinates) do
+  begin
+    pts := [];
+    pts += coordinates[i];
+    Self.Mushrooms[i].Location := locs[i];
+    Self.Mushrooms[i].Mushroom.SetupEx([1.3, 1.3, 13], pts);
+    Self.Mushrooms[i].Mushroom.SetupUpText(['Mushtree']);
+    Self.Mushrooms[i].Mushroom.Finder.Colors += CTS2(3233415, 13, 0.19, 0.65);
+    Self.Mushrooms[i].Mushroom.Finder.Colors += CTS2(4339785, 11, 0.18, 0.52);
+    Self.Mushrooms[i].Mushroom.Finder.ColorClusters += [
+      CTS2(3233415, 13, 0.19, 0.65), CTS2(7176299, 39, 0.05, 0.19), 30
+    ];
+    Self.Mushrooms[i].Mushroom.Finder.ColorClusters += [
+      CTS2(3233415, 13, 0.19, 0.65), CTS2(5605773, 38, 0.05, 0.59), 30
+    ];
+    Self.Mushrooms[i].Mushroom.Walker := @Map.Walker;
+  end;
+
+  if Length(MushTree.Mushrooms.Coordinates) > 0 then
+    MushTree.Mushrooms.Coordinates[0] := coordinates[0];
+end;
+
+function TBASHBirdHouseRunner.GetHouseOnHillRegion(): TBox;
+begin
+  Result := Box(23850, 34750, 24200, 35100);
+end;
+
+function TBASHBirdHouseRunner.IsOnFossilIsland(): Boolean;
+var
+  pos: TPoint;
+begin
+  pos := Map.Position();
+  Result := pos.InBox(Box(9800, 34750, 12000, 35650))
+    or pos.InBox(Self.GetHouseOnHillRegion())
+    or (Map.Region.Plane = 1);
+end;
+
+function TBASHBirdHouseRunner.GetNearestUnfilledBirdHouse(myPos: TPoint; out bestIndex: Int32): Boolean;
+var
+  dist, bestDist: Int32;
+  i: Int8;
+begin
+  bestDist := 99999;
+  bestIndex := -1;
+  Result := False;
+
+  for i := 0 to High(Self.BirdHouses) do
+  begin
+    if Self.BirdHouses[i].IsFilled then
+      Continue;
+
+    dist := Distance(Self.BirdHouses[i].BirdhouseObject.Coordinates[0], myPos);
+    if dist < bestDist then
+    begin
+      bestDist := dist;
+      bestIndex := i;
+      Result := True;
+    end;
+  end;
+end;
+
+procedure TBASHBirdHouseRunner.EnsureChunks();
+begin
+  if Map.IsSetup then
+    Map.AddChunk(ERSChunk.FOSSIL_ISLAND)
+  else
+    Map.SetupChunk(ERSChunk.FOSSIL_ISLAND);
+
+  Map.Walker.AdaptiveWalk := True;
+  MushTree.Mushrooms.Walker := @Map.Walker;
+end;
+
+procedure TBASHBirdHouseRunner.Init();
+begin
+  if Self.IsDisabled then
+    Exit;
+
+  if Self.Initialized then
+    Exit;
+
+  Self.SetupMushrooms();
+  Self.MushIndex := 0;
+  Self.ShouldTeleport := True;
+  Self.SetupBirdHouses();
+  Self.Initialized := True;
+
+  Self.Seed := ToStr(Self.Seed).Replace('Barely', 'Barley', [rfIgnoreCase]);
+  if not ToStr(Self.Seed).Contains('seed') then
+    Self.Seed := ToStr(Self.Seed).Before(' ') + ' seed';
+
+  Self.NestsLooted := 0;
+
+  if Self.ScriptIntervalTimer.Length < 100 then
+  begin
+    Self.ScriptIntervalTimer.Init(Self.GetNewRunInterval());
+  end;
+end;
+
+procedure TBASHBirdHouseRunner.ApplyConfig(cfg: TBASHBirdHouseConfig);
+begin
+  Self.LogType := EBASHBirdHouseLog(cfg.LogTypeIdx);
+  Self.Seed := cfg.Seed();
+  Self.AlwaysUseBestLog := cfg.UseBestLog;
+  if cfg.RunNow then
+  begin
+    Self.TaskInterval := 0;
+    Self.ScriptIntervalTimer.Init(0);
+  end
+  else
+  begin
+    Self.TaskInterval := 51 * ONE_MINUTE;
+    Self.ScriptIntervalTimer.Init(Self.GetNewRunInterval());
+  end;
+end;
+
+function TBASHBirdHouseRunner.ConfirmUptext(textToCheck: TStringArray): Boolean;
+const
+  TEXT_COLOR: TCTS0Color := CTS0(14014992, 20);
+var
+  tpa: TPointArray;
+begin
+  Result := Mainscreen.IsUpText(textToCheck)
+    and (SRL.FindColors(tpa, TEXT_COLOR, MainScreen.UpTextArea) > 0);
+end;
+
+function TBASHBirdHouseRunner.ClassifyBirdHouseUpText(upText: String): EBASHBirdHouseSpot;
+var
+  t: String;
+begin
+  t := LowerCase(upText);
+
+  if t.Contains('build') or t.Contains('space') then
+    Exit(EBASHBirdHouseSpot.EMPTY_SPACE);
+
+  if t.Contains('empty') or t.Contains('seeds') then
+    Exit(EBASHBirdHouseSpot.READY_TO_FILL);
+
+  if t.Contains('interact') or t.Contains('bird house') or t.Contains('birdhouse') then
+    Exit(EBASHBirdHouseSpot.NEEDS_RESET);
+
+  Result := EBASHBirdHouseSpot.UNKNOWN;
+end;
+
+function TBASHBirdHouseRunner.HoverBirdHouseSpot(out upText: String; timeoutMs: Int32 = 5000): Boolean;
+var
+  birdhouseATPA: T2DPointArray;
+  spaceTPA: TPointArray;
+  timeout: TCountDown;
+begin
+  upText := '';
+  timeout.Init(timeoutMs);
+
+  while not timeout.IsFinished() do
+  begin
+    birdhouseATPA := Self.CurrentBirdHouse^.BirdhouseObject.FindOnMainScreen(
+      Self.CurrentBirdHouse^.BirdhouseObject.GetCuboidArray()
+    );
+
+    if birdhouseATPA.Len() > 0 then
+    begin
+      birdhouseATPA := birdhouseATPA.SortFrom(MainScreen.Center);
+      Mouse.Move(birdhouseATPA[0].RandomValue());
+    end
+    else
+    begin
+      spaceTPA := Self.GetBirdHouseSpace();
+      if spaceTPA.Len() < 1 then
+      begin
+        Antiban.RandomRotate();
+        Continue;
+      end;
+      Mouse.Move(spaceTPA.RandomValue());
+    end;
+
+    upText := MainScreen.GetUpText();
+    if (upText <> '') and (Self.ClassifyBirdHouseUpText(upText) <> EBASHBirdHouseSpot.UNKNOWN) then
+      Exit(True);
+
+    Antiban.RandomRotate();
+  end;
+end;
+
+function TBASHBirdHouseRunner.WalkCloserToBirdHouse(): Boolean;
+begin
+  WriteLn('[BASHBirdHouse] Walking to birdhouse #' + ToStr(Self.CurrentBirdHouseIndex + 1));
+  if not WaitUntil(Map.Walker.WalkBlind(Self.CurrentBirdHouse^.BirdhouseObject.Coordinates[0], 12), 65, 5000) then
+    Exit(False);
+
+  Result := True;
+end;
+
+function TBASHBirdHouseRunner.DismantleBirdhouse(out shouldSkip: Boolean; alreadyThere: Boolean = False): Boolean;
+var
+  birdhouseATPA: T2DPointArray;
+  dismantleTimeout, outcomeTimeout: TCountDown;
+  logItem: String;
+  birdHouseItem: TRSItem;
+  logsBefore, roll: Int32;
+  alreadyWillLose, gotXP, gotWillLose, sawBirdHouse: Boolean;
+  upText: String;
+  spot: EBASHBirdHouseSpot;
+begin
+  shouldSkip := False;
+
+  if not alreadyThere then
+  begin
+    if not WaitUntil(Map.Walker.WalkBlind(Self.CurrentBirdHouse^.BirdhouseObject.Coordinates[0], 20), 65, 5000) then
+      Exit;
+
+  end;
+
+  logItem := Self.GetLogString(Self.LogType);
+  birdHouseItem := Self.GetBirdhouseItem(Self.LogType);
+
+  dismantleTimeout.Init(18000);
+
+  while not dismantleTimeout.IsFinished() do
+  begin
+    birdhouseATPA := Self.CurrentBirdHouse^.BirdhouseObject.FindOnMainScreen(
+      Self.CurrentBirdHouse^.BirdhouseObject.GetCuboidArray()
+    );
+
+    if birdhouseATPA.Len() < 1 then
+    begin
+      Antiban.RandomRotate();
+      WriteLn('[BASHBirdHouse] Failed to find bird house, rotating');
+      Continue;
+    end;
+
+    birdhouseATPA := birdhouseATPA.SortFrom(MainScreen.Center);
+    Mouse.Move(birdhouseATPA[0].RandomValue());
+    upText := MainScreen.GetUpText();
+    spot := Self.ClassifyBirdHouseUpText(upText);
+
+    if spot = EBASHBirdHouseSpot.READY_TO_FILL then
+    begin
+      Exit(True);
+    end;
+
+    if not Self.ConfirmUptext(['nteract']) then
+    begin
+      Antiban.RandomRotate();
+      Continue;
+    end;
+
+    Mouse.Click(MOUSE_RIGHT);
+    WriteLn('[BASHBirdHouse] Resetting birdhouse');
+
+    if not WaitUntil(ChooseOption.IsOpen, 65, 1200) then
+      Continue;
+
+    logsBefore := Inventory.CountItemStack(logItem);
+
+    if not ChooseOption.Select(['eset'], MOUSE_LEFT, False, True) then
+      Continue;
+
+    gotXP := False;
+    gotWillLose := False;
+    alreadyWillLose := Chat.GetChatTitle().Contains('will lose');
+    outcomeTimeout.Init(8000);
+
+    while not outcomeTimeout.IsFinished() do
+    begin
+      if XPBar.EarnedXP() then
+        gotXP := True;
+      if (not alreadyWillLose) and Chat.GetChatTitle().Contains('will lose') then
+        gotWillLose := True;
+
+      if gotXP or gotWillLose then
+        Break;
+
+      Wait(65);
+    end;
+
+    if (not gotXP) and alreadyWillLose and Chat.GetChatTitle().Contains('will lose') then
+      gotWillLose := True;
+
+    if gotWillLose and (not gotXP) then
+    begin
+
+      roll := Random(100);
+      if (Self.BirdHousesFilled >= 3) or (roll >= 70) then
+      begin
+        if SRL.Dice(50) then
+          Chat.ClickOption('leave it be', 0, [CHAT_COLOR_BLACK])
+        else
+          PressKey(VK_ESCAPE);
+
+        WaitUntil(not Chat.GetChatTitle().Contains('will lose'), 65, 2000);
+      end;
+
+      shouldSkip := True;
+      Exit(False);
+    end;
+
+    if not gotXP then
+      Continue;
+
+    sawBirdHouse := False;
+    outcomeTimeout.Init(10000);
+
+    while not outcomeTimeout.IsFinished() do
+    begin
+      if Inventory.ContainsItem(birdHouseItem) then
+        sawBirdHouse := True;
+
+      if Inventory.CountItemStack(logItem) < logsBefore then
+      begin
+        if Inventory.ContainsItem(birdHouseItem) then
+          WaitUntil(not Inventory.ContainsItem(birdHouseItem), 50, 3000);
+
+        Exit(True);
+      end;
+
+      if sawBirdHouse and (not Inventory.ContainsItem(birdHouseItem)) then
+      begin
+        Exit(True);
+      end;
+
+      Wait(65);
+    end;
+
+    WriteLn('[BASHBirdHouse] Birdhouse was not crafted after reset');
+  end;
+end;
+
+function TBASHBirdHouseRunner.InteractWithBirdHouseSpace(): Boolean;
+var
+  birdhouseATPA: T2DPointArray;
+  birdHouseSpaceTPA: TPointArray;
+  BirdSpaceTimeout: TCountDown;
+begin
+
+  BirdSpaceTimeout.Init(4000);
+  while not BirdSpaceTimeout.IsFinished() do
+  begin
+    birdHouseSpaceTPA := Self.GetBirdHouseSpace();
+
+    if birdHouseSpaceTPA.Len() < 1 then
+    begin
+      Antiban.RandomRotate();
+      Continue;
+    end;
+
+    Mouse.Move(birdHouseSpaceTPA.RandomValue());
+
+    if not Mainscreen.IsUpText(['uild', 'pace']) then
+    begin
+      Antiban.RandomRotate();
+      Continue;
+    end;
+
+    Mouse.Click(MOUSE_LEFT);
+
+    if WaitUntil(not Inventory.ContainsItem(Self.GetBirdhouseItem(Self.LogType)), 200, 2300) then
+    begin
+      BirdSpaceTimeout.Pause();
+      Break;
+    end;
+  end;
+
+  if BirdSpaceTimeout.IsFinished() then
+    Exit(False);
+
+  if WaitUntil(
+    (not Minimap.IsPlayerMoving())
+    and ((Mainscreen.IsUpText(['eeds', 'mpty']))
+      or Self.CurrentBirdHouse^.BirdhouseObject.Find(birdhouseATPA)),
+    75, 8000
+  ) then
+    Result := True;
+end;
+
+function TBASHBirdHouseRunner.FillBirdHouse(): Boolean;
+var
+  birdhouseATPA: T2DPointArray;
+  seedSlot, seedCount, attempt: Int32;
+  timeout: TCountdown;
+begin
+  if not Inventory.FindItem(Self.Seed, seedSlot) then
+  begin
+    WriteLn('[BASHBirdHouse] No seeds left, ending run');
+    Self.HasRunFinished := True;
+    Self.Reset();
+    Exit(False);
+  end;
+
+  seedCount := Inventory.CountItemStack(Self.Seed);
+
+  for attempt := 1 to 4 do
+  begin
+    if Inventory.IsSlotSelected(seedSlot) then
+      Break;
+    Inventory.SetSelectedSlot(-1);
+    Inventory.SetSelectedSlot(seedSlot);
+  end;
+
+  if not Inventory.IsSlotSelected(seedSlot) then
+  begin
+    WriteLn('[BASHBirdHouse] Could not select seeds');
+    Exit(False);
+  end;
+
+  timeout.Init(6500);
+  WriteLn('[BASHBirdHouse] Attempting to fill birdhouse');
+  while not timeout.IsFinished() do
+  begin
+    birdhouseATPA := Self.CurrentBirdHouse^.BirdhouseObject.FindOnMainScreen(
+      Self.CurrentBirdHouse^.BirdhouseObject.GetCuboidArray()
+    );
+
+    if birdhouseATPA.Len() < 1 then
+    begin
+      Antiban.RandomRotate();
+      Continue;
+    end;
+
+    birdhouseATPA := birdhouseATPA.SortFrom(Mainscreen.Center);
+    Mouse.Move(birdhouseATPA[0].RandomValue());
+
+    if Self.ConfirmUptext(['mpty']) then
+    begin
+      timeout.Pause();
+      Mouse.Click(MOUSE_LEFT);
+      Break;
+    end;
+
+    Antiban.RandomRotate();
+  end;
+
+  if timeout.IsFinished() then
+  begin
+    WriteLn('[BASHBirdHouse] Timed out on filling, skipping birdhouse #' + ToStr(Self.CurrentBirdHouseIndex + 1));
+    Self.MarkBirdHouseDone(Self.CurrentBirdHouseIndex);
+    Exit;
+  end;
+
+  Result := WaitUntil(seedCount > Inventory.CountItemStack(Self.Seed), 65, 6000);
+end;
+
+function TBASHBirdHouseRunner.BuildBirdHouseItem(): Boolean;
+var
+  birdHouseItem: TRSItem;
+begin
+  birdHouseItem := Self.GetBirdhouseItem(Self.LogType);
+
+  if (not Inventory.ContainsItem('Clockwork'))
+  and (not Inventory.ContainsItem(birdHouseItem)) then
+  begin
+    WriteLn('[BASHBirdHouse] No clockwork or birdhouse in inventory, we can''t continue!');
+    WriteLn('[BASHBirdHouse] Ending run!');
+    Self.BirdHousesFilled := 4;
+    Exit(False);
+  end;
+
+  Result := Inventory.ContainsItem(birdHouseItem);
+  if Result then
+    Exit;
+
+  WriteLn('[BASHBirdHouse] No birdhouse in inventory, making one');
+
+  if not Inventory.Use('Chisel', Self.GetLogString(Self.LogType)) then
+  begin
+    WriteLn('[BASHBirdHouse] Failed to use chisel');
+    Exit;
+  end;
+
+  if WaitUntil(Make.IsOpen(), 65, 1200) then
+  begin
+    if not Make.Select(ToStr(birdHouseItem), Make.QUANTITY_ALL, Antiban.BioDice()) then
+    begin
+      WriteLn('[BASHBirdHouse] Failed to make birdHouse');
+      Exit;
+    end;
+  end;
+
+  if not WaitUntil(Inventory.ContainsItem(birdHouseItem), 65, 3000) then
+  begin
+    WriteLn('[BASHBirdHouse] Inventory has no birdHouse');
+    Exit;
+  end;
+
+  Result := True;
+end;
+
+function TBASHBirdHouseRunner.MarkBirdHouseDone(index: Int32): Boolean;
+begin
+  if (index < 0) or (index > High(Self.BirdHouses)) then
+    Exit(False);
+  if Self.BirdHouses[index].IsFilled then
+    Exit(True);
+
+  Self.BirdHouses[index].IsFilled := True;
+  Self.BirdHousesFilled += 1;
+  Result := True;
+end;
+
+function TBASHBirdHouseRunner.HandleBirdHouse(): Boolean;
+var
+  shouldSkip, placed: Boolean;
+  upText: String;
+  spot: EBASHBirdHouseSpot;
+begin
+  if not Self.HoverBirdHouseSpot(upText, 2500) then
+  begin
+    WriteLn('[BASHBirdHouse] Could not see birdhouse #' + ToStr(Self.CurrentBirdHouseIndex + 1) + ' from here, walking closer');
+    if not Self.WalkCloserToBirdHouse() then
+      Exit;
+    if not Self.HoverBirdHouseSpot(upText, 5000) then
+    begin
+      WriteLn('[BASHBirdHouse] Could not read birdhouse uptext');
+      Exit;
+    end;
+  end;
+
+  spot := Self.ClassifyBirdHouseUpText(upText);
+
+  case spot of
+    EBASHBirdHouseSpot.NEEDS_RESET:
+      begin
+        placed := Self.DismantleBirdhouse(shouldSkip, True);
+        if (not placed) and (not shouldSkip) then
+        begin
+          if Self.WalkCloserToBirdHouse() then
+            placed := Self.DismantleBirdhouse(shouldSkip, True);
+        end;
+
+        if shouldSkip then
+        begin
+          WriteLn('[BASHBirdHouse] Too early for birdhouse #' + ToStr(Self.CurrentBirdHouseIndex + 1) + ', skipping.');
+          Self.MarkBirdHouseDone(Self.CurrentBirdHouseIndex);
+          Exit;
+        end;
+        if not placed then
+          Exit;
+      end;
+
+    EBASHBirdHouseSpot.EMPTY_SPACE:
+      begin
+        if not Inventory.ContainsItem(Self.GetBirdhouseItem(Self.LogType)) then
+          Self.BuildBirdHouseItem();
+
+        if not Self.InteractWithBirdHouseSpace() then
+        begin
+          if not Self.WalkCloserToBirdHouse() then
+            Exit;
+          if not Self.InteractWithBirdHouseSpace() then
+            Exit;
+        end;
+        WriteLn('[BASHBirdHouse] Built birdhouse #' + ToStr(Self.CurrentBirdHouseIndex + 1));
+      end;
+
+    EBASHBirdHouseSpot.READY_TO_FILL:
+      WriteLn('[BASHBirdHouse] Birdhouse ready for seeds, filling');
+
+    EBASHBirdHouseSpot.UNKNOWN:
+      begin
+        WriteLn('[BASHBirdHouse] Unknown birdhouse uptext, trying space then fill');
+        if not Self.InteractWithBirdHouseSpace() then
+        begin
+          if not Self.WalkCloserToBirdHouse() then
+            Exit;
+          if not Self.InteractWithBirdHouseSpace() then
+            Exit;
+        end;
+      end;
+  end;
+
+  if Self.FillBirdHouse() then
+  begin
+    WriteLn('[BASHBirdHouse] Filled birdhouse #' + ToStr(Self.CurrentBirdHouseIndex + 1));
+    Self.MarkBirdHouseDone(Self.CurrentBirdHouseIndex);
+    Exit(True);
+  end;
+
+  if Self.BirdHouses[Self.CurrentBirdHouseIndex].IsFilled then
+    Exit(True);
+
+  if Self.WalkCloserToBirdHouse() and Self.FillBirdHouse() then
+  begin
+    WriteLn('[BASHBirdHouse] Filled birdhouse #' + ToStr(Self.CurrentBirdHouseIndex + 1));
+    Self.MarkBirdHouseDone(Self.CurrentBirdHouseIndex);
+    Result := True;
+  end;
+end;
+
+procedure TBASHBirdHouseRunner.Reset();
+var
+  i: Int32;
+begin
+  Self.MushIndex := 0;
+  Self.BirdHousesFilled := 0;
+  Self.CurrentBirdHouse := nil;
+  Self.CurrentBirdHouseIndex := -1;
+  Self.ShouldTeleport := True;
+
+  for i := 0 to High(Self.BirdHouses) do
+    Self.BirdHouses[i].IsFilled := False;
+end;
+
+function TBASHBirdHouseRunner.GetState(): EBASHBirdHouseState;
+var
+  myPos: TPoint;
+  bestBHIndex: Int32;
+begin
+  myPos := Map.Position();
+  bestBHIndex := -1;
+
+  if Self.HasRunFinished then
+    Exit(EBASHBirdHouseState.DO_NOTHING);
+
+  if Self.BirdHousesFilled >= 4 then
+  begin
+    WriteLn('[BASHBirdHouse] Run finished');
+    Inc(Self.RunsCompleted);
+    Self.TotalXPEarned += XPBar.Read() - Self.RunStartXp;
+    Self.NestsLooted += Inventory.CountItem('Bird nest');
+    if WaitUntil(Chat.HasContinue(), 65, 1400) then
+      Chat.ClickContinue(True);
+
+    Self.HasRunFinished := True;
+    Self.Reset();
+    Exit(EBASHBirdHouseState.DO_NOTHING);
+  end;
+
+  if not Self.HasTools() then
+  begin
+    Self.HasRunFinished := True;
+    Self.Reset();
+    WriteLn('[BASHBirdHouse] Ending run: Missing some tools');
+    Exit(EBASHBirdHouseState.DO_NOTHING);
+  end;
+
+  if Self.GetNearestUnfilledBirdHouse(myPos, bestBHIndex) and (bestBHIndex > -1) then
+  begin
+    Self.CurrentBirdHouseIndex := bestBHIndex;
+    Self.CurrentBirdHouse := @Self.BirdHouses[bestBHIndex];
+
+    if myPos.DistanceTo(Self.CurrentBirdHouse^.BirdhouseObject.Coordinates[0]) < 100 then
+    begin
+      Self.ShouldTeleport := False;
+      Exit(EBASHBirdHouseState.INTERACT_BIRDHOUSES);
+    end;
+
+    Self.ShouldTeleport := True;
+  end;
+
+  if Self.MushIndex = High(Self.Mushrooms) then
+    Exit(EBASHBirdHouseState.NAVIGATING);
+
+  if Self.ShouldTeleport then
+  begin
+    if Self.MushIndex < High(Self.Mushrooms) then
+    begin
+      Self.CurrentBirdHouse := nil;
+
+      if MushTree.IsOpen() then
+        Exit(EBASHBirdHouseState.USE_MUSHROOM);
+
+      Exit(EBASHBirdHouseState.CLICK_MUSHROOM);
+    end;
+  end;
+end;
+
+function TBASHBirdHouseRunner.WalkToMushroom(index: Int32 = -1): Boolean;
+var
+  indexToUse: Int32;
+begin
+  if index = -1 then
+    indexToUse := Self.MushIndex
+  else
+    indexToUse := index;
+
+  if not Self.Mushrooms[indexToUse].Mushroom.WalkClick() then
+    WriteLn('[BASHBirdHouse] Failed to get to mushroom')
+  else
+    Result := WaitUntil(MushTree.IsOpen(), 65, 5000);
+end;
+
+function TBASHBirdHouseRunner.HandleMushroomTeleport(index: Int32 = -1): Boolean;
+var
+  indexToUse: Int32;
+begin
+  if not MushTree.IsOpen() then
+    Exit;
+
+  if index = -1 then
+    indexToUse := Self.MushIndex
+  else
+    indexToUse := index;
+
+  WriteLn('[BASHBirdHouse] Teleporting via mushroom');
+  MushTree.ClickButton(Self.Mushrooms[indexToUse].GetMushButton());
+
+  WaitUntil(Minimap.PercentBlack() >= 50, 35, 3000);
+
+  if not WaitUntil(Minimap.PercentBlack() < 5, 35, 6000) then
+    Exit;
+
+  WaitUntil(Self.MainScreenPercentBlack() < 15, 35, 6000);
+
+  Wait(Random(1000, 2000));
+
+  Result := True;
+  if index = -1 then
+    Self.MushIndex := Min(Self.MushIndex + 1, High(Self.Mushrooms));
+
+end;
+
+function TBASHBirdHouseRunner.HandleCave(): Boolean;
+const
+  CAVE_FLOOR_COL: TCTS2Color := CTS2(4474118, 3, 0.30, 5.83);
+  ROPE_COL: TCTS2Color := CTS2(6717077, 11, 0.09, 0.47);
+var
+  tpa: TPointArray;
+  ropeClicked: Boolean;
+  i: Int32;
+begin
+  if SRL.FindColors(tpa, CAVE_FLOOR_COL, Mainscreen.Bounds) < 1000 then
+  begin
+    WriteLn('[BASHBirdHouse] Not in cave');
+    Exit(True);
+  end;
+
+  ropeClicked := False;
+  for i := 0 to 5 do
+  begin
+    if SRL.FindColors(tpa, ROPE_COL, Mainscreen.Bounds) < 1 then
+    begin
+      Antiban.RandomRotate();
+      Continue;
+    end;
+
+    tpa := tpa.Cluster(5).Biggest();
+    Mouse.Move(tpa);
+    if not Mainscreen.IsUpText(['up', 'xit']) then
+    begin
+      Antiban.RandomRotate();
+      Continue;
+    end;
+
+    Mouse.Click(MOUSE_LEFT);
+    if Mainscreen.DidRedClick(300) then
+    begin
+      ropeClicked := True;
+      Break;
+    end;
+  end;
+
+  if not ropeClicked then
+    Exit(False);
+
+  Result := WaitUntil(SRL.CountColor(CAVE_FLOOR_COL, Mainscreen.Bounds) < 1000, Random(250, 600), 10000);
+end;
+
+function TBASHBirdHouseRunner.HandleNavigating(): Boolean;
+begin
+  Map.Walker.ScreenWalk := False;
+  Map.Walker.AdaptiveWalk := False;
+
+  try
+    if not Map.Walker.WebWalk(Self.CurrentBirdHouse^.BirdhouseObject.Coordinates[0], 10) then
+    begin
+      WriteLn('[BASHBirdHouse] We may have entered the cave. Trying to handle it...');
+      if not Self.HandleCave() then
+      begin
+        WriteLn('[BASHBirdHouse] Couldn''t recover. Terminating.');
+        TerminateScript();
+      end
+      else
+        WriteLn('[BASHBirdHouse] Recovered!');
+    end;
+  except
+    begin
+      WriteLn('[BASHBirdHouse] Web walker caused an exception, may have entered the cave. Trying to handle it...');
+      if not Self.HandleCave() then
+      begin
+        WriteLn('[BASHBirdHouse] Couldn''t recover. Terminating.');
+        TerminateScript();
+      end
+      else
+        WriteLn('[BASHBirdHouse] Recovered!');
+    end;
+  end;
+
+  Map.Walker.ScreenWalk := True;
+  Map.Walker.AdaptiveWalk := True;
+  Result := True;
+end;
+
+function TBASHBirdHouseRunner.GetLogForHunterLevel(level: Int32): EBASHBirdHouseLog;
+var
+  craftLevel: Int32;
+begin
+  craftLevel := Stats.GetLevel(ERSSkill.CRAFTING, False);
+
+  if (level >= 89) and (craftLevel >= 90) then
+    Result := EBASHBirdHouseLog.REDWOOD_LOGS
+  else if (level >= 74) and (craftLevel >= 75) then
+    Result := EBASHBirdHouseLog.MAGIC_LOGS
+  else if (level >= 59) and (craftLevel >= 60) then
+    Result := EBASHBirdHouseLog.YEW_LOGS
+  else if (level >= 49) and (craftLevel >= 50) then
+    Result := EBASHBirdHouseLog.MAHOGANY_LOGS
+  else if (level >= 44) and (craftLevel >= 45) then
+    Result := EBASHBirdHouseLog.MAPLE_LOGS
+  else if (level >= 34) and (craftLevel >= 35) then
+    Result := EBASHBirdHouseLog.TEAK_LOGS
+  else if (level >= 24) and (craftLevel >= 25) then
+    Result := EBASHBirdHouseLog.WILLOW_LOGS
+  else if (level >= 14) and (craftLevel >= 15) then
+    Result := EBASHBirdHouseLog.OAK_LOGS
+  else
+    Result := EBASHBirdHouseLog.REGULAR_LOGS;
+end;
+
+function TBASHBirdHouseRunner.GetNextBestLogInBank(currLog: EBASHBirdHouseLog; out nextLog: EBASHBirdHouseLog): Boolean;
+var
+  i: Int32;
+  tempBox: TBox;
+  foundBankItem: TRSBankItem;
+begin
+  nextLog := Self.LogType;
+  if not Bank.IsOpen() then
+    Exit(True);
+
+  for i := Ord(currLog) downto 0 do
+  begin
+    foundBankItem.Item := Self.GetLogString(EBASHBirdHouseLog(i));
+    if Bank.FindItem(foundBankItem, tempBox) then
+    begin
+      nextLog := EBASHBirdHouseLog(i);
+      Exit(True);
+    end;
+  end;
+
+  WriteLn('[BASHBirdHouse] Couldn''t find any logs in the bank');
+  Result := False;
+end;
+
+function TBASHBirdHouseRunner.WalkToIslandBank(): Boolean;
+begin
+  if Self.AlwaysUseBestLog then
+    Self.SuggestedLogType := Self.GetLogForHunterLevel(Stats.GetLevel(ERSSkill.HUNTER, False));
+
+  Result := Banks.WalkOpen();
+end;
+
+function TBASHBirdHouseRunner.OnStart(): Boolean;
+begin
+  Result := True;
+end;
+
+procedure TBASHBirdHouseRunner.OnComplete();
+begin
+end;
+
+function TBASHBirdHouseRunner.HasAllItemsForRun(): Boolean;
+var
+  tools: TRSBankItemArray;
+  i: Int32;
+  itemStr: String;
+begin
+  tools := Self.GetWithdrawList();
+
+  for i := 0 to High(tools) do
+  begin
+    itemStr := ToStr(tools[i].Item);
+    if itemStr.Contains('seed') then
+    begin
+      if Inventory.CountItemStack(tools[i].Item) < 40 then
+      begin
+        WriteLn('[BASHBirdHouse] Cannot do run, missing some seeds');
+        Exit(False);
+      end;
+    end
+    else
+    begin
+      if Inventory.CountItem(tools[i].Item) < tools[i].Quantity then
+      begin
+        WriteLn('[BASHBirdHouse] Cannot do run, not enough of item: ' + itemStr);
+        Exit(False);
+      end;
+    end;
+  end;
+
+  Result := True;
+end;
+
+function TBASHBirdHouseRunner.TeleportToIsland(): Boolean;
+begin
+  Result := Self.Transport.Run(RSTeleportsV2.FOSSIL_ISLAND, False, False, Map);
+  if not Result then
+    WriteLn('[BASHBirdHouse] Could not teleport');
+end;
+
+function TBASHBirdHouseRunner.GetReportStrings(): TStringArray;
+const
+  spacingStart: String = '[';
+  spacingEnd: String = '|]';
+var
+  listOfStrings: TStringArray;
+  i: Int32;
+begin
+  listOfStrings += spacingStart + '=================================' + spacingEnd;
+  listOfStrings += 'BASH Birdhouse Runner';
+  listOfStrings += listOfStrings[0];
+  listOfStrings += 'Next run in ' + SRL.MsToTime(Self.ScriptIntervalTimer.TimeRemaining(), TTimeFormat.Time_Short);
+  listOfStrings += 'Runs Completed: ' + ToStr(Self.RunsCompleted);
+  listOfStrings += 'XP Earned: ' + ToStr(Self.TotalXPEarned);
+  listOfStrings += 'Nests Looted: ' + ToStr(Self.NestsLooted);
+  listOfStrings += listOfStrings[0];
+
+  Result += listOfStrings[0];
+  Result += spacingStart + PadL(' ', 3, ' ') + PadR(listOfStrings[1], 30, ' ') + spacingEnd;
+  Result += listOfStrings[2];
+
+  for i := 3 to High(listOfStrings) - 1 do
+    Result += spacingStart + PadL(' ', 3, ' ') + PadR(listOfStrings[i], 30, ' ') + spacingEnd;
+
+  Result += listOfStrings[High(listOfStrings)];
+end;
+
+procedure TBASHBirdHouseRunner.DisplayReport();
+var
+  report: TStringArray;
+  i: Int32;
+begin
+  report := Self.GetReportStrings();
+  for i := 0 to High(report) do
+    WriteLn(report[i]);
+end;
+
+procedure TBASHBirdHouseRunner.PrintReport();
+begin
+  Self.DisplayReport();
+end;
+
+procedure TBASHBirdHouseRunner.BirdhouseRun();
+begin
+  if not Self.Initialized then
+    Self.Init();
+
+  Self.EnsureChunks();
+
+  BASHEnsureRunZoom(5, 25);
+
+  if not Self.OnStart() then
+    Exit;
+
+  if (not Self.IsOnFossilIsland())
+  and (not Self.TeleportToIsland()) then
+  begin
+    WriteLn('[BASHBirdHouse] Could not reach Fossil Island');
+    Exit;
+  end;
+
+  Self.RunStartXp := XPBar.Read();
+
+  while not Self.HasRunFinished do
+  begin
+    if not RSClient.IsLoggedIn() then
+    begin
+      if not Login.LoginPlayer() then
+      begin
+        WriteLn('[BASHBirdHouse] Could not log in, aborting run attempt');
+        Exit;
+      end;
+    end;
+
+    Self.State := Self.GetState();
+
+    case Self.State of
+      EBASHBirdHouseState.INTERACT_BIRDHOUSES: Self.HandleBirdHouse();
+      EBASHBirdHouseState.CLICK_MUSHROOM: Self.WalkToMushroom();
+      EBASHBirdHouseState.USE_MUSHROOM: Self.HandleMushroomTeleport();
+      EBASHBirdHouseState.DO_NOTHING: ;
+      EBASHBirdHouseState.NAVIGATING: Self.HandleNavigating();
+    end;
+  end;
+
+  Self.OnComplete();
+  Self.HasRunFinished := False;
+end;
+
+function TBASHBirdHouseRunner.CanDoBirdHouseRun(): Boolean;
+begin
+  if Self.IsDisabled then
+    Exit(False);
+
+  if not Self.ScriptIntervalTimer.IsFinished() then
+  begin
+    if (Self.NextRunSpewTimer.TimeRemaining = 0)
+    or Self.NextRunSpewTimer.IsFinished() then
+    begin
+      Self.NextRunSpewTimer.Init(5 * ONE_MINUTE);
+      WriteLn('[BASHBirdHouse] Next birdhouse run in ' + SRL.MsToTime(Self.ScriptIntervalTimer.TimeRemaining(), TTimeFormat.Time_Short));
+    end;
+    Exit(False);
+  end;
+
+  Result := True;
+end;
+
+procedure TBASHBirdHouseRunner.DoBirdHouseRun();
+begin
+  if not Self.CanDoBirdHouseRun() then
+    Exit;
+
+  Self.BirdhouseRun();
+
+  if Self.TaskInterval < (50 * ONE_MINUTE) then
+    Self.TaskInterval := 50 * ONE_MINUTE;
+
+  Self.ScriptIntervalTimer.Init(Self.GetNewRunInterval());
+  Self.PrintReport();
+end;
+
+procedure TBASHBirdHouseRunner.ShuffleWithdrawSteps(var steps: TIntegerArray);
+var
+  i, j, tmp: Int32;
+begin
+  for i := High(steps) downto 1 do
+  begin
+    j := Random(i + 1);
+    tmp := steps[i];
+    steps[i] := steps[j];
+    steps[j] := tmp;
+  end;
+end;
+
+function TBASHBirdHouseRunner.WithdrawDigsitePendant(): Boolean;
+var
+  chargedVariants: TRSItemArray;
+  chargedJewellery: TRSItem;
+  bankItem: TRSBankItem;
+begin
+  chargedVariants := getChargedJewelleryNames(RSTeleportsV2.FOSSIL_ISLAND.item);
+  for chargedJewellery in chargedVariants do
+  begin
+    if Inventory.ContainsItem(chargedJewellery) then
+      Exit(True);
+
+    WriteLn('[BASHBirdHouse] Withdrawing ' + ToStr(chargedJewellery));
+    bankItem := TRSBankItem.Setup(chargedJewellery, 1, False);
+    if Bank.WithdrawItem(bankItem, False)
+    and WaitUntil(Inventory.ContainsItem(chargedJewellery), 65, 2200) then
+      Exit(True);
+  end;
+
+  WriteLn('[BASHBirdHouse] Could not get digsite pendant');
+end;
+
+function TBASHBirdHouseRunner.WithdrawBankItem(bankItem: TRSBankItem): Boolean;
+var
+  itemName: String;
+  itemNumNeeded: Int32;
+begin
+  itemName := ToStr(bankItem.Item);
+  if not itemName.Contains('seed') then
+    itemNumNeeded := bankItem.Quantity - Inventory.CountItem(bankItem.Item)
+  else
+    itemNumNeeded := bankItem.Quantity - Max(0, Inventory.CountItemStack(bankItem.Item));
+
+  if itemNumNeeded < 1 then
+  begin
+    WriteLn('[BASHBirdHouse] Skipping withdraw for item: ' + itemName);
+    Exit(True);
+  end;
+
+  bankItem.Quantity := itemNumNeeded;
+  if not Bank.WithdrawItem(bankItem, False) then
+  begin
+    WriteLn('[BASHBirdHouse] Bank is missing: ' + itemName);
+    Exit(False);
+  end;
+
+  if not WaitUntil(Inventory.ContainsItem(bankItem.Item), 65, 2000) then
+  begin
+    WriteLn('[BASHBirdHouse] Could not withdraw item: ' + itemName);
+    Exit(False);
+  end;
+
+  Result := True;
+end;
+
+function TBASHBirdHouseRunner.WithdrawNextRun(): Boolean;
+var
+  itemList: TRSBankItemArray;
+  steps: TIntegerArray;
+  i, step, pendantStep: Int32;
+  nextBestLog: EBASHBirdHouseLog;
+begin
+  if not Bank.IsOpen() then
+    Exit;
+
+  if Self.AlwaysUseBestLog
+  and (not Self.TerminateOnNoLogs)
+  and (Self.LogType <> Self.SuggestedLogType) then
+  begin
+    if not Self.BankHasAll([Self.GetLogString(Self.LogType), Self.GetLogString(Self.SuggestedLogType)]) then
+    begin
+      WriteLn('[BASHBirdHouse] Bank doesn''t have our best choice or current choice, finding another');
+      if not Self.GetNextBestLogInBank(Self.LogType, nextBestLog) then
+      begin
+        WriteLn('[BASHBirdHouse] Out of logs, cannot do a birdhouse run');
+        Exit(False);
+      end;
+      WriteLn('[BASHBirdHouse] Switching log to ' + ToStr(nextBestLog));
+      Self.LogType := nextBestLog;
+    end
+    else if Self.LogType <> Self.SuggestedLogType then
+    begin
+      Self.LogType := Self.SuggestedLogType;
+    end;
+  end;
+
+  itemList := Self.GetWithdrawList();
+  pendantStep := Length(itemList);
+
+  for i := 0 to High(itemList) do
+    steps += i;
+  steps += pendantStep;
+  Self.ShuffleWithdrawSteps(steps);
+
+  for i := 0 to High(steps) do
+  begin
+    step := steps[i];
+    if step = pendantStep then
+    begin
+      if not Self.WithdrawDigsitePendant() then
+        Exit(False);
+    end
+    else if not Self.WithdrawBankItem(itemList[step]) then
+      Exit(False);
+  end;
+
+  if Bank.IsOpen() then
+  begin
+    WriteLn('[BASHBirdHouse] Closing bank after withdraws');
+    Bank.Close();
+    if not WaitUntil(not Bank.IsOpen(), 65, 3000) then
+    begin
+      WriteLn('[BASHBirdHouse] Failed to close bank');
+      Exit(False);
+    end;
+  end;
+
+  Result := True;
+end;
+
+procedure TBASHBirdHouseRunner.Setup(
+  log: EBASHBirdHouseLog;
+  seedItem: TRSItem;
+  useBestLog: Boolean = False;
+  interval: UInt32 = (50 * ONE_MINUTE)
+);
+begin
+  Self.LogType := log;
+  Self.Seed := seedItem;
+  Self.AlwaysUseBestLog := useBestLog;
+  Self.TaskInterval := interval;
+
+  Self.ScriptIntervalTimer.Init(Self.GetNewRunInterval());
+end;
+
+{$I BashLib/optional/handlers/bashbirdhouse/gui.simba}

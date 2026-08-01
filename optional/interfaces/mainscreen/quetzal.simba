@@ -128,22 +128,14 @@ begin
   Result := Self.IsUnlocked(Site, x, y);
 end;
 
-(*!
-  Wait for Quetzal teleport: fade to black, then fade back.
-  `timeout` is for the return from black (default 8s).
-*)
 function TQuetzal.WaitArrived(timeout: Int32 = 8000): Boolean;
 begin
-  // Teleport blackscreen first — don't treat "already clear" as arrived
   WaitUntil(Minimap.PercentBlack() >= 50, 35, 3000);
 
   Result := WaitUntil(Minimap.PercentBlack() < 25, 35, timeout);
 end;
 
-(*!
-  Click a landing site on the open Quetzal map.
-  Returns True once the interface closes (and optionally after the teleport blackscreen).
-*)
+
 function TQuetzal.Travel(Destination: EQuetzalLanding; waitArrive: Boolean = True): Boolean;
 var
   Bounds: TBox;
@@ -155,7 +147,6 @@ begin
   if not Self.FindAnchor(x, y) then
     Exit(False);
 
-  // CLOSE is always available — skip lock check
   if (Destination <> EQuetzalLanding.CLOSE) and (not Self.IsUnlocked(Destination, x, y)) then
   begin
     WriteLn('[Quetzal] Landing locked: ', ToStr(Destination));
@@ -308,7 +299,7 @@ begin
           Exit;
       end
       else
-        WriteLn('[Quetzal] Renu clicked — Quetzal UI did not open');
+        WriteLn('[Quetzal] Renu clicked - Quetzal UI did not open');
     end
     else if Self.Renu.WalkClick() then
     begin

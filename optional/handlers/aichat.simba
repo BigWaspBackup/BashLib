@@ -26,7 +26,7 @@ if AIChatbot.Enabled then
 //   AIChatbot.SetScriptDefaults('prif agility');
 // Users can still edit it in the AI Chat GUI.
 
-// No ProcessMessages call needed — DoAntiban handles it.
+// No ProcessMessages call needed - DoAntiban handles it.
 ```
 
 TScriptForm scripts can use `Form.CreateAIChatSettings()` instead of BuildSettings.
@@ -54,6 +54,7 @@ const
   AIC_SENDER_SEP   = #58#32;
 
 var
+  LLMClient: TLLMClient;
   AIChatGUIApiService : String := 'Gemini';
   AIChatGUIApiKey : String := '';
   AIChatGUIResponseStyle : Integer := 0;
@@ -1100,12 +1101,14 @@ end;
 
 procedure TAIChatbot.CheckAndFixChatTabs();
 const
-  CHAT_TAB_CHECK_INTERVAL = 30000; // Don't spam-click if Open fails
+  CHAT_TAB_CHECK_INTERVAL = 30000;
 var
   currentTime: Int64;
+  needsAllTab, needsPublicEnabled: Boolean;
 begin
-  // Need All chat so public player messages are visible for the chatbot.
-  if ChatButtons.IsActive(ERSChatButton.ALL_CHAT) then
+  needsAllTab := not ChatButtons.IsActive(ERSChatButton.ALL_CHAT);
+  needsPublicEnabled := ChatButtons.GetState(ERSChatButton.PUBLIC_CHAT) <> ERSChatButtonState.ENABLED;
+  if (not needsAllTab) and (not needsPublicEnabled) then
     Exit;
 
   currentTime := GetSystemTime();
@@ -1116,12 +1119,23 @@ begin
   Self.LastChatTabSwitchAttempt := currentTime;
 
   try
-    if Self.DebugMode then
-      WriteLn('[AI Chatbot] Opening ALL_CHAT so messages can be read...');
-    ChatButtons.Open(ERSChatButton.ALL_CHAT);
-    Wait(RandomRange(400, 900));
+    if needsPublicEnabled then
+    begin
+      if Self.DebugMode then
+        WriteLn('[AI Chatbot] Enabling PUBLIC_CHAT so messages can be read...');
+      ChatButtons.ChangeState(ERSChatButton.PUBLIC_CHAT, ERSChatButtonState.ENABLED);
+      Wait(RandomRange(200, 500));
+    end;
+
+    if needsAllTab then
+    begin
+      if Self.DebugMode then
+        WriteLn('[AI Chatbot] Opening ALL_CHAT so messages can be read...');
+      ChatButtons.Open(ERSChatButton.ALL_CHAT);
+      Wait(RandomRange(400, 900));
+    end;
   except
-    WriteLn('[AI Chatbot] Failed to open ALL_CHAT: ' + GetExceptionMessage);
+    WriteLn('[AI Chatbot] Failed to fix chat tabs: ' + GetExceptionMessage);
   end;
 end;
 
@@ -2190,6 +2204,9 @@ begin
   Self.IsInitialized := True;
   Self.CheckAndFixChatTabs();
 
+  Antiban.PauseTask(@Antiban.RandomChatTask);
+  WriteLn('[AI Chatbot] Chat antibans disabled while AI Chatbot is enabled');
+
 {$IFDEF WL_DISCORD_INCLUDED}
   if AIChatDiscord.Webhook.URL = '' then
     AIChatDiscord.Setup();
@@ -2995,6 +3012,39 @@ begin
     AIChatbot.Init();
 
   AIChatbot.ProcessMessages();
+end;
+
+// When AI Chatbot is enabled, suppress chat antibans
+procedure TAntiban.ChatScrolling(); override;
+begin
+  if AIChatbot.Enabled then
+    Exit;
+
+  inherited;
+end;
+
+procedure TAntiban.RandomChatButton(); override;
+begin
+  if AIChatbot.Enabled then
+    Exit;
+
+  inherited;
+end;
+
+procedure TAntiban.ToggleChatButton(); override;
+begin
+  if AIChatbot.Enabled then
+    Exit;
+
+  inherited;
+end;
+
+procedure TAntiban.RandomChatButtonState(); override;
+begin
+  if AIChatbot.Enabled then
+    Exit;
+
+  inherited;
 end;
 
 procedure TAntiban.RandomChatTask(); override;

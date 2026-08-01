@@ -1,259 +1,55 @@
-(*!
-  BASH Farm dashboard GUI — Tesla-style shell:
-    left nav | right content panels | bottom status bar
-
-  Hosts:
-    var Form: TBASHFarmGUI;
-    Form.Run(); // builds shell; Start! applies settings
-*)
+{$IFNDEF BASH_GUI_KIT}
+  {$I BashLib/optional/handlers/bashgui.simba}
+{$ENDIF}
 
 const
-  BASH_GUI_NAV       = $F0EBE4; // warm stone sidebar column
-  BASH_GUI_BG        = $FFFFFF; // main canvas
-  BASH_GUI_STATUS    = $F7F4F1; // start bar (main side only)
-  BASH_GUI_DIVIDER   = $D4C9BC; // seams around nav / status
-  BASH_GUI_CARD      = $F7F4F1; // warm soft card
-  BASH_GUI_ACCENT    = $E0C9AE; // selected chip
-  BASH_GUI_NAV_IDLE  = $E7DED4; // idle chip on stone nav
-  BASH_GUI_START     = $C9B094; // start chip
-  BASH_GUI_TEXT      = $1C1C1E;
-  BASH_GUI_MUTED     = $6B6B70;
-  BASH_GUI_W         = 1120;
-  BASH_GUI_H         = 700;
-  BASH_GUI_NAV_W     = 190;
-  BASH_GUI_STATUS_H  = 56;
-  BASH_GUI_CONTENT_W = BASH_GUI_W - BASH_GUI_NAV_W - 2; // fill main pane to form edge
-  BASH_GUI_CONTENT_H = 580;
-  BASH_GUI_BTN_H     = 42;
-  BASH_GUI_COMBO_W   = 260; // ~30% larger than ~200 default
-  BASH_GUI_COMBO_H   = 58;
-  BASH_GUI_COMBO_FONT = 10;
-  BASH_GUI_COMBO_COL2 = 308;
-  BASH_GUI_COMBO_COL3 = 592;
-  BASH_GUI_COMBO_ROW2 = 190;
-  BASH_GUI_COMBO_ROW3 = 270;
-  BASH_GUI_COMBO_ROW4 = 350;
-  BASH_GUI_BOTTOM_INSET = 34; // keep start bar on-screen (half of prior 130)
-
+  BASH_GUI_W = 1120;
+  BASH_GUI_H = 700;
 
 type
-  TBASHFarmGUI = record(TScriptForm)
-    NavPanel, ContentPanel, StatusPanel, DividerPanel, StatusDivider, StatusPad: TPanel;
-    BrandLabel: TLabel;
+  TBASHFarmGUI = record(TBASHGUIBase)
     PatchesNav, TravelNav, TreesNav: TImage;
-    StartChip: TImage;
-    ActiveNav: TImage;
     PatchesSection, TravelSection, TreesSection: TPanel;
+    ActivitiesNav, BirdhouseNav, AccountsNav, AntibanNav: TImage;
+    ActivitiesSection, BirdhouseSection, AccountsSection, AntibanSection: TPanel;
+    DoPatches, DoTrees, DoBirdhouse: Boolean;
+    StartingLocationIdx: Int32;
   end;
-
-var
-  BASHFarmGUI: TBASHFarmGUI;
-
-// --- helpers (no `with` — Caption/Name shadowing) ---
-
-function TBASHFarmGUI.MakePanel(
-  parent: TWinControl;
-  left, top, width, height, color: Int32
-): TPanel;
-begin
-  Result.Create(parent);
-  Result.SetLeft(TControl.AdjustToDPI(left));
-  Result.SetTop(TControl.AdjustToDPI(top));
-  Result.SetWidth(TControl.AdjustToDPI(width));
-  Result.SetHeight(TControl.AdjustToDPI(height));
-  Result.SetColor(color);
-  Result.SetBevelOuter(bvNone);
-end;
-
-procedure TBASHFarmGUI.PaintRoundChip(
-  img: TImage;
-  labelText: String;
-  fill, parentBg: Int32;
-  selected: Boolean = False;
-  centered: Boolean = False
-);
-var
-  bmp: TBitmap;
-  c: TCanvas;
-  w, h, r, tw, th, tx: Int32;
-begin
-  w := img.GetWidth();
-  h := img.GetHeight();
-  if (w <= 0) or (h <= 0) then
-    Exit;
-
-  r := TControl.AdjustToDPI(6); // slight corner radius, mostly square
-  if r * 2 > h then
-    r := h div 2;
-  if r * 2 > w then
-    r := w div 2;
-
-  bmp := img.GetPicture().GetBitmap();
-  bmp.SetWidth(w);
-  bmp.SetHeight(h);
-  c := bmp.GetCanvas();
-
-  // Parent fill so corners read as transparent round edges
-  c.GetBrush().SetColor(parentBg);
-  c.GetPen().SetColor(parentBg);
-  c.FillRect(0, 0, w, h);
-
-  c.GetBrush().SetColor(fill);
-  c.GetPen().SetColor(fill);
-  c.RoundRect(0, 0, w - 1, h - 1, r * 2, r * 2);
-
-  c.GetBrush().SetColor(fill);
-  c.GetFont().SetColor(BASH_GUI_TEXT);
-  c.GetFont().SetSize(11);
-  if selected then
-    c.GetFont().SetStyle([fsBold])
-  else
-    c.GetFont().SetStyle([]);
-
-  tw := c.TextWidth(labelText);
-  th := c.TextHeight(labelText);
-  if centered then
-    tx := (w - tw) div 2
-  else
-    tx := TControl.AdjustToDPI(16);
-  c.TextOut(tx, (h - th) div 2, labelText);
-
-  img.SetHint(labelText);
-  img.SetShowHint(False);
-  img.Invalidate();
-end;
-
-function TBASHFarmGUI.MakeNavItem(
-  parent: TWinControl;
-  labelText: String;
-  left, top: Int32;
-  selected: Boolean = False
-): TImage;
-var
-  fill: Int32;
-begin
-  Result.Create(parent);
-  Result.SetLeft(TControl.AdjustToDPI(left));
-  Result.SetTop(TControl.AdjustToDPI(top));
-  Result.SetWidth(TControl.AdjustToDPI(BASH_GUI_NAV_W - 28));
-  Result.SetHeight(TControl.AdjustToDPI(BASH_GUI_BTN_H));
-  Result.SetCursor(crHandPoint);
-
-  if selected then
-    fill := BASH_GUI_ACCENT
-  else
-    fill := BASH_GUI_NAV_IDLE;
-
-  Self.PaintRoundChip(Result, labelText, fill, BASH_GUI_NAV, selected);
-end;
-
-function TBASHFarmGUI.MakeLabel(
-  parent: TWinControl;
-  labelText: String;
-  left, top, fontSize, fontColor: Int32;
-  bold: Boolean = False
-): TLabel;
-begin
-  Result.Create(parent);
-  Result.SetLeft(TControl.AdjustToDPI(left));
-  Result.SetTop(TControl.AdjustToDPI(top));
-  Result.SetCaption(labelText);
-  Result.GetFont().SetSize(fontSize);
-  Result.GetFont().SetColor(fontColor);
-  if bold then
-    Result.GetFont().SetStyle([fsBold]);
-end;
-
-procedure TBASHFarmGUI.AddCombo(
-  parent: TWinControl;
-  var box: TLabeledComboBox;
-  ctrlName, labelText: String;
-  left, top: Int32;
-  items: TStringArray;
-  itemIndex: Int32
-);
-begin
-  box.Create(parent);
-  box.SetLeft(TControl.AdjustToDPI(left));
-  box.SetTop(TControl.AdjustToDPI(top));
-  box.SetWidth(TControl.AdjustToDPI(BASH_GUI_COMBO_W));
-  box.SetHeight(TControl.AdjustToDPI(BASH_GUI_COMBO_H));
-  box.SetName(ctrlName);
-  box.SetCaption(labelText);
-  box.AddItemArray(items);
-  if (itemIndex >= 0) and (itemIndex <= High(items)) then
-    box.SetItemIndex(itemIndex)
-  else
-    box.SetItemIndex(0);
-  box.SetFontColor(BASH_GUI_TEXT);
-  box.SetStyle(csDropDownList);
-  box.SetFontSize(BASH_GUI_COMBO_FONT);
-  box.ComboBox.SetFontColor(BASH_GUI_TEXT);
-  box.ComboBox.GetFont().SetSize(BASH_GUI_COMBO_FONT);
-end;
-
-procedure TBASHFarmGUI.AddCheck(
-  parent: TWinControl;
-  var box: TLabeledCheckBox;
-  ctrlName, labelText: String;
-  left, top: Int32;
-  checked: Boolean
-);
-begin
-  box.Create(parent);
-  box.SetLeft(TControl.AdjustToDPI(left));
-  box.SetTop(TControl.AdjustToDPI(top));
-  box.SetName(ctrlName);
-  box.SetFontColor(BASH_GUI_TEXT);
-  box.SetCaption(labelText);
-  if checked then
-    box.CheckBox.SetChecked(True);
-end;
-
-procedure TBASHFarmGUI.AddHeader(parent: TPanel; titleText, subtitleText: String);
-var
-  header: TPanel;
-  headerW: Int32;
-begin
-  headerW := parent.GetWidth();
-  if headerW <= 0 then
-    headerW := TControl.AdjustToDPI(BASH_GUI_CONTENT_W);
-
-  header := Self.MakePanel(parent, 0, 0, 1, 88, BASH_GUI_CARD);
-  header.SetWidth(headerW);
-  header.SetHeight(TControl.AdjustToDPI(88));
-  Self.MakeLabel(header, titleText, 24, 18, 18, BASH_GUI_TEXT, True);
-  Self.MakeLabel(header, subtitleText, 24, 52, 10, BASH_GUI_MUTED, False);
-end;
-
-function TBASHFarmGUI.ReadCheck(ctrlName: String): Boolean;
-var
-  cb: TCheckBox;
-begin
-  cb := Self.Form.GetChild(ctrlName + '_checkbox');
-  Result := (cb.GetState() = cbChecked);
-end;
-
-function TBASHFarmGUI.ReadComboIdx(ctrlName: String): Int32;
-var
-  combo: TComboBox;
-begin
-  combo := Self.Form.GetChild(ctrlName + '_combobox');
-  Result := combo.GetItemIndex();
-end;
 
 procedure TBASHFarmGUI.StyleNav(selected: TImage);
 begin
   Self.ActiveNav := selected;
 
-  Self.PaintRoundChip(Self.PatchesNav, Self.PatchesNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
-  Self.PaintRoundChip(Self.TreesNav, Self.TreesNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
-  Self.PaintRoundChip(Self.TravelNav, Self.TravelNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  Self.PaintRoundChip(Self.ActivitiesNav, Self.ActivitiesNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  if Self.BirdhouseNav.GetVisible() then
+    Self.PaintRoundChip(Self.BirdhouseNav, Self.BirdhouseNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  {$ENDIF}
+  if Self.PatchesNav.GetVisible() then
+    Self.PaintRoundChip(Self.PatchesNav, Self.PatchesNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  if Self.TreesNav.GetVisible() then
+    Self.PaintRoundChip(Self.TreesNav, Self.TreesNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  if Self.TravelNav.GetVisible() then
+    Self.PaintRoundChip(Self.TravelNav, Self.TravelNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  Self.PaintRoundChip(Self.AccountsNav, Self.AccountsNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  Self.PaintRoundChip(Self.AntibanNav, Self.AntibanNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  {$ENDIF}
   Self.PaintRoundChip(selected, selected.GetHint(), BASH_GUI_ACCENT, BASH_GUI_NAV, True);
+
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  Self.ApplyActivityNavVisibility();
+  {$ENDIF}
 end;
 
 procedure TBASHFarmGUI.ShowSection(section: TPanel; selected: TImage);
 begin
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  Self.ActivitiesSection.SetVisible(False);
+  Self.BirdhouseSection.SetVisible(False);
+  Self.AccountsSection.SetVisible(False);
+  Self.AntibanSection.SetVisible(False);
+  {$ENDIF}
   Self.PatchesSection.SetVisible(False);
   Self.TreesSection.SetVisible(False);
   Self.TravelSection.SetVisible(False);
@@ -261,6 +57,126 @@ begin
   section.SetVisible(True);
   Self.StyleNav(selected);
 end;
+
+{$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+procedure TBASHFarmGUI.ShowActivities({$H-}sender: TObject); {$H+}
+begin
+  Self.ShowSection(Self.ActivitiesSection, Self.ActivitiesNav);
+end;
+
+procedure TBASHFarmGUI.RefreshBirdhouseLogEnabled();
+var
+  combo: TComboBox;
+  caption: TLabel;
+  enabled: Boolean;
+begin
+  enabled := not Self.ReadCheck('cb_bash_bh_bestlog');
+
+  combo := Self.Form.GetChild('lcb_bash_bh_log_combobox');
+  if combo <> nil then
+    combo.SetEnabled(enabled);
+
+  caption := Self.Form.GetChild('lcb_bash_bh_log_caption');
+  if caption <> nil then
+    caption.SetEnabled(enabled);
+end;
+
+procedure TBASHFarmGUI.OnBestLogCheckChange({$H-}sender: TObject); {$H+}
+begin
+  Self.RefreshBirdhouseLogEnabled();
+end;
+
+procedure TBASHFarmGUI.ShowBirdhouse({$H-}sender: TObject); {$H+}
+begin
+  Self.RefreshBirdhouseLogEnabled();
+  Self.ShowSection(Self.BirdhouseSection, Self.BirdhouseNav);
+end;
+
+procedure TBASHFarmGUI.ShowAccounts({$H-}sender: TObject); {$H+}
+begin
+  Self.ShowSection(Self.AccountsSection, Self.AccountsNav);
+end;
+
+procedure TBASHFarmGUI.ShowAntiban({$H-}sender: TObject); {$H+}
+begin
+  Self.ShowSection(Self.AntibanSection, Self.AntibanNav);
+end;
+
+procedure TBASHFarmGUI.ApplyActivityNavVisibility();
+var
+  patches, trees, birds, travel: Boolean;
+begin
+  patches := Self.ReadCheck('cb_bash_enable_patches');
+  trees := Self.ReadCheck('cb_bash_enable_trees');
+  birds := Self.ReadCheck('cb_bash_enable_birdhouse');
+  travel := patches or trees;
+
+  Self.PatchesNav.SetVisible(patches);
+  Self.TreesNav.SetVisible(trees);
+  Self.TravelNav.SetVisible(travel);
+  Self.BirdhouseNav.SetVisible(birds);
+end;
+
+procedure TBASHFarmGUI.RefreshActivityNav();
+var
+  patches, trees, birds, travel: Boolean;
+  y, gap: Int32;
+  activeHidden: Boolean;
+begin
+  patches := Self.ReadCheck('cb_bash_enable_patches');
+  trees := Self.ReadCheck('cb_bash_enable_trees');
+  birds := Self.ReadCheck('cb_bash_enable_birdhouse');
+  travel := patches or trees;
+
+  Self.ApplyActivityNavVisibility();
+
+  gap := TControl.AdjustToDPI(52);
+  y := TControl.AdjustToDPI(100);
+  Self.ActivitiesNav.SetTop(y);
+  y += gap;
+
+  if patches then
+  begin
+    Self.PatchesNav.SetTop(y);
+    y += gap;
+  end;
+  if trees then
+  begin
+    Self.TreesNav.SetTop(y);
+    y += gap;
+  end;
+  if travel then
+  begin
+    Self.TravelNav.SetTop(y);
+    y += gap;
+  end;
+  if birds then
+  begin
+    Self.BirdhouseNav.SetTop(y);
+    y += gap;
+  end;
+
+  Self.AccountsNav.SetTop(y);
+  y += gap;
+  Self.AntibanNav.SetTop(y);
+
+  activeHidden :=
+    ((Self.ActiveNav = Self.PatchesNav) and (not patches)) or
+    ((Self.ActiveNav = Self.TreesNav) and (not trees)) or
+    ((Self.ActiveNav = Self.TravelNav) and (not travel)) or
+    ((Self.ActiveNav = Self.BirdhouseNav) and (not birds));
+
+  if activeHidden then
+    Self.ShowActivities(Self.ActivitiesNav)
+  else if Self.ActiveNav <> nil then
+    Self.StyleNav(Self.ActiveNav);
+end;
+
+procedure TBASHFarmGUI.OnActivityCheckChange({$H-}sender: TObject); {$H+}
+begin
+  Self.RefreshActivityNav();
+end;
+{$ENDIF}
 
 procedure TBASHFarmGUI.ShowPatches({$H-}sender: TObject); {$H+}
 begin
@@ -445,7 +361,6 @@ begin
     or (Self.ReadCheck('cb_bash_ortus_flower') and flower)
     or (Self.ReadCheck('cb_bash_ortus_allot') and allot);
 
-
   guild := (Self.ReadCheck('cb_bash_guild_herb') and herb)
     or (Self.ReadCheck('cb_bash_guild_flower') and flower)
     or (Self.ReadCheck('cb_bash_guild_allot') and allot)
@@ -463,7 +378,6 @@ begin
   Self.SetTravelComboEnabled('lcb_bash_hosidius_tp', hosi);
   Self.SetTravelComboEnabled('lcb_bash_ortus_tp', ortus);
   Self.SetTravelComboEnabled('lcb_bash_guild_tp', guild);
-  // Lumby elite only relevant for Fairy CIR (index 2)
   Self.SetCheckVisible('cb_bash_lumby_elite', guild and (Self.ReadComboIdx('lcb_bash_guild_tp') = 2));
 
   Self.SetTravelComboEnabled('lcb_bash_lum_tree_tp', Self.ReadCheck('cb_bash_lum_tree') and treeSap);
@@ -485,23 +399,31 @@ var
   cb: TLabeledCheckBox;
   y: Int32;
 begin
-  Self.AddHeader(Self.PatchesSection, 'Patches', 'Seeds, compost, tools, and which patches to run. Harmony is unavailable.');
+  Self.AddHeader(Self.PatchesSection, 'Patches', 'Seeds, compost, tools, and which patches to run. All farming supplies should be in Leprechaun Storage');
 
   Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_herbseed', 'Herb seed', 24, 100, BASH_FARM_HERB_SEEDS, BASHFarmConfig.HerbSeedIdx);
+  lcb.SetTooltip('Herb seed to plant. Select None to skip herb patches.');
   lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
   Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_flowerseed', 'Flower seed', BASH_GUI_COMBO_COL2, 100, BASH_FARM_FLOWER_SEEDS, BASHFarmConfig.FlowerSeedIdx);
+  lcb.SetTooltip('Flower seed to plant. Select None to skip flower patches.');
   lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
   Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_allotseed', 'Allotment seed', BASH_GUI_COMBO_COL3, 100, BASH_FARM_ALLOT_SEEDS, BASHFarmConfig.AllotmentSeedIdx);
+  lcb.SetTooltip('Allotment seed to plant. Select None to skip allotment patches.');
   lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
 
   Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_bushseed', 'Bush seed', 24, 175, BASH_FARM_BUSH_SEEDS, BASHFarmConfig.BushSeedIdx);
+  lcb.SetTooltip('Bush seed for Farming Guild bush patch. Select None to skip.');
   lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
   Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_cactusseed', 'Cactus seed', BASH_GUI_COMBO_COL2, 175, BASH_FARM_CACTUS_SEEDS, BASHFarmConfig.CactusSeedIdx);
+  lcb.SetTooltip('Cactus seed for Farming Guild cactus patch. Select None to skip.');
   lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
   Self.AddCombo(Self.PatchesSection, lcb, 'lcb_bash_compost', 'Compost', BASH_GUI_COMBO_COL3, 175, BASH_FARM_COMPOST, BASHFarmConfig.CompostIdx);
+  lcb.SetTooltip('Compost type applied after planting. Keep compost in leprechaun storage.');
 
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_barbdibber', 'Barbarian dibber', 24, 250, BASHFarmConfig.BarbDibber);
+  cb.SetTooltip('You completed Barbarian training and can plant without a Seed dibber - skips withdrawing one.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_runnow', 'Run farm now', 200, 250, BASHFarmConfig.RunNow);
+  cb.SetTooltip('Ignore growth timers and run a farm lap immediately when the script starts.');
 
   Self.MakeLabel(Self.PatchesSection, 'Location', 24, 295, 10, BASH_GUI_MUTED, True);
   Self.MakeLabel(Self.PatchesSection, 'Herb', 140, 295, 10, BASH_GUI_MUTED, True);
@@ -511,61 +433,86 @@ begin
   y := 325;
   Self.MakeLabel(Self.PatchesSection, 'Weiss', 24, y, 10, BASH_GUI_TEXT, False);
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_weiss_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.WEISS_HERB]);
+  cb.SetTooltip('Include the Weiss herb patch. Requires a herb seed selected above.');
 
   y := 355;
   Self.MakeLabel(Self.PatchesSection, 'Stronghold', 24, y, 10, BASH_GUI_TEXT, False);
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_stronghold_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.STRONGHOLD_HERB]);
+  cb.SetTooltip('Include the Stronghold herb patch. Requires a herb seed selected above.');
 
   y := 385;
   Self.MakeLabel(Self.PatchesSection, 'Ardougne', 24, y, 10, BASH_GUI_TEXT, False);
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ardy_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_HERB]);
+  cb.SetTooltip('Include the Ardougne herb patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ardy_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_FLOWER]);
+  cb.SetTooltip('Include the Ardougne flower patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ardy_allot', 'Allotments', 340, y,
     BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_ALLOT_S]);
+  cb.SetTooltip('Include both Ardougne allotment patches.');
 
   y := 415;
   Self.MakeLabel(Self.PatchesSection, 'Falador', 24, y, 10, BASH_GUI_TEXT, False);
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_fally_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_HERB]);
+  cb.SetTooltip('Include the Falador herb patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_fally_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_FLOWER]);
+  cb.SetTooltip('Include the Falador flower patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_fally_allot', 'Allotments', 340, y,
     BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_ALLOT_S]);
+  cb.SetTooltip('Include both Falador allotment patches.');
 
   y := 445;
   Self.MakeLabel(Self.PatchesSection, 'Catherby', 24, y, 10, BASH_GUI_TEXT, False);
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_cath_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_HERB]);
+  cb.SetTooltip('Include the Catherby herb patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_cath_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_FLOWER]);
+  cb.SetTooltip('Include the Catherby flower patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_cath_allot', 'Allotments', 340, y,
     BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_ALLOT_S]);
+  cb.SetTooltip('Include both Catherby allotment patches.');
 
   y := 475;
   Self.MakeLabel(Self.PatchesSection, 'Phasmatys', 24, y, 10, BASH_GUI_TEXT, False);
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_phas_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_HERB]);
+  cb.SetTooltip('Include the Port Phasmatys herb patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_phas_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_FLOWER]);
+  cb.SetTooltip('Include the Port Phasmatys flower patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_phas_allot', 'Allotments', 340, y,
     BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_ALLOT_S]);
+  cb.SetTooltip('Include both Port Phasmatys allotment patches.');
 
   y := 505;
   Self.MakeLabel(Self.PatchesSection, 'Hosidius', 24, y, 10, BASH_GUI_TEXT, False);
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_hosi_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_HERB]);
+  cb.SetTooltip('Include the Hosidius herb patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_hosi_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_FLOWER]);
+  cb.SetTooltip('Include the Hosidius flower patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_hosi_allot', 'Allotments', 340, y,
     BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_ALLOT_S]);
+  cb.SetTooltip('Include both Hosidius allotment patches.');
 
   y := 535;
   Self.MakeLabel(Self.PatchesSection, 'Civitas illa Fortis', 24, y, 10, BASH_GUI_TEXT, False);
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ortus_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_HERB]);
+  cb.SetTooltip('Include the Civitas illa Fortis (Ortus) herb patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ortus_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_FLOWER]);
+  cb.SetTooltip('Include the Civitas illa Fortis (Ortus) flower patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_ortus_allot', 'Allotments', 340, y,
     BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_ALLOT_S]);
+  cb.SetTooltip('Include both Civitas illa Fortis (Ortus) allotment patches.');
 
   y := 565;
   Self.MakeLabel(Self.PatchesSection, 'Guild', 24, y, 10, BASH_GUI_TEXT, False);
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_guild_herb', 'Herb', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_HERB]);
+  cb.SetTooltip('Include the Farming Guild herb patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_guild_flower', 'Flower', 230, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_FLOWER]);
+  cb.SetTooltip('Include the Farming Guild flower patch.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_guild_allot', 'Allotments', 340, y,
     BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_ALLOT_N] or BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_ALLOT_S]);
+  cb.SetTooltip('Include both Farming Guild allotment patches.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_guild_bush', 'Bush', 470, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_BUSH]);
+  cb.SetTooltip('Include the Farming Guild bush patch. Requires a bush seed selected above.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_guild_cactus', 'Cactus', 550, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_CACTUS]);
+  cb.SetTooltip('Include the Farming Guild cactus patch. Requires a cactus seed selected above.');
 
   Self.RefreshPatchesEnabled();
 end;
@@ -575,42 +522,59 @@ var
   lcb: TLabeledComboBox;
   cb: TLabeledCheckBox;
 begin
-  Self.AddHeader(Self.TravelSection, 'Travel', 'Teleports for enabled patches with a seed or sapling selected. Unused options are greyed out.');
+  Self.AddHeader(Self.TravelSection, 'Travel', 'Teleports for enabled patches with a seed or sapling selected.');
 
   Self.MakeLabel(Self.TravelSection, 'Herb / flower / allotment', 24, 96, 11, BASH_GUI_TEXT, True);
 
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_weiss_tp', 'Weiss', 24, 116, BASH_TRAVEL_WEISS, BASHFarmConfig.WeissTP);
+  lcb.SetTooltip('How to travel to Weiss. Enabled when the Weiss herb patch is selected.');
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_stronghold_tp', 'Stronghold', BASH_GUI_COMBO_COL2, 116, BASH_TRAVEL_STRONGHOLD, BASHFarmConfig.StrongholdTP);
+  lcb.SetTooltip('How to travel to the Stronghold herb patch. Enabled when that patch is selected.');
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_ardougne_tp', 'Ardougne', BASH_GUI_COMBO_COL3, 116, BASH_TRAVEL_ARDOUGNE, BASHFarmConfig.ArdougneTP);
+  lcb.SetTooltip('How to travel to Ardougne patches. Enabled when any Ardougne patch is selected.');
 
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_falador_tp', 'Falador', 24, 178, BASH_TRAVEL_FALADOR, BASHFarmConfig.FaladorTP);
+  lcb.SetTooltip('How to travel to Falador patches. Enabled when any Falador patch is selected.');
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_catherby_tp', 'Catherby', BASH_GUI_COMBO_COL2, 178, BASH_TRAVEL_CATHERBY, BASHFarmConfig.CatherbyTP);
-  // Phasmatys / Mory: Ectophial only — no travel combo
+  lcb.SetTooltip('How to travel to Catherby patches. Enabled when any Catherby patch is selected.');
 
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_hosidius_tp', 'Hosidius', BASH_GUI_COMBO_COL3, 178, BASH_TRAVEL_HOSIDIUS, BASHFarmConfig.HosidiusTP);
+  lcb.SetTooltip('How to travel to Hosidius patches. Enabled when any Hosidius patch is selected.');
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_ortus_tp', 'Civitas illa Fortis', 24, 240, BASH_TRAVEL_ORTUS, BASHFarmConfig.OrtusTP);
+  lcb.SetTooltip('How to travel to Civitas illa Fortis patches. Enabled when any Ortus patch is selected.');
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_guild_tp', 'Farming Guild', BASH_GUI_COMBO_COL2, 240, BASH_TRAVEL_GUILD, BASHFarmConfig.GuildTP);
+  lcb.SetTooltip('How to travel to the Farming Guild. Enabled when any guild patch/tree is selected.');
   lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
-  // Directly under Farming Guild dropdown — only shown for Fairy CIR
   Self.AddCheck(Self.TravelSection, cb, 'cb_bash_lumby_elite', 'Lumby elite (no Dramen)', BASH_GUI_COMBO_COL2, 302, BASHFarmConfig.LumbyElite);
+  cb.SetTooltip('You have Lumbridge Elite diary done - Fairy Ring travel without a Dramen/Lunar staff.');
 
   Self.MakeLabel(Self.TravelSection, 'Trees', 24, 336, 11, BASH_GUI_TEXT, True);
 
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_lum_tree_tp', 'Lumbridge tree', 24, 356, BASH_TRAVEL_LUMBRIDGE_TREE, BASHFarmConfig.LumbridgeTreeTP);
+  lcb.SetTooltip('How to travel to the Lumbridge tree patch.');
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_var_tree_tp', 'Varrock tree', BASH_GUI_COMBO_COL2, 356, BASH_TRAVEL_VARROCK_TREE, BASHFarmConfig.VarrockTreeTP);
+  lcb.SetTooltip('How to travel to the Varrock tree patch.');
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_fally_tree_tp', 'Falador tree', BASH_GUI_COMBO_COL3, 356, BASH_TRAVEL_FALADOR_TREE, BASHFarmConfig.FaladorTreeTP);
+  lcb.SetTooltip('How to travel to the Falador tree patch.');
 
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_tav_tree_tp', 'Taverley tree', 24, 418, BASH_TRAVEL_TAVERLEY_TREE, BASHFarmConfig.TaverleyTreeTP);
+  lcb.SetTooltip('How to travel to the Taverley tree patch.');
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_tree_tp', 'Gnome tree', BASH_GUI_COMBO_COL2, 418, BASH_TRAVEL_GNOME_TREE, BASHFarmConfig.GnomeTreeTP);
+  lcb.SetTooltip('How to travel to the Gnome Stronghold tree patch.');
 
   Self.MakeLabel(Self.TravelSection, 'Fruit trees', 24, 484, 11, BASH_GUI_TEXT, True);
 
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_fruit_tp', 'Gnome fruit', 24, 504, BASH_TRAVEL_GNOME_FRUIT, BASHFarmConfig.GnomeFruitTP);
+  lcb.SetTooltip('How to travel to the Gnome Stronghold fruit tree patch.');
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_village_tp', 'Gnome village fruit', BASH_GUI_COMBO_COL2, 504, BASH_TRAVEL_GNOME_VILLAGE_FRUIT, BASHFarmConfig.GnomeVillageFruitTP);
+  lcb.SetTooltip('How to travel to the Tree Gnome Village fruit tree patch.');
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_cath_fruit_tp', 'Catherby fruit', BASH_GUI_COMBO_COL3, 504, BASH_TRAVEL_CATHERBY_FRUIT, BASHFarmConfig.CatherbyFruitTP);
+  lcb.SetTooltip('How to travel to the Catherby fruit tree patch.');
 
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_brim_fruit_tp', 'Brimhaven fruit', 24, 566, BASH_TRAVEL_BRIMHAVEN_FRUIT, BASHFarmConfig.BrimhavenFruitTP);
+  lcb.SetTooltip('How to travel to the Brimhaven fruit tree patch.');
   Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_lletya_fruit_tp', 'Lletya fruit', BASH_GUI_COMBO_COL2, 566, BASH_TRAVEL_LLETYA_FRUIT, BASHFarmConfig.LletyaFruitTP);
+  lcb.SetTooltip('How to travel to the Lletya fruit tree patch.');
 
   Self.RefreshTravelEnabled();
 end;
@@ -624,108 +588,285 @@ begin
   Self.AddHeader(Self.TreesSection, 'Trees', 'Saplings and which tree / fruit patches to run.');
 
   Self.AddCombo(Self.TreesSection, lcb, 'lcb_bash_treesapling', 'Tree sapling', 24, 100, BASH_FARM_TREE_SAPLINGS, BASHFarmConfig.TreeSaplingIdx);
+  lcb.SetTooltip('Tree sapling to plant. Select None to skip tree patches.');
   lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
   Self.AddCombo(Self.TreesSection, lcb, 'lcb_bash_fruitsapling', 'Fruit sapling', BASH_GUI_COMBO_COL2, 100, BASH_FARM_FRUIT_SAPLINGS, BASHFarmConfig.FruitSaplingIdx);
+  lcb.SetTooltip('Fruit tree sapling to plant. Select None to skip fruit tree patches.');
   lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
 
   Self.MakeLabel(Self.TreesSection, 'Trees', 24, 175, 11, BASH_GUI_TEXT, True);
   y := 205;
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_lum_tree', 'Lumbridge', 24, y, BASHFarmConfig.Enabled[EBASHFarmPatch.LUMBRIDGE_TREE]);
+  cb.SetTooltip('Include the Lumbridge tree patch.');
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_var_tree', 'Varrock', 140, y, BASHFarmConfig.Enabled[EBASHFarmPatch.VARROCK_TREE]);
+  cb.SetTooltip('Include the Varrock tree patch.');
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_fally_tree', 'Falador', 250, y, BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_TREE]);
+  cb.SetTooltip('Include the Falador tree patch.');
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_tav_tree', 'Taverley', 360, y, BASHFarmConfig.Enabled[EBASHFarmPatch.TAVERLEY_TREE]);
+  cb.SetTooltip('Include the Taverley tree patch.');
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_gnome_tree', 'Gnome', 470, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_TREE]);
+  cb.SetTooltip('Include the Gnome Stronghold tree patch.');
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_guild_tree', 'Guild', 570, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_TREE]);
+  cb.SetTooltip('Include the Farming Guild tree patch.');
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_guild_redwood', 'Redwood', 660, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_REDWOOD]);
+  cb.SetTooltip('Include the Farming Guild redwood patch.');
 
   Self.MakeLabel(Self.TreesSection, 'Fruit trees', 24, 250, 11, BASH_GUI_TEXT, True);
   y := 280;
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_gnome_fruit', 'Gnome stronghold', 24, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_STRONGHOLD_FRUIT]);
+  cb.SetTooltip('Include the Gnome Stronghold fruit tree patch.');
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_cath_fruit', 'Catherby', 200, y, BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_FRUIT]);
+  cb.SetTooltip('Include the Catherby fruit tree patch.');
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_gnome_village_fruit', 'Gnome village', 320, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_VILLAGE_FRUIT]);
+  cb.SetTooltip('Include the Tree Gnome Village fruit tree patch.');
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_brim_fruit', 'Brimhaven', 470, y, BASHFarmConfig.Enabled[EBASHFarmPatch.BRIMHAVEN_FRUIT]);
+  cb.SetTooltip('Include the Brimhaven fruit tree patch.');
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_lletya_fruit', 'Lletya', 590, y, BASHFarmConfig.Enabled[EBASHFarmPatch.LLETYA_FRUIT]);
+  cb.SetTooltip('Include the Lletya fruit tree patch.');
   Self.AddCheck(Self.TreesSection, cb, 'cb_bash_guild_fruit', 'Guild', 690, y, BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_FRUIT]);
+  cb.SetTooltip('Include the Farming Guild fruit tree patch.');
 
   Self.RefreshTreesEnabled();
 end;
 
+{$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+procedure TBASHFarmGUI.BuildActivitiesSection();
+var
+  cb: TLabeledCheckBox;
+  lcb: TLabeledComboBox;
+begin
+  Self.AddHeader(
+    Self.ActivitiesSection,
+    'Activities',
+    'Choose which runs this script will do. Uncheck anything you want to skip.'
+  );
+
+  Self.AddCheck(Self.ActivitiesSection, cb, 'cb_bash_enable_patches',
+    'Herb / flower / allotment / bush / cactus runs',
+    24, 110, BASHFarmConfig.EnablePatches);
+  cb.SetTooltip('Enable farming patch runs. Shows the Patches and Travel tabs when checked.');
+  cb.CheckBox.SetOnChange(@Self.OnActivityCheckChange);
+
+  Self.AddCheck(Self.ActivitiesSection, cb, 'cb_bash_enable_trees',
+    'Tree / fruit tree runs (WIP)',
+    24, 160, False);
+  cb.SetTooltip('Tree and fruit tree runs are not finished yet and stay disabled.');
+  cb.CheckBox.SetChecked(False);
+  cb.CheckBox.SetEnabled(False);
+  cb.SetEnabled(False);
+
+  Self.AddCheck(Self.ActivitiesSection, cb, 'cb_bash_enable_birdhouse',
+    'Birdhouse runs',
+    24, 210, BASHFarmConfig.EnableBirdhouse);
+  cb.SetTooltip('Enable birdhouse runs on Fossil Island. Shows the Birdhouse tab when checked.');
+  cb.CheckBox.SetOnChange(@Self.OnActivityCheckChange);
+
+  Self.AddCombo(Self.ActivitiesSection, lcb, 'lcb_bash_start_loc', 'Starting location (return to bank)',
+    24, 270, BASH_HOST_START_LOCATIONS, BASHFarmConfig.StartingLocationIdx);
+  lcb.SetTooltip('Bank / start location to return to between activities.');
+end;
+
+procedure TBASHFarmGUI.BuildBirdhouseSection();
+var
+  lcb: TLabeledComboBox;
+  cb: TLabeledCheckBox;
+begin
+  Self.AddHeader(
+    Self.BirdhouseSection,
+    'Birdhouse',
+    'Birdhouse type, seeds, and when to run.'
+  );
+
+  Self.AddCombo(Self.BirdhouseSection, lcb, 'lcb_bash_bh_log', 'Birdhouse / log type',
+    24, 110, BASH_BH_LOG_TYPES, BASHBirdHouseConfig.LogTypeIdx);
+  lcb.SetTooltip('Log / birdhouse tier to craft and place. Disabled when Always use best log is on.');
+
+  Self.AddCombo(Self.BirdhouseSection, lcb, 'lcb_bash_bh_seed', 'Seed',
+    BASH_GUI_COMBO_COL2, 110, BASH_BH_SEEDS, BASHBirdHouseConfig.SeedIdx);
+  lcb.SetTooltip('Seed type used to fill birdhouses. Keep enough in the bank.');
+
+  Self.AddCheck(Self.BirdhouseSection, cb, 'cb_bash_bh_bestlog', 'Always use best log',
+    24, 200, BASHBirdHouseConfig.UseBestLog);
+  cb.SetTooltip('Auto-pick the highest birdhouse your Hunter level unlocks. Disables the log dropdown.');
+  cb.CheckBox.SetOnChange(@Self.OnBestLogCheckChange);
+
+  Self.AddCheck(Self.BirdhouseSection, cb, 'cb_bash_bh_runnow', 'Run birdhouse now',
+    24, 250, BASHBirdHouseConfig.RunNow);
+  cb.SetTooltip('Ignore the birdhouse timer and run a birdhouse lap immediately when the script starts.');
+
+  Self.RefreshBirdhouseLogEnabled();
+end;
+
+procedure TBASHFarmGUI.BuildAccountsSection();
+var
+  am: TPanel;
+  selectorPanel, userPanel, passPanel, pinPanel, worldsPanel, jagexPanel: TPanel;
+  addBtn, deleteBtn, generateBtn: TButton;
+  leftColW, passW, pinW, worldsLeft, btnW, btnGap: Int32;
+begin
+  Self.AddHeader(Self.AccountsSection, 'Accounts', 'Login account used when the script starts.');
+
+  am := Self.CreateAccountManager(Self.AccountsSection);
+  am.SetLeft(TControl.AdjustToDPI(16));
+  am.SetTop(TControl.AdjustToDPI(100));
+  am.SetColor(BASH_GUI_BG);
+
+  leftColW := TControl.AdjustToDPI(280);
+  passW := Floor(leftColW * 0.6);
+  pinW := Floor(leftColW * 0.3);
+
+  selectorPanel := Self.Form.GetChild('am_selector_panel');
+  userPanel := Self.Form.GetChild('am_user_panel');
+  passPanel := Self.Form.GetChild('am_pass_panel');
+  pinPanel := Self.Form.GetChild('am_pin_panel');
+  worldsPanel := Self.Form.GetChild('am_worlds_panel');
+  jagexPanel := Self.Form.GetChild('am_jagex_panel');
+
+  if selectorPanel <> nil then
+    selectorPanel.SetWidth(leftColW);
+  if userPanel <> nil then
+    userPanel.SetWidth(leftColW);
+  if jagexPanel <> nil then
+    jagexPanel.SetWidth(leftColW);
+  if passPanel <> nil then
+    passPanel.SetWidth(passW);
+  if (pinPanel <> nil) and (selectorPanel <> nil) then
+  begin
+    pinPanel.SetWidth(pinW);
+    pinPanel.SetLeft(selectorPanel.GetLeft() + leftColW - pinW);
+  end;
+
+  if (worldsPanel <> nil) and (selectorPanel <> nil) and (userPanel <> nil) then
+  begin
+    worldsLeft := selectorPanel.GetLeft() + leftColW + TControl.AdjustToDPI(48);
+    worldsPanel.SetLeft(worldsLeft);
+    worldsPanel.SetHeight(userPanel.GetBottom());
+
+    addBtn := Self.Form.GetChild('am_add_button');
+    deleteBtn := Self.Form.GetChild('am_delete_button');
+    generateBtn := Self.Form.GetChild('am_generate_worlds_button');
+    btnGap := TControl.AdjustToDPI(8);
+    btnW := Floor((worldsPanel.GetWidth() - btnGap) / 2);
+
+    if generateBtn <> nil then
+    begin
+      generateBtn.SetLeft(worldsLeft);
+      generateBtn.SetWidth(worldsPanel.GetWidth());
+    end;
+    if addBtn <> nil then
+    begin
+      addBtn.SetLeft(worldsLeft);
+      addBtn.SetWidth(btnW);
+    end;
+    if deleteBtn <> nil then
+    begin
+      deleteBtn.SetLeft(worldsLeft + worldsPanel.GetWidth() - btnW - TControl.AdjustToDPI(1));
+      deleteBtn.SetWidth(btnW);
+    end;
+
+    if (addBtn <> nil) and (am.GetHeight() < addBtn.GetTop() + addBtn.GetHeight() + TControl.AdjustToDPI(8)) then
+      am.SetHeight(addBtn.GetTop() + addBtn.GetHeight() + TControl.AdjustToDPI(8));
+  end;
+
+  Self.ApplyJagexAccountVisibility();
+end;
+
+procedure TBASHFarmGUI.BuildAntibanSection();
+var
+  ab: TPanel;
+begin
+  Self.AddHeader(Self.AntibanSection, 'Antiban', 'BioHash, breaks, sleeps, and action limits.');
+
+  ab := Self.CreateAntibanManager(Self.AntibanSection);
+  ab.SetAlign(alNone);
+  ab.SetLeft(0);
+  ab.SetTop(TControl.AdjustToDPI(88));
+  ab.SetWidth(Self.AntibanSection.GetWidth());
+  ab.SetHeight(Self.AntibanSection.GetHeight() - TControl.AdjustToDPI(88));
+  ab.SetColor(BASH_GUI_BG);
+end;
+
+procedure TBASHFarmGUI.ClearPatchEnables();
+var
+  p: EBASHFarmPatch;
+begin
+  for p := Low(EBASHFarmPatch) to High(EBASHFarmPatch) do
+    if not BASHFarmPatchIsTreeRun(p) then
+      BASHFarmConfig.Enabled[p] := False;
+end;
+
+procedure TBASHFarmGUI.ClearTreeEnables();
+var
+  p: EBASHFarmPatch;
+begin
+  for p := Low(EBASHFarmPatch) to High(EBASHFarmPatch) do
+    if BASHFarmPatchIsTreeRun(p) then
+      BASHFarmConfig.Enabled[p] := False;
+end;
+{$ENDIF}
+
 procedure TBASHFarmGUI.BuildShell(tab: TTabSheet);
 var
-  contentH, startW, startH, shellW, shellH, statusTop, statusH, mainLeft, mainW, navW, bottomInset: Int32;
+  contentH, mainW: Int32;
 begin
-  // Stock Start is alBottom on the form and reserves a strip even when hidden —
-  // collapse it so the page/tab can fill the window edge-to-edge.
-  Self.Start.SetAlign(alNone);
-  Self.Start.SetVisible(False);
-  Self.Start.SetHeight(0);
-  Self.Start.SetWidth(0);
+  Self.BuildChrome(tab);
+  mainW := Self.MainWidth();
+  contentH := Self.ContentHeight();
 
-  // Self.Size is already DPI-adjusted by Setup — use it for pixel layout (no second AdjustToDPI).
-  bottomInset := TControl.AdjustToDPI(BASH_GUI_BOTTOM_INSET);
-  navW := TControl.AdjustToDPI(BASH_GUI_NAV_W);
-  statusH := TControl.AdjustToDPI(BASH_GUI_STATUS_H);
-  shellW := Self.Size.X;
-  shellH := Self.Size.Y;
-  mainLeft := navW + TControl.AdjustToDPI(2);
-  mainW := shellW - mainLeft;
-  // Raise start bar into the visible client (tab/form chrome clips the true bottom)
-  statusTop := shellH - statusH - bottomInset;
-  contentH := statusTop;
-  startW := TControl.AdjustToDPI(132);
-  startH := TControl.AdjustToDPI(BASH_GUI_BTN_H);
-
-  Self.NavPanel.Create(tab);
-  Self.NavPanel.SetLeft(0);
-  Self.NavPanel.SetTop(0);
-  Self.NavPanel.SetWidth(navW);
-  Self.NavPanel.SetHeight(shellH);
-  Self.NavPanel.SetColor(BASH_GUI_NAV);
-  Self.NavPanel.SetBevelOuter(bvNone);
-
-  Self.DividerPanel.Create(tab);
-  Self.DividerPanel.SetLeft(navW);
-  Self.DividerPanel.SetTop(0);
-  Self.DividerPanel.SetWidth(TControl.AdjustToDPI(2));
-  Self.DividerPanel.SetHeight(shellH);
-  Self.DividerPanel.SetColor(BASH_GUI_DIVIDER);
-  Self.DividerPanel.SetBevelOuter(bvNone);
-
-  Self.ContentPanel.Create(tab);
-  Self.ContentPanel.SetLeft(mainLeft);
-  Self.ContentPanel.SetTop(0);
-  Self.ContentPanel.SetWidth(mainW);
-  Self.ContentPanel.SetHeight(contentH);
-  Self.ContentPanel.SetColor(BASH_GUI_BG);
-  Self.ContentPanel.SetBevelOuter(bvNone);
-
-  Self.StatusDivider.Create(tab);
-  Self.StatusDivider.SetLeft(mainLeft);
-  Self.StatusDivider.SetTop(statusTop);
-  Self.StatusDivider.SetWidth(mainW);
-  Self.StatusDivider.SetHeight(TControl.AdjustToDPI(2));
-  Self.StatusDivider.SetColor(BASH_GUI_DIVIDER);
-  Self.StatusDivider.SetBevelOuter(bvNone);
-
-  Self.StatusPanel.Create(tab);
-  Self.StatusPanel.SetLeft(mainLeft);
-  Self.StatusPanel.SetTop(statusTop + Self.StatusDivider.GetHeight());
-  Self.StatusPanel.SetWidth(mainW);
-  Self.StatusPanel.SetHeight(statusH - Self.StatusDivider.GetHeight());
-  Self.StatusPanel.SetColor(BASH_GUI_STATUS);
-  Self.StatusPanel.SetBevelOuter(bvNone);
-
-  Self.StatusPad.Create(tab);
-  Self.StatusPad.SetLeft(mainLeft);
-  Self.StatusPad.SetTop(Self.StatusPanel.GetTop() + Self.StatusPanel.GetHeight());
-  Self.StatusPad.SetWidth(mainW);
-  Self.StatusPad.SetHeight(shellH - Self.StatusPad.GetTop());
-  Self.StatusPad.SetColor(BASH_GUI_STATUS);
-  Self.StatusPad.SetBevelOuter(bvNone);
-
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  Self.BrandLabel := Self.MakeLabel(Self.NavPanel, 'BASH Farm + BH', 16, 28, 14, BASH_GUI_TEXT, True);
+  {$ELSE}
   Self.BrandLabel := Self.MakeLabel(Self.NavPanel, 'BASH Farm', 16, 28, 16, BASH_GUI_TEXT, True);
-  Self.MakeLabel(Self.NavPanel, 'WalkerV2 runner', 16, 54, 9, BASH_GUI_MUTED, False);
+  {$ENDIF}
 
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  Self.ActivitiesNav := Self.MakeNavItem(Self.NavPanel, 'Activities', 12, 100, True);
+  Self.PatchesNav := Self.MakeNavItem(Self.NavPanel, 'Patches', 12, 152);
+  Self.TreesNav := Self.MakeNavItem(Self.NavPanel, 'Trees', 12, 204);
+  Self.TravelNav := Self.MakeNavItem(Self.NavPanel, 'Travel', 12, 256);
+  Self.BirdhouseNav := Self.MakeNavItem(Self.NavPanel, 'Birdhouse', 12, 308);
+  Self.AccountsNav := Self.MakeNavItem(Self.NavPanel, 'Accounts', 12, 360);
+  Self.AntibanNav := Self.MakeNavItem(Self.NavPanel, 'Antiban', 12, 412);
+
+  Self.ActivitiesSection := Self.MakePanel(Self.ContentPanel, 0, 0, 100, 100, BASH_GUI_BG);
+  Self.PatchesSection := Self.MakePanel(Self.ContentPanel, 0, 0, 100, 100, BASH_GUI_BG);
+  Self.TreesSection := Self.MakePanel(Self.ContentPanel, 0, 0, 100, 100, BASH_GUI_BG);
+  Self.TravelSection := Self.MakePanel(Self.ContentPanel, 0, 0, 100, 100, BASH_GUI_BG);
+  Self.BirdhouseSection := Self.MakePanel(Self.ContentPanel, 0, 0, 100, 100, BASH_GUI_BG);
+  Self.AccountsSection := Self.MakePanel(Self.ContentPanel, 0, 0, 100, 100, BASH_GUI_BG);
+  Self.AntibanSection := Self.MakePanel(Self.ContentPanel, 0, 0, 100, 100, BASH_GUI_BG);
+
+  Self.ActivitiesSection.SetWidth(mainW);
+  Self.ActivitiesSection.SetHeight(contentH);
+  Self.PatchesSection.SetWidth(mainW);
+  Self.PatchesSection.SetHeight(contentH);
+  Self.TreesSection.SetWidth(mainW);
+  Self.TreesSection.SetHeight(contentH);
+  Self.TravelSection.SetWidth(mainW);
+  Self.TravelSection.SetHeight(contentH);
+  Self.BirdhouseSection.SetWidth(mainW);
+  Self.BirdhouseSection.SetHeight(contentH);
+  Self.AccountsSection.SetWidth(mainW);
+  Self.AccountsSection.SetHeight(contentH);
+  Self.AntibanSection.SetWidth(mainW);
+  Self.AntibanSection.SetHeight(contentH);
+
+  Self.BuildActivitiesSection();
+  Self.BuildPatchesSection();
+  Self.BuildTreesSection();
+  Self.BuildTravelSection();
+  Self.BuildBirdhouseSection();
+  Self.BuildAccountsSection();
+  Self.BuildAntibanSection();
+
+  Self.ActivitiesNav.SetOnClick(@Self.ShowActivities);
+  Self.PatchesNav.SetOnClick(@Self.ShowPatches);
+  Self.TreesNav.SetOnClick(@Self.ShowTrees);
+  Self.TravelNav.SetOnClick(@Self.ShowTravel);
+  Self.BirdhouseNav.SetOnClick(@Self.ShowBirdhouse);
+  Self.AccountsNav.SetOnClick(@Self.ShowAccounts);
+  Self.AntibanNav.SetOnClick(@Self.ShowAntiban);
+  {$ELSE}
   Self.PatchesNav := Self.MakeNavItem(Self.NavPanel, 'Patches', 12, 100, True);
   Self.TreesNav := Self.MakeNavItem(Self.NavPanel, 'Trees', 12, 152);
   Self.TravelNav := Self.MakeNavItem(Self.NavPanel, 'Travel', 12, 204);
@@ -748,17 +889,16 @@ begin
   Self.PatchesNav.SetOnClick(@Self.ShowPatches);
   Self.TreesNav.SetOnClick(@Self.ShowTrees);
   Self.TravelNav.SetOnClick(@Self.ShowTravel);
+  {$ENDIF}
 
-  Self.StartChip.Create(Self.StatusPanel);
-  Self.StartChip.SetLeft(mainW - startW - TControl.AdjustToDPI(24));
-  Self.StartChip.SetTop((Self.StatusPanel.GetHeight() - startH) div 2 + 2);
-  Self.StartChip.SetWidth(startW);
-  Self.StartChip.SetHeight(startH);
-  Self.StartChip.SetCursor(crHandPoint);
-  Self.PaintRoundChip(Self.StartChip, 'Start', BASH_GUI_START, BASH_GUI_STATUS, True, True);
   Self.StartChip.SetOnClick(@Self.StartScript);
 
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  Self.ShowActivities(Self.ActivitiesNav);
+  Self.RefreshActivityNav();
+  {$ELSE}
   Self.ShowPatches(Self.PatchesNav);
+  {$ENDIF}
 end;
 
 procedure TBASHFarmGUI.ApplySettings();
@@ -775,7 +915,7 @@ begin
   BASHFarmConfig.ArdougneTP := Self.ReadComboIdx('lcb_bash_ardougne_tp');
   BASHFarmConfig.FaladorTP := Self.ReadComboIdx('lcb_bash_falador_tp');
   BASHFarmConfig.CatherbyTP := Self.ReadComboIdx('lcb_bash_catherby_tp');
-  BASHFarmConfig.PhasmatysTP := 0; // Ectophial only
+  BASHFarmConfig.PhasmatysTP := 0;
   BASHFarmConfig.HosidiusTP := Self.ReadComboIdx('lcb_bash_hosidius_tp');
   BASHFarmConfig.OrtusTP := Self.ReadComboIdx('lcb_bash_ortus_tp');
   BASHFarmConfig.GuildTP := Self.ReadComboIdx('lcb_bash_guild_tp');
@@ -795,7 +935,6 @@ begin
 
   BASHFarmConfig.BarbDibber := Self.ReadCheck('cb_bash_barbdibber');
   BASHFarmConfig.LumbyElite := Self.ReadCheck('cb_bash_lumby_elite');
-  BASHFarmConfig.MagicSecateurs := False;
   BASHFarmConfig.RunNow := Self.ReadCheck('cb_bash_runnow');
 
   BASHFarmConfig.Enabled[EBASHFarmPatch.WEISS_HERB] := Self.ReadCheck('cb_bash_weiss_herb');
@@ -847,19 +986,67 @@ begin
   BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_FRUIT] := Self.ReadCheck('cb_bash_guild_fruit');
   BASHFarmConfig.Enabled[EBASHFarmPatch.HARMONY_ISLAND_HERB] := False;
 
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  Self.DoPatches := Self.ReadCheck('cb_bash_enable_patches');
+  Self.DoTrees := False;
+  Self.DoBirdhouse := Self.ReadCheck('cb_bash_enable_birdhouse');
+  Self.StartingLocationIdx := Self.ReadComboIdx('lcb_bash_start_loc');
+
+  BASHFarmConfig.EnablePatches := Self.DoPatches;
+  BASHFarmConfig.EnableTrees := False;
+  BASHFarmConfig.EnableBirdhouse := Self.DoBirdhouse;
+  BASHFarmConfig.StartingLocationIdx := Self.StartingLocationIdx;
+
+  BASHBirdHouseConfig.LogTypeIdx := Self.ReadComboIdx('lcb_bash_bh_log');
+  BASHBirdHouseConfig.SeedIdx := Self.ReadComboIdx('lcb_bash_bh_seed');
+  BASHBirdHouseConfig.UseBestLog := Self.ReadCheck('cb_bash_bh_bestlog');
+  BASHBirdHouseConfig.RunNow := Self.ReadCheck('cb_bash_bh_runnow');
+  BASHBirdHouseConfig.Write();
+  {$ENDIF}
+
   BASHFarmConfig.Write();
+
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+
+  if not Self.DoPatches then
+    Self.ClearPatchEnables();
+  if not Self.DoTrees then
+    Self.ClearTreeEnables();
+  {$ENDIF}
+
   BASHFarmRunner.BuildFromConfig(BASHFarmConfig);
+
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  if Self.DoBirdhouse then
+  begin
+    BASHBirdHouseRunner.ApplyConfig(BASHBirdHouseConfig);
+    BASHBirdHouseRunner.IsDisabled := False;
+  end
+  else
+    BASHBirdHouseRunner.IsDisabled := True;
+  {$ENDIF}
 end;
 
-procedure TBASHFarmGUI.StartScript(sender: TObject); override;
+procedure TBASHFarmGUI.StartScript({$H-}sender: TObject); override; {$H+}
 begin
   Self.ApplySettings();
   BASHFarmRunner.Init();
   WriteLn('[BASHFarm] Loaded ', Length(BASHFarmRunner.Patches), ' patches from GUI');
 
-  // Close like base TScriptForm.StartScript — do NOT `inherited` when a host
-  // still includes farmrunnerupdate (that overrides TScriptForm.StartScript and
-  // reads old farm-tab controls that BASH Farm never creates).
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  if Self.DoBirdhouse then
+  begin
+    BASHBirdHouseRunner.Init();
+    WriteLn('[BASHFarm] Birdhouse ready - log=', ToStr(BASHBirdHouseRunner.LogType),
+      ' seed=', ToStr(BASHBirdHouseRunner.Seed));
+  end
+  else
+    WriteLn('[BASHFarm] Birdhouse runs disabled');
+
+  WriteLn('[BASHFarm] Activities - patches=', Self.DoPatches,
+    ' trees=', Self.DoTrees, ' birdhouse=', Self.DoBirdhouse);
+  {$ENDIF}
+
   try
     Self._WarmBuildCache();
   except
@@ -873,9 +1060,25 @@ var
   tab: TTabSheet;
 begin
   BASHFarmConfig.Read();
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  BASHBirdHouseConfig.Read();
+  Self.DoPatches := BASHFarmConfig.EnablePatches;
+  Self.DoTrees := False;
+  Self.DoBirdhouse := BASHFarmConfig.EnableBirdhouse;
+  Self.StartingLocationIdx := BASHFarmConfig.StartingLocationIdx;
+  Self.Setup('BASH Farm and Birdhouse', [BASH_GUI_W, BASH_GUI_H], False);
+  Self.AddTab('BASH Farm BH');
+  {$ELSE}
   Self.Setup('BASH Farm', [BASH_GUI_W, BASH_GUI_H], False);
   Self.AddTab('BASH Farm');
+  {$ENDIF}
   tab := Self.Tabs[High(Self.Tabs)];
-  Self.BuildShell(tab); // reparents/styles Start after Setup creates it
+  Self.BuildShell(tab);
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  try
+    Self.PageControl.SetShowTabs(False);
+  except
+  end;
+  {$ENDIF}
   inherited;
 end;

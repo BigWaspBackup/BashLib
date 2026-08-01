@@ -1,0 +1,25 @@
+{$IFNDEF BASH_ENSURE_RUN_ZOOM}
+{$DEFINE BASH_ENSURE_RUN_ZOOM}
+
+// Shared helpers for the BASH handlers (farm, birdhouse).
+
+procedure BASHEnsureRunZoom(minZ: Int32 = 5; maxZ: Int32 = 25);
+var
+  zoom, target: Int32;
+begin
+  if minZ > maxZ then
+    Swap(minZ, maxZ);
+
+  if RSInterface.IsOpen() then
+    RSInterface.Close(True);
+
+  zoom := EnsureRange(MM2MS.GetZoomLevel(), 0, 100);
+  if InRange(zoom, minZ, maxZ) then
+  begin
+    Exit;
+  end;
+
+  target := Random(minZ, maxZ);
+  RSMouseZoom.SetZoomLevel(target);
+end;
+{$ENDIF}

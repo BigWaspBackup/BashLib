@@ -1,8 +1,3 @@
-(*!
-  Shared Amazing Farming Equipment Store slot grid helpers.
-  Steel corners → uniform button boxes (store 4x3, invent 2x6).
-*)
-
 const
   BASH_LEP_COORD_TOL = 10;
   BASH_LEP_MIN_BW = 45;
@@ -107,7 +102,6 @@ begin
   end;
 end;
 
-// Steel corner centers → uniform Cols×Rows button boxes.
 function BASHLepFitGrid(Corners: TPointArray; Cols, Rows: Int32): TBoxArray;
 var
   I, J, R, C, Ox, Oy, PitchX, PitchY, BtnW, BtnH, Gap: Int32;

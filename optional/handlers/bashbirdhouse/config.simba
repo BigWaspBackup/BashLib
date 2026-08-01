@@ -1,0 +1,83 @@
+
+
+type
+  TBASHBirdHouseConfig = record
+    LogTypeIdx: Int32;
+    SeedIdx: Int32;
+    UseBestLog: Boolean;
+    RunNow: Boolean;
+  end;
+
+const
+  BASH_BH_LOG_TYPES: TStringArray = [
+    'Regular', 'Oak', 'Willow', 'Teak',
+    'Maple', 'Mahogany', 'Yew', 'Magic', 'Redwood'
+  ];
+
+  BASH_BH_SEEDS: TStringArray = [
+    'Asgarnian seed', 'Barley seed', 'Cabbage seed', 'Hammerstone seed',
+    'Jute seed', 'Krandorian seed', 'Onion seed', 'Potato seed',
+    'Snape grass seed', 'Strawberry seed', 'Sweetcorn seed', 'Tomato seed',
+    'Watermelon seed', 'Wildblood seed', 'Yanillian seed'
+  ];
+
+var
+  BASHBirdHouseConfig: TBASHBirdHouseConfig;
+
+function TBASHBirdHouseConfig.Section(): String;
+begin
+  Result := 'BASH Birdhouse' + ToStr(Login.PlayerIndex);
+end;
+
+function TBASHBirdHouseConfig.Path(): String;
+begin
+  Result := AppPath + 'Configs/BASHBirdHouseSettings';
+end;
+
+procedure TBASHBirdHouseConfig.Clear();
+begin
+  Self.LogTypeIdx := 4;
+  Self.SeedIdx := 7;
+  Self.UseBestLog := False;
+  Self.RunNow := False;
+end;
+
+procedure TBASHBirdHouseConfig.ReadBool(key: String; var dest: Boolean);
+begin
+  dest := StrToBoolDef(ReadINI(Self.Section(), key, Self.Path()), False);
+end;
+
+procedure TBASHBirdHouseConfig.ReadInt(key: String; var dest: Int32);
+begin
+  dest := StrToIntDef(ReadINI(Self.Section(), key, Self.Path()), dest);
+end;
+
+procedure TBASHBirdHouseConfig.Read();
+begin
+  Self.Clear();
+
+  Self.ReadInt('Log type', Self.LogTypeIdx);
+  Self.ReadInt('Seed', Self.SeedIdx);
+  Self.ReadBool('Use best log', Self.UseBestLog);
+  Self.ReadBool('Run now', Self.RunNow);
+
+  if (Self.LogTypeIdx < 0) or (Self.LogTypeIdx > High(BASH_BH_LOG_TYPES)) then
+    Self.LogTypeIdx := 4;
+  if (Self.SeedIdx < 0) or (Self.SeedIdx > High(BASH_BH_SEEDS)) then
+    Self.SeedIdx := 0;
+end;
+
+procedure TBASHBirdHouseConfig.Write();
+begin
+  WriteINI(Self.Section(), 'Log type', ToStr(Self.LogTypeIdx), Self.Path());
+  WriteINI(Self.Section(), 'Seed', ToStr(Self.SeedIdx), Self.Path());
+  WriteINI(Self.Section(), 'Use best log', ToStr(Self.UseBestLog), Self.Path());
+  WriteINI(Self.Section(), 'Run now', ToStr(Self.RunNow), Self.Path());
+end;
+
+function TBASHBirdHouseConfig.Seed(): TRSItem;
+begin
+  if (Self.SeedIdx < 0) or (Self.SeedIdx > High(BASH_BH_SEEDS)) then
+    Exit('Potato seed');
+  Result := BASH_BH_SEEDS[Self.SeedIdx];
+end;

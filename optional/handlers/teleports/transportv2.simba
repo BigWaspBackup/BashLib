@@ -237,7 +237,6 @@ begin
       chargedVariants := getChargedJewelleryNames(teleportLocation.item);
       for chargedJewellery in chargedVariants do
       begin
-        // Invent only — Equipment.ContainsItem closes an open bank
         if Inventory.ContainsItem(chargedJewellery) then
           Exit(True);
 
@@ -270,7 +269,6 @@ begin
         if teleportItem = '' then
           Continue;
 
-        // Invent only — Equipment.ContainsItem closes an open bank
         if Inventory.ContainsItem(teleportItem) then
           Exit(True);
 
@@ -295,7 +293,6 @@ begin
     end;
     ETeleportType.DIARY_ITEM:
     begin
-      // Single "explorer's ring 4..1" (etc.) — Bank.FindItem expands via GetArray in one search
       numberedItems := getNumberedDiaryItems(teleportLocation.item);
       if Length(numberedItems) = 0 then
         Exit(False);

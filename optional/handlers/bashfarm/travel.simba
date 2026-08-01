@@ -1,7 +1,3 @@
-(*!
-  Region travel choices for BASHFarmRunner → RSTeleportsV2.
-*)
-
 const
   BASH_TRAVEL_WEISS: TStringArray = [
     'Icy basalt',
@@ -125,8 +121,8 @@ end;
 function BASHFarmTravel_Ardougne(idx: Int32): TTeleportLocation;
 begin
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_ARDOUGNE) of
-    1: Exit(RSTeleportsV2.ARDOUGNE); // cast spell (runes)
-    2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Ardougne teleport'], 'Break', [6565, 37207])); // tablet
+    1: Exit(RSTeleportsV2.ARDOUGNE);
+    2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Ardougne teleport'], 'Break', [6565, 37207]));
     3: Exit(RSTeleportsV2.NEXUS_ARDOUGNE);
   end;
   Result := RSTeleportsV2.ARDOUGNE_FARM_PATCH;
@@ -135,8 +131,8 @@ end;
 function BASHFarmTravel_Falador(idx: Int32): TTeleportLocation;
 begin
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_FALADOR) of
-    1: Exit(RSTeleportsV2.FALADOR); // cast spell (runes)
-    2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Falador teleport'], 'Break', [7769, 37211])); // tablet
+    1: Exit(RSTeleportsV2.FALADOR);
+    2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Falador teleport'], 'Break', [7769, 37211]));
     3: Exit(RSTeleportsV2.NEXUS_FALADOR);
   end;
   Result := RSTeleportsV2.FALADOR_FARM_PATCH;
@@ -145,28 +141,27 @@ end;
 function BASHFarmTravel_Catherby(idx: Int32): TTeleportLocation;
 begin
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_CATHERBY) of
-    1: Exit(RSTeleportsV2.CAMELOT); // normal spell (runes)
+    1: Exit(RSTeleportsV2.CAMELOT);
     2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Camelot teleport'], 'Break', [6933, 37963]));
     3: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Catherby teleport'], 'Break', [7164, 36566]));
     4: Exit(RSTeleportsV2.NEXUS_CATHERBY);
     5: Exit(RSTeleportsV2.NEXUS_CAMELOT);
   end;
-  Result := RSTeleportsV2.CATHERBY; // Lunar spell (runes)
+  Result := RSTeleportsV2.CATHERBY;
 end;
 
-function BASHFarmTravel_Phasmatys(idx: Int32): TTeleportLocation;
+function BASHFarmTravel_Phasmatys({$H-}idx: Int32): TTeleportLocation; {$H+}
 begin
-  Result := RSTeleportsV2.ECTOFUNTUS; // Ectophial only
+  Result := RSTeleportsV2.ECTOFUNTUS;
 end;
 
 function BASHFarmTravel_Hosidius(idx: Int32): TTeleportLocation;
 begin
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_HOSIDIUS) of
     1: Exit(RSTeleportsV2.HOSIDIUS_PORTAL);
-    2: Exit(RSTeleportsV2.HOUSE); // Teleport to House spell — TeleportTo uses Outside
-    3: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Teleport to house'], 'Outside', [2868, 36222])); // house tablet → Outside
+    2: Exit(RSTeleportsV2.HOUSE);
+    3: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Teleport to house'], 'Outside', [2868, 36222]));
   end;
-  // Book of the dead / Kharedst's — Reminisce → Lunch by the Lancalliums
   Result := RSTeleportsV2.LUNCH_BY_THE_LANCALLIUMS_HOSIDIUS;
 end;
 
@@ -174,7 +169,6 @@ function BASHFarmTravel_Ortus(idx: Int32): TTeleportLocation;
 begin
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_ORTUS) of
     1:
-      // Quetzal whistle → Hunter Guild → run north
       Exit(setupTeleportLocation(
         ETeleportType.OTHER,
         [
@@ -187,7 +181,6 @@ begin
         BASH_ORTUS_HUNTER_LANDING
       ));
     2:
-      // Civitas tablet → Renu Quetzal → Hunter Guild → run north
       Exit(setupTeleportLocation(
         ETeleportType.OTHER,
         ['Civitas illa fortis teleport'],
@@ -195,7 +188,6 @@ begin
         BASH_ORTUS_HUNTER_LANDING
       ));
     3:
-      // Civitas spell (1 fire, 1 earth, 2 law) → Renu → Guild → north
       Exit(setupTeleportLocation(
         ETeleportType.NORMAL_MAGIC,
         'Ortus Civitas Spell',
@@ -204,7 +196,6 @@ begin
       ));
   end;
 
-  // Hunter cape → Hunter Guild → run north
   Result := setupTeleportLocation(
     ETeleportType.OTHER,
     ['Hunter cape(t)', 'Hunter cape'],
@@ -224,7 +215,6 @@ begin
          RSTeleportsV2.FARMING_GUILD.worldPoint
        ));
   end;
-  // Skills necklace — Farming Guild (45+ Farming lands inside)
   Result := RSTeleportsV2.FARMING_GUILD;
 end;
 
@@ -247,14 +237,14 @@ end;
 function BASHFarmTravel_FaladorTree(idx: Int32): TTeleportLocation;
 begin
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_FALADOR_TREE) of
-    1: Exit(RSTeleportsV2.FALADOR); // cast spell (runes)
-    2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Falador teleport'], 'Break', [7769, 37211])); // tablet
+    1: Exit(RSTeleportsV2.FALADOR);
+    2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Falador teleport'], 'Break', [7769, 37211]));
     3: Exit(RSTeleportsV2.NEXUS_FALADOR);
   end;
   Result := RSTeleportsV2.FALADOR_PARK;
 end;
 
-function BASHFarmTravel_TaverleyTree(idx: Int32): TTeleportLocation;
+function BASHFarmTravel_TaverleyTree({$H-}idx: Int32): TTeleportLocation; {$H+}
 begin
   Result := RSTeleportsV2.TAVERLEY_PORTAL;
 end;
@@ -275,7 +265,7 @@ begin
   Result := RSTeleportsV2.CIQ_NORTHWEST_OF_YANILLE;
 end;
 
-function BASHFarmTravel_GnomeVillageFruit(idx: Int32): TTeleportLocation;
+function BASHFarmTravel_GnomeVillageFruit({$H-}idx: Int32): TTeleportLocation; {$H+}
 begin
   Result := RSTeleportsV2.CIQ_NORTHWEST_OF_YANILLE;
 end;
@@ -288,7 +278,7 @@ begin
   Result := RSTeleportsV2.BRIMHAVEN_PORTAL;
 end;
 
-function BASHFarmTravel_LletyaFruit(idx: Int32): TTeleportLocation;
+function BASHFarmTravel_LletyaFruit({$H-}idx: Int32): TTeleportLocation; {$H+}
 begin
   Result := RSTeleportsV2.LLETYA;
 end;
@@ -352,6 +342,5 @@ begin
       Exit(BASHFarmTravel_LletyaFruit(cfg.LletyaFruitTP));
   end;
 
-  // Harmony / unknown — fall back to guild
   Result := RSTeleportsV2.FARMING_GUILD;
 end;

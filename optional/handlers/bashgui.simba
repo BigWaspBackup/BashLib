@@ -1,0 +1,318 @@
+{$DEFINE BASH_GUI_KIT}
+
+// Shared GUI kit for the BASH handler forms (farm, birdhouse).
+// Provides the common palette, layout constants, widget helpers and the
+// nav/content/status "chrome" that every BASH form shares.
+
+const
+  BASH_GUI_NAV       = $F0EBE4;
+  BASH_GUI_BG        = $FFFFFF;
+  BASH_GUI_STATUS    = $F7F4F1;
+  BASH_GUI_DIVIDER   = $D4C9BC;
+  BASH_GUI_CARD      = $F7F4F1;
+  BASH_GUI_ACCENT    = $E0C9AE;
+  BASH_GUI_NAV_IDLE  = $E7DED4;
+  BASH_GUI_START     = $C9B094;
+  BASH_GUI_TEXT      = $1C1C1E;
+  BASH_GUI_MUTED     = $6B6B70;
+  BASH_GUI_NAV_W     = 190;
+  BASH_GUI_STATUS_H  = 56;
+  BASH_GUI_BTN_H     = 42;
+  BASH_GUI_COMBO_W   = 260;
+  BASH_GUI_COMBO_H   = 58;
+  BASH_GUI_COMBO_FONT = 10;
+  BASH_GUI_COMBO_COL2 = 308;
+  BASH_GUI_COMBO_COL3 = 592;
+  BASH_GUI_BOTTOM_INSET = 34;
+
+type
+  TBASHGUIBase = record(TScriptForm)
+    NavPanel, ContentPanel, StatusPanel, DividerPanel, StatusDivider, StatusPad: TPanel;
+    BrandLabel: TLabel;
+    StartChip: TImage;
+    ActiveNav: TImage;
+  end;
+
+function TBASHGUIBase.MainLeft(): Int32;
+begin
+  Result := TControl.AdjustToDPI(BASH_GUI_NAV_W) + TControl.AdjustToDPI(2);
+end;
+
+function TBASHGUIBase.MainWidth(): Int32;
+begin
+  Result := Self.Size.X - Self.MainLeft();
+end;
+
+function TBASHGUIBase.ContentHeight(): Int32;
+begin
+  Result := Self.Size.Y - TControl.AdjustToDPI(BASH_GUI_STATUS_H) -
+            TControl.AdjustToDPI(BASH_GUI_BOTTOM_INSET);
+end;
+
+function TBASHGUIBase.MakePanel(
+  parent: TWinControl;
+  left, top, width, height, color: Int32
+): TPanel;
+begin
+  Result.Create(parent);
+  Result.SetLeft(TControl.AdjustToDPI(left));
+  Result.SetTop(TControl.AdjustToDPI(top));
+  Result.SetWidth(TControl.AdjustToDPI(width));
+  Result.SetHeight(TControl.AdjustToDPI(height));
+  Result.SetColor(color);
+  Result.SetBevelOuter(bvNone);
+end;
+
+procedure TBASHGUIBase.PaintRoundChip(
+  img: TImage;
+  labelText: String;
+  fill, parentBg: Int32;
+  selected: Boolean = False;
+  centered: Boolean = False
+);
+var
+  bmp: TBitmap;
+  c: TCanvas;
+  w, h, r, tw, th, tx: Int32;
+begin
+  w := img.GetWidth();
+  h := img.GetHeight();
+  if (w <= 0) or (h <= 0) then
+    Exit;
+
+  r := TControl.AdjustToDPI(6);
+  if r * 2 > h then
+    r := h div 2;
+  if r * 2 > w then
+    r := w div 2;
+
+  bmp := img.GetPicture().GetBitmap();
+  bmp.SetWidth(w);
+  bmp.SetHeight(h);
+  c := bmp.GetCanvas();
+
+  c.GetBrush().SetColor(parentBg);
+  c.GetPen().SetColor(parentBg);
+  c.FillRect(0, 0, w, h);
+
+  c.GetBrush().SetColor(fill);
+  c.GetPen().SetColor(fill);
+  c.RoundRect(0, 0, w - 1, h - 1, r * 2, r * 2);
+
+  c.GetBrush().SetColor(fill);
+  c.GetFont().SetColor(BASH_GUI_TEXT);
+  c.GetFont().SetSize(11);
+  if selected then
+    c.GetFont().SetStyle([fsBold])
+  else
+    c.GetFont().SetStyle([]);
+
+  tw := c.TextWidth(labelText);
+  th := c.TextHeight(labelText);
+  if centered then
+    tx := (w - tw) div 2
+  else
+    tx := TControl.AdjustToDPI(16);
+  c.TextOut(tx, (h - th) div 2, labelText);
+
+  img.SetHint(labelText);
+  img.SetShowHint(False);
+  img.Invalidate();
+end;
+
+function TBASHGUIBase.MakeNavItem(
+  parent: TWinControl;
+  labelText: String;
+  left, top: Int32;
+  selected: Boolean = False
+): TImage;
+var
+  fill: Int32;
+begin
+  Result.Create(parent);
+  Result.SetLeft(TControl.AdjustToDPI(left));
+  Result.SetTop(TControl.AdjustToDPI(top));
+  Result.SetWidth(TControl.AdjustToDPI(BASH_GUI_NAV_W - 28));
+  Result.SetHeight(TControl.AdjustToDPI(BASH_GUI_BTN_H));
+  Result.SetCursor(crHandPoint);
+
+  if selected then
+    fill := BASH_GUI_ACCENT
+  else
+    fill := BASH_GUI_NAV_IDLE;
+
+  Self.PaintRoundChip(Result, labelText, fill, BASH_GUI_NAV, selected);
+end;
+
+function TBASHGUIBase.MakeLabel(
+  parent: TWinControl;
+  labelText: String;
+  left, top, fontSize, fontColor: Int32;
+  bold: Boolean = False
+): TLabel;
+begin
+  Result.Create(parent);
+  Result.SetLeft(TControl.AdjustToDPI(left));
+  Result.SetTop(TControl.AdjustToDPI(top));
+  Result.SetCaption(labelText);
+  Result.GetFont().SetSize(fontSize);
+  Result.GetFont().SetColor(fontColor);
+  if bold then
+    Result.GetFont().SetStyle([fsBold]);
+end;
+
+procedure TBASHGUIBase.AddCombo(
+  parent: TWinControl;
+  var box: TLabeledComboBox;
+  ctrlName, labelText: String;
+  left, top: Int32;
+  items: TStringArray;
+  itemIndex: Int32
+);
+begin
+  box.Create(parent);
+  box.SetLeft(TControl.AdjustToDPI(left));
+  box.SetTop(TControl.AdjustToDPI(top));
+  box.SetWidth(TControl.AdjustToDPI(BASH_GUI_COMBO_W));
+  box.SetHeight(TControl.AdjustToDPI(BASH_GUI_COMBO_H));
+  box.SetName(ctrlName);
+  box.SetCaption(labelText);
+  box.AddItemArray(items);
+  if (itemIndex >= 0) and (itemIndex <= High(items)) then
+    box.SetItemIndex(itemIndex)
+  else
+    box.SetItemIndex(0);
+  box.SetFontColor(BASH_GUI_TEXT);
+  box.SetStyle(csDropDownList);
+  box.SetFontSize(BASH_GUI_COMBO_FONT);
+  box.ComboBox.SetFontColor(BASH_GUI_TEXT);
+  box.ComboBox.GetFont().SetSize(BASH_GUI_COMBO_FONT);
+end;
+
+procedure TBASHGUIBase.AddCheck(
+  parent: TWinControl;
+  var box: TLabeledCheckBox;
+  ctrlName, labelText: String;
+  left, top: Int32;
+  checked: Boolean
+);
+begin
+  box.Create(parent);
+  box.SetLeft(TControl.AdjustToDPI(left));
+  box.SetTop(TControl.AdjustToDPI(top));
+  box.SetName(ctrlName);
+  box.SetFontColor(BASH_GUI_TEXT);
+  box.SetCaption(labelText);
+  if checked then
+    box.CheckBox.SetChecked(True);
+end;
+
+procedure TBASHGUIBase.AddHeader(parent: TPanel; titleText, subtitleText: String);
+var
+  header: TPanel;
+  headerW: Int32;
+begin
+  headerW := parent.GetWidth();
+  if headerW <= 0 then
+    headerW := Self.MainWidth();
+
+  header := Self.MakePanel(parent, 0, 0, 1, 88, BASH_GUI_CARD);
+  header.SetWidth(headerW);
+  header.SetHeight(TControl.AdjustToDPI(88));
+  Self.MakeLabel(header, titleText, 24, 18, 18, BASH_GUI_TEXT, True);
+  Self.MakeLabel(header, subtitleText, 24, 52, 10, BASH_GUI_MUTED, False);
+end;
+
+function TBASHGUIBase.ReadCheck(ctrlName: String): Boolean;
+var
+  cb: TCheckBox;
+begin
+  cb := Self.Form.GetChild(ctrlName + '_checkbox');
+  Result := (cb.GetState() = cbChecked);
+end;
+
+function TBASHGUIBase.ReadComboIdx(ctrlName: String): Int32;
+var
+  combo: TComboBox;
+begin
+  combo := Self.Form.GetChild(ctrlName + '_combobox');
+  Result := combo.GetItemIndex();
+end;
+
+// Builds the shared shell: nav panel, divider, content area, status bar
+// and the Start chip (caller wires up the chip's OnClick).
+procedure TBASHGUIBase.BuildChrome(tab: TTabSheet);
+var
+  startW, startH, shellW, shellH, statusTop, statusH, mainLeft, mainW, navW: Int32;
+begin
+  Self.Start.SetAlign(alNone);
+  Self.Start.SetVisible(False);
+  Self.Start.SetHeight(0);
+  Self.Start.SetWidth(0);
+
+  navW := TControl.AdjustToDPI(BASH_GUI_NAV_W);
+  statusH := TControl.AdjustToDPI(BASH_GUI_STATUS_H);
+  shellW := Self.Size.X;
+  shellH := Self.Size.Y;
+  mainLeft := Self.MainLeft();
+  mainW := shellW - mainLeft;
+  statusTop := Self.ContentHeight();
+  startW := TControl.AdjustToDPI(132);
+  startH := TControl.AdjustToDPI(BASH_GUI_BTN_H);
+
+  Self.NavPanel.Create(tab);
+  Self.NavPanel.SetLeft(0);
+  Self.NavPanel.SetTop(0);
+  Self.NavPanel.SetWidth(navW);
+  Self.NavPanel.SetHeight(shellH);
+  Self.NavPanel.SetColor(BASH_GUI_NAV);
+  Self.NavPanel.SetBevelOuter(bvNone);
+
+  Self.DividerPanel.Create(tab);
+  Self.DividerPanel.SetLeft(navW);
+  Self.DividerPanel.SetTop(0);
+  Self.DividerPanel.SetWidth(TControl.AdjustToDPI(2));
+  Self.DividerPanel.SetHeight(shellH);
+  Self.DividerPanel.SetColor(BASH_GUI_DIVIDER);
+  Self.DividerPanel.SetBevelOuter(bvNone);
+
+  Self.ContentPanel.Create(tab);
+  Self.ContentPanel.SetLeft(mainLeft);
+  Self.ContentPanel.SetTop(0);
+  Self.ContentPanel.SetWidth(mainW);
+  Self.ContentPanel.SetHeight(statusTop);
+  Self.ContentPanel.SetColor(BASH_GUI_BG);
+  Self.ContentPanel.SetBevelOuter(bvNone);
+
+  Self.StatusDivider.Create(tab);
+  Self.StatusDivider.SetLeft(mainLeft);
+  Self.StatusDivider.SetTop(statusTop);
+  Self.StatusDivider.SetWidth(mainW);
+  Self.StatusDivider.SetHeight(TControl.AdjustToDPI(2));
+  Self.StatusDivider.SetColor(BASH_GUI_DIVIDER);
+  Self.StatusDivider.SetBevelOuter(bvNone);
+
+  Self.StatusPanel.Create(tab);
+  Self.StatusPanel.SetLeft(mainLeft);
+  Self.StatusPanel.SetTop(statusTop + Self.StatusDivider.GetHeight());
+  Self.StatusPanel.SetWidth(mainW);
+  Self.StatusPanel.SetHeight(statusH - Self.StatusDivider.GetHeight());
+  Self.StatusPanel.SetColor(BASH_GUI_STATUS);
+  Self.StatusPanel.SetBevelOuter(bvNone);
+
+  Self.StatusPad.Create(tab);
+  Self.StatusPad.SetLeft(mainLeft);
+  Self.StatusPad.SetTop(Self.StatusPanel.GetTop() + Self.StatusPanel.GetHeight());
+  Self.StatusPad.SetWidth(mainW);
+  Self.StatusPad.SetHeight(shellH - Self.StatusPad.GetTop());
+  Self.StatusPad.SetColor(BASH_GUI_STATUS);
+  Self.StatusPad.SetBevelOuter(bvNone);
+
+  Self.StartChip.Create(Self.StatusPanel);
+  Self.StartChip.SetLeft(mainW - startW - TControl.AdjustToDPI(24));
+  Self.StartChip.SetTop((Self.StatusPanel.GetHeight() - startH) div 2 + 2);
+  Self.StartChip.SetWidth(startW);
+  Self.StartChip.SetHeight(startH);
+  Self.StartChip.SetCursor(crHandPoint);
+  Self.PaintRoundChip(Self.StartChip, 'Start', BASH_GUI_START, BASH_GUI_STATUS, True, True);
+end;

@@ -59,8 +59,6 @@ end;
 function setupDiaryTeleportItem(baseItem: TRSItem): TDiaryTeleportItem;
 begin
   Result.baseItem := baseItem;
-  // One range string — Bank/Inventory Find expands via GetArray() in a single search
-  // (not ring 1, fail, ring 2, fail…). Prefer higher diary tier first.
   Result.numberedItems := [baseItem + ' 4..1'];
 end;
 
