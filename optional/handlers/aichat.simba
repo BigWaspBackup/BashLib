@@ -3056,5 +3056,3 @@ begin
 
   inherited;
 end;
-
-{$SCOPEDENUMS ON}
