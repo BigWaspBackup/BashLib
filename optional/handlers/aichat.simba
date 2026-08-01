@@ -37,6 +37,8 @@ TScriptForm scripts can use `Form.CreateAIChatSettings()` instead of BuildSettin
   {$I BashLib/osr.simba}
 {$ENDIF}
 
+{$SCOPEDENUMS OFF}
+
 const
   AIC_GUI_BG       = $FFFFFF;
   AIC_GUI_CARD     = $F7F4F1;
@@ -3054,3 +3056,5 @@ begin
 
   inherited;
 end;
+
+{$SCOPEDENUMS ON}
