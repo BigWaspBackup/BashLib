@@ -1,9 +1,5 @@
 {$DEFINE BASH_GUI_KIT}
 
-// Shared GUI kit for the BASH handler forms (farm, birdhouse).
-// Provides the common palette, layout constants, widget helpers and the
-// nav/content/status "chrome" that every BASH form shares.
-
 const
   BASH_GUI_NAV       = $F0EBE4;
   BASH_GUI_BG        = $FFFFFF;
@@ -15,15 +11,21 @@ const
   BASH_GUI_START     = $C9B094;
   BASH_GUI_TEXT      = $1C1C1E;
   BASH_GUI_MUTED     = $6B6B70;
+  BASH_GUI_LINK      = $C07020;
+  BASH_GUI_W         = 1120;
+  BASH_GUI_H         = 710;
   BASH_GUI_NAV_W     = 190;
   BASH_GUI_STATUS_H  = 56;
   BASH_GUI_BTN_H     = 42;
   BASH_GUI_COMBO_W   = 260;
   BASH_GUI_COMBO_H   = 58;
   BASH_GUI_COMBO_FONT = 10;
+  BASH_GUI_EDIT_W    = 260;
+  BASH_GUI_COL2      = 308;
+  BASH_GUI_COL3      = 592;
   BASH_GUI_COMBO_COL2 = 308;
   BASH_GUI_COMBO_COL3 = 592;
-  BASH_GUI_BOTTOM_INSET = 34;
+  BASH_GUI_BOTTOM_INSET = 14;
 
 type
   TBASHGUIBase = record(TScriptForm)
@@ -227,7 +229,12 @@ function TBASHGUIBase.ReadCheck(ctrlName: String): Boolean;
 var
   cb: TCheckBox;
 begin
+  Result := False;
+  if Self.Form = nil then
+    Exit;
   cb := Self.Form.GetChild(ctrlName + '_checkbox');
+  if cb = nil then
+    Exit;
   Result := (cb.GetState() = cbChecked);
 end;
 
@@ -235,12 +242,15 @@ function TBASHGUIBase.ReadComboIdx(ctrlName: String): Int32;
 var
   combo: TComboBox;
 begin
+  Result := 0;
+  if Self.Form = nil then
+    Exit;
   combo := Self.Form.GetChild(ctrlName + '_combobox');
+  if combo = nil then
+    Exit;
   Result := combo.GetItemIndex();
 end;
 
-// Builds the shared shell: nav panel, divider, content area, status bar
-// and the Start chip (caller wires up the chip's OnClick).
 procedure TBASHGUIBase.BuildChrome(tab: TTabSheet);
 var
   startW, startH, shellW, shellH, statusTop, statusH, mainLeft, mainW, navW: Int32;

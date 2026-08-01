@@ -318,6 +318,14 @@ begin
 
   Map.Walker.AdaptiveWalk := True;
   MushTree.Mushrooms.Walker := @Map.Walker;
+
+  Objects.Data := nil;
+  NPCs.Data := nil;
+  Banks.MapObjects := [];
+  Banks.ObjectsCache := [];
+  Banks.NPCsCache := [];
+  Objects.Setup(Map.Objects(), @Map.Walker);
+  NPCs.Setup(Map.NPCs(), @Map.Walker);
 end;
 
 procedure TBASHBirdHouseRunner.Init();

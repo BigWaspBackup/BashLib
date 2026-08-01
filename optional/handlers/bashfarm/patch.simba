@@ -746,7 +746,7 @@ begin
       if not started then
       begin
         started := True;
-        stall.Init(3000);
+        stall.Init(1500);
       end
       else
         stall.Restart();
@@ -1846,9 +1846,9 @@ end;
 function TBASHFarmPatch.WithdrawLepSecateurs(closeAfter: Boolean = True): Boolean;
 begin
   Result := Self.WithdrawLepTool(
-    ['Magic secateurs', 'Secateurs'],
+    ['Magic secateurs'],
     BASH_LEP_SLOT_SECATEURS,
-    'secateurs',
+    'Magic secateurs',
     closeAfter
   );
 end;
@@ -2000,8 +2000,9 @@ var
 begin
   Self.NoteItems();
 
-  needSecs := (not Inventory.ContainsItem('Magic secateurs')) and (not Inventory.ContainsItem('Secateurs'))
-    and (not Equipment.ContainsItem('Magic secateurs')) and (not Equipment.ContainsItem('Secateurs'));
+  needSecs := Self.MagicSecateurs and
+              (not Inventory.ContainsItem('Magic secateurs')) and
+              (not Equipment.ContainsItem('Magic secateurs'));
   needSpade := not Inventory.ContainsItem('Spade');
   needCompost := includeCompost and (not Self.UseFertileSoil) and (Self.CompostItem <> '') and
                  (not Inventory.ContainsItem(Self.CompostItem));
@@ -2027,21 +2028,21 @@ begin
   RSInterface.Close(True);
   _BASHLepClearSlots();
   WaitUntil(
-    ((not needSecs) or Inventory.ContainsItem('Magic secateurs') or Inventory.ContainsItem('Secateurs')
-      or Equipment.ContainsItem('Magic secateurs') or Equipment.ContainsItem('Secateurs')) and
+    ((not needSecs) or Inventory.ContainsItem('Magic secateurs')
+      or Equipment.ContainsItem('Magic secateurs')) and
     ((not needSpade) or Inventory.ContainsItem('Spade')) and
     ((not needCompost) or Inventory.ContainsItem(Self.CompostItem)),
     35,
     350
   );
 
-  okSecs := (not needSecs) or Inventory.ContainsItem('Magic secateurs') or Inventory.ContainsItem('Secateurs')
-    or Equipment.ContainsItem('Magic secateurs') or Equipment.ContainsItem('Secateurs');
+  okSecs := (not needSecs) or Inventory.ContainsItem('Magic secateurs')
+    or Equipment.ContainsItem('Magic secateurs');
   okSpade := (not needSpade) or Inventory.ContainsItem('Spade');
   okCompost := (not needCompost) or Inventory.ContainsItem(Self.CompostItem);
 
   if needSecs and not okSecs then
-    WriteLn('[BASHFarm] Failed to withdraw secateurs from leprechaun');
+    WriteLn('[BASHFarm] Failed to withdraw Magic secateurs from leprechaun');
   if needSpade and not okSpade then
     WriteLn('[BASHFarm] Failed to withdraw spade from leprechaun');
   if needCompost and not okCompost then

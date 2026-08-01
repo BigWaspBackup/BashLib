@@ -173,6 +173,7 @@ type
     SearchBox: TBox;
     Harvested, Planted, Composted, Skip, Complete, DontClear: Boolean;
     UseFertileSoil: Boolean;
+    MagicSecateurs: Boolean;
     FailCount: Int32;
 
     CombatHpWatch: Boolean;

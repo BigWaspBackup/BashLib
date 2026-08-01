@@ -61,19 +61,19 @@ begin
     Self.SettingsSection, lcb, 'lcb_bash_bh_log', 'Birdhouse / log type',
     24, 110, BASH_BH_LOG_TYPES, BASHBirdHouseConfig.LogTypeIdx
   );
-  lcb.SetTooltip('Log / birdhouse tier to craft and place. Disabled when Always use best log is on.');
+  lcb.SetTooltip('Log / birdhouse tier to craft and place.');
 
   Self.AddCombo(
     Self.SettingsSection, lcb, 'lcb_bash_bh_seed', 'Seed',
     BASH_GUI_COMBO_COL2, 110, BASH_BH_SEEDS, BASHBirdHouseConfig.SeedIdx
   );
-  lcb.SetTooltip('Seed type used to fill birdhouses. Keep enough in the bank.');
+  lcb.SetTooltip('Seed type used to fill birdhouses..');
 
   Self.AddCheck(
     Self.SettingsSection, cb, 'cb_bash_bh_bestlog', 'Always use best log',
     24, 200, BASHBirdHouseConfig.UseBestLog
   );
-  cb.SetTooltip('Auto-pick the highest birdhouse your Hunter level unlocks. Disables the log dropdown.');
+  cb.SetTooltip('Auto-pick the highest birdhouse your Hunter level unlocks..');
   cb.CheckBox.SetOnChange(@Self.OnBestLogCheckChange);
 
   Self.AddCheck(

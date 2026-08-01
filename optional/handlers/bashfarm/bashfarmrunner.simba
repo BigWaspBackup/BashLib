@@ -27,6 +27,7 @@ type
     Contract: TBASHFarmContract;
     CompostMethod: EBASHCompostMethod;
     BarbDibber: Boolean;
+    MagicSecateurs: Boolean;
     LumbyElite: Boolean;
     Initialized: Boolean;
     PatchesCompleted, PatchesSkipped, RunsComplete: Int32;
@@ -78,6 +79,7 @@ begin
   patch.Seed := seed;
   patch.CompostItem := Self.CompostItemName();
   patch.UseFertileSoil := Self.CompostMethod = EBASHCompostMethod.FERTILE_SOIL;
+  patch.MagicSecateurs := Self.MagicSecateurs;
   Self.SetupUpTexts(patch);
 
   patch.Seed := Self.Contract.ApplyContractOverride(patchId, seed);
@@ -100,6 +102,7 @@ begin
 
   Self.CompostMethod := cfg.GetCompostMethod();
   Self.BarbDibber := cfg.BarbDibber;
+  Self.MagicSecateurs := cfg.MagicSecateurs;
   Self.LumbyElite := cfg.LumbyElite;
 
   for p := Low(EBASHFarmPatch) to High(EBASHFarmPatch) do
@@ -188,6 +191,14 @@ begin
     Map.SetupChunks(chunks, 8);
 
   Map.Walker.AdaptiveWalk := True;
+
+  Objects.Data := nil;
+  NPCs.Data := nil;
+  Banks.MapObjects := [];
+  Banks.ObjectsCache := [];
+  Banks.NPCsCache := [];
+  Objects.Setup(Map.Objects(), @Map.Walker);
+  NPCs.Setup(Map.NPCs(), @Map.Walker);
 end;
 
 procedure TBASHFarmRunner.Init();
@@ -768,7 +779,7 @@ function TBASHFarmRunner.TeleportTo(travel: TTeleportLocation): Boolean;
 var
   startPos: TPoint;
   item: TRSItem;
-  i: Int32;
+  i, attempt: Int32;
   dest, itemName: String;
   isKharedst: Boolean;
 begin
@@ -901,13 +912,19 @@ begin
     Exit;
   end;
 
-  if BASHFarmIsMagicTeleport(travel.teleportType) then
-    Result := Self.Transport.run(travel, True, False, Map)
-  else
-    Result := Self.Transport.run(travel, False, False, Map);
+  for attempt := 1 to 3 do
+  begin
+    if BASHFarmIsMagicTeleport(travel.teleportType) then
+      Result := Self.Transport.run(travel, True, False, Map)
+    else
+      Result := Self.Transport.run(travel, False, False, Map);
 
-  if not Result then
-    WriteLn('[BASHFarm] Teleport failed: ', travel.destination, ' (', ToStr(travel.teleportType), ')');
+    if Result then
+      Exit;
+
+    WriteLn('[BASHFarm] Teleport attempt ', attempt, '/3 failed: ',
+            travel.destination, ' (', ToStr(travel.teleportType), ')');
+  end;
 end;
 
 function TBASHFarmRunner.OrtusWalkNorthToFarm(): Boolean;
@@ -1161,6 +1178,7 @@ begin
   patch.Seed := Self.Contract.ApplyContractOverride(patch.Id, patch.Seed);
   patch.CompostItem := Self.CompostItemName();
   patch.UseFertileSoil := Self.CompostMethod = EBASHCompostMethod.FERTILE_SOIL;
+  patch.MagicSecateurs := Self.MagicSecateurs;
 
   if Self.Journal.IsLikelyGrowing(patch.Id) and (patch.Data.PatchType in [EBASHPatchType.TREE, EBASHPatchType.FRUIT]) then
     WriteLn('[BASHFarm] Journal: ', patch.Data.Name, ' likely still growing (', Self.Journal.GetPlantedItem(patch.Id), ')');

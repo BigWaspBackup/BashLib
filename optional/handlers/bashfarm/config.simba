@@ -13,7 +13,7 @@ type
     GnomeTreeTP, GnomeFruitTP, GnomeVillageFruitTP: Int32;
     CatherbyFruitTP, BrimhavenFruitTP, LletyaFruitTP: Int32;
 
-    BarbDibber, RunNow: Boolean;
+    BarbDibber, MagicSecateurs, RunNow: Boolean;
     LumbyElite: Boolean;
 
     EnablePatches, EnableTrees, EnableBirdhouse: Boolean;
@@ -293,6 +293,7 @@ begin
   Self.LletyaFruitTP := 0;
 
   Self.BarbDibber := False;
+  Self.MagicSecateurs := False;
   Self.LumbyElite := False;
   Self.RunNow := False;
 
@@ -370,6 +371,7 @@ begin
   Self.Enabled[EBASHFarmPatch.HARMONY_ISLAND_HERB] := False;
 
   Self.ReadBool('Barb dibber', Self.BarbDibber);
+  Self.ReadBool('Magic secateurs', Self.MagicSecateurs);
   Self.ReadBool('Lumby elite', Self.LumbyElite);
   Self.ReadBool('Run now', Self.RunNow);
 
@@ -427,6 +429,7 @@ begin
   end;
 
   WriteINI(sec, 'Barb dibber', ToStr(Self.BarbDibber), path);
+  WriteINI(sec, 'Magic secateurs', ToStr(Self.MagicSecateurs), path);
   WriteINI(sec, 'Lumby elite', ToStr(Self.LumbyElite), path);
   WriteINI(sec, 'Run now', ToStr(Self.RunNow), path);
 
