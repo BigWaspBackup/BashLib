@@ -1,3 +1,12 @@
+# [8.3.0](https://github.com/BigWaspBackup/BashLib/compare/v8.2.4...v8.3.0) (2026-08-02)
+
+
+### Features
+
+* Bash Farm runs now support farming guild via fairy ring/ardy cloak or Skills necklace. ([9bcac99](https://github.com/BigWaspBackup/BashLib/commit/9bcac99a041e484e01f2bd1b6158feed5820c119))
+
+
+
 ## [8.2.4](https://github.com/BigWaspBackup/BashLib/compare/v8.2.3...v8.2.4) (2026-08-01)
 
 
@@ -22,10 +31,6 @@
 ### Bug Fixes
 
 * allow aichat enums ([2b4768a](https://github.com/BigWaspBackup/BashLib/commit/2b4768a8bb662e8e54db9bbd1d5dca9573254b32))
-
-
-
-## [8.2.1](https://github.com/BigWaspBackup/BashLib/compare/v8.2.0...v8.2.1) (2026-08-01)
 
 
 
