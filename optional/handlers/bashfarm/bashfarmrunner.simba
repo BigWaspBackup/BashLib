@@ -30,12 +30,16 @@ type
     MagicSecateurs: Boolean;
     LumbyElite: Boolean;
     Initialized: Boolean;
-    // SetupChunks instead of AddChunks when the host script already has a large map.
-    ReplaceMapOnEnsure: Boolean;
     PatchesCompleted, PatchesSkipped, RunsComplete: Int32;
 
     ExtraRuneNames: TRSItemArray;
     ExtraRuneQtys: TIntegerArray;
+
+    EquippedScanDone: Boolean;
+    EquippedTravelKeys: TStringArray;
+    ArdyCloakEquipped: Boolean;
+    FairyStaffEquipped: Boolean;
+    FairyStaffName: TRSItem;
   end;
 
 var
@@ -94,6 +98,11 @@ procedure TBASHFarmRunner.ClearPatches();
 begin
   SetLength(Self.Patches, 0);
   Self.Initialized := False;
+  Self.EquippedScanDone := False;
+  SetLength(Self.EquippedTravelKeys, 0);
+  Self.ArdyCloakEquipped := False;
+  Self.FairyStaffEquipped := False;
+  Self.FairyStaffName := '';
 end;
 
 procedure TBASHFarmRunner.BuildFromConfig(cfg: TBASHFarmConfig);
@@ -135,14 +144,13 @@ begin
   Result := 'bash guild fairy cir' in travel.destination.Lower();
 end;
 
-procedure TBASHFarmRunner.EnsureChunks();
+function TBASHFarmRunner.CollectChunks(): array of TRSMapChunk;
 var
   i, j, k: Int32;
-  chunks: array of TRSMapChunk;
   chunk: TRSMapChunk;
   exists, needArdyCloak: Boolean;
 begin
-  SetLength(chunks, 0);
+  SetLength(Result, 0);
   needArdyCloak := False;
 
   for i := 0 to High(Self.Patches) do
@@ -154,14 +162,14 @@ begin
     begin
       chunk := Self.Patches[i].Data.Chunks[j];
       exists := False;
-      for k := 0 to High(chunks) do
-        if (chunks[k].Chunk = chunk.Chunk) then
+      for k := 0 to High(Result) do
+        if (Result[k].Chunk = chunk.Chunk) then
         begin
           exists := True;
           Break;
         end;
       if not exists then
-        chunks += chunk;
+        Result += chunk;
     end;
   end;
 
@@ -170,27 +178,19 @@ begin
     chunk.Chunk := Box(38, 51, 42, 48);
     chunk.Planes := [0];
     exists := False;
-    for k := 0 to High(chunks) do
-      if (chunks[k].Chunk = chunk.Chunk) then
+    for k := 0 to High(Result) do
+      if (Result[k].Chunk = chunk.Chunk) then
       begin
         exists := True;
         Break;
       end;
     if not exists then
-      chunks += chunk;
+      Result += chunk;
   end;
+end;
 
-  if Length(chunks) = 0 then
-  begin
-    WriteLn('[BASHFarm] EnsureChunks: no chunks on enabled patches');
-    Exit;
-  end;
-
-  if Map.IsSetup and (not Self.ReplaceMapOnEnsure) then
-    Map.AddChunks(chunks, 8)
-  else
-    Map.SetupChunks(chunks, 8);
-
+procedure TBASHFarmRunner.BindMapObjects();
+begin
   Map.Walker.AdaptiveWalk := True;
   Map.Walker._DoorHandler.Enabled := True;
 
@@ -201,6 +201,17 @@ begin
   Banks.NPCsCache := [];
   Objects.Setup(Map.Objects(), @Map.Walker);
   NPCs.Setup(Map.NPCs(), @Map.Walker);
+end;
+
+procedure TBASHFarmRunner.EnsureChunks();
+begin
+  if not Map.IsSetup then
+  begin
+    WriteLn('[BASHFarm] EnsureChunks: map not loaded');
+    Exit;
+  end;
+
+  Self.BindMapObjects();
 end;
 
 procedure TBASHFarmRunner.Init();
@@ -396,57 +407,105 @@ begin
   end;
 end;
 
-{ Equipment.ContainsItem opens the equipment tab and closes an open bank.
-  Pass checkEquipment=False while withdrawing at the bank. }
+function BASHFarmExpandItemVariants(variants: TRSItemArray): TRSItemArray;
+var
+  j: Int32;
+  variant: TRSItem;
+  concrete: TRSItemArray;
+begin
+  SetLength(Result, 0);
+  for j := 0 to High(variants) do
+  begin
+    variant := variants[j];
+    concrete := variant.GetArray();
+    Result += concrete;
+  end;
+end;
+
 function BASHFarmHasTeleportItem(constref travel: TTeleportLocation; checkEquipment: Boolean = True): Boolean;
 var
   j: Int32;
   tpItem: TRSItem;
-  variants: TRSItemArray;
+  concrete: TRSItemArray;
 begin
   for j := 0 to High(travel.items) do
   begin
     tpItem := travel.items[j];
     if tpItem = '' then
       Continue;
-    if Inventory.ContainsItem(tpItem) then
+    concrete := tpItem.GetArray();
+    if Inventory.ContainsAny(concrete) then
       Exit(True);
-    if checkEquipment and Equipment.ContainsItem(tpItem) then
+    if checkEquipment and Equipment.ContainsAny(concrete) then
       Exit(True);
   end;
 
   if (travel.teleportType = ETeleportType.DIARY_ITEM) and (travel.item <> '') then
   begin
-    variants := getNumberedDiaryItems(travel.item);
-    for j := 0 to High(variants) do
-    begin
-      if Inventory.ContainsItem(variants[j]) then
-        Exit(True);
-      if checkEquipment and Equipment.ContainsItem(variants[j]) then
-        Exit(True);
-    end;
+    concrete := BASHFarmExpandItemVariants(getNumberedDiaryItems(travel.item));
+    if Inventory.ContainsAny(concrete) then
+      Exit(True);
+    if checkEquipment and Equipment.ContainsAny(concrete) then
+      Exit(True);
     Exit(False);
   end;
 
   if (travel.teleportType = ETeleportType.JEWELLERY) and (travel.item <> '') then
   begin
-    variants := getChargedJewelleryNames(travel.item);
-    for j := 0 to High(variants) do
-    begin
-      if Inventory.ContainsItem(variants[j]) then
-        Exit(True);
-      if checkEquipment and Equipment.ContainsItem(variants[j]) then
-        Exit(True);
-    end;
+    concrete := BASHFarmExpandItemVariants(getChargedJewelleryNames(travel.item));
+    if Inventory.ContainsAny(concrete) then
+      Exit(True);
+    if checkEquipment and Equipment.ContainsAny(concrete) then
+      Exit(True);
     Exit(False);
   end;
 
   if travel.item <> '' then
   begin
-    if Inventory.ContainsItem(travel.item) then
+    tpItem := travel.item;
+    concrete := tpItem.GetArray();
+    if Inventory.ContainsAny(concrete) then
       Exit(True);
-    if checkEquipment and Equipment.ContainsItem(travel.item) then
+    if checkEquipment and Equipment.ContainsAny(concrete) then
       Exit(True);
+  end;
+
+  Result := False;
+end;
+
+function BASHFarmTeleportEquipped(constref travel: TTeleportLocation): Boolean;
+var
+  j: Int32;
+  tpItem: TRSItem;
+  concrete: TRSItemArray;
+begin
+  for j := 0 to High(travel.items) do
+  begin
+    tpItem := travel.items[j];
+    if tpItem = '' then
+      Continue;
+    concrete := tpItem.GetArray();
+    if Equipment.ContainsAny(concrete) then
+      Exit(True);
+  end;
+
+  if (travel.teleportType = ETeleportType.DIARY_ITEM) and (travel.item <> '') then
+  begin
+    concrete := BASHFarmExpandItemVariants(getNumberedDiaryItems(travel.item));
+    Exit(Equipment.ContainsAny(concrete));
+  end;
+
+  if (travel.teleportType = ETeleportType.JEWELLERY) and (travel.item <> '') then
+  begin
+    concrete := BASHFarmExpandItemVariants(getChargedJewelleryNames(travel.item));
+    Exit(Equipment.ContainsAny(concrete));
+  end;
+
+  if travel.item <> '' then
+  begin
+    tpItem := travel.item;
+    concrete := tpItem.GetArray();
+    Exit(Equipment.ContainsAny(concrete));
   end;
 
   Result := False;
@@ -466,6 +525,112 @@ begin
     Result += travel.destination.Lower();
 end;
 
+function TBASHFarmRunner.TravelKeyEquipped(constref key: String): Boolean;
+var
+  k: Int32;
+begin
+  for k := 0 to High(Self.EquippedTravelKeys) do
+    if Self.EquippedTravelKeys[k] = key then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TBASHFarmRunner.EnsureEquippedTeleportCache();
+var
+  i: Int32;
+  travel: TTeleportLocation;
+  itemKey: String;
+  needGuildFairy: Boolean;
+begin
+  if Self.EquippedScanDone then
+    Exit;
+
+  if Length(Self.Patches) = 0 then
+    Exit;
+
+  WriteLn('[BASHFarm] Scanning equipment for teleports / fairy staff');
+
+  if Bank.IsOpen() then
+  begin
+    Bank.Close();
+    WaitUntil(not Bank.IsOpen(), 50, 2500);
+  end;
+
+  SetLength(Self.EquippedTravelKeys, 0);
+  Self.ArdyCloakEquipped := False;
+  Self.FairyStaffEquipped := Self.LumbyElite;
+  Self.FairyStaffName := '';
+  needGuildFairy := False;
+
+  for i := 0 to High(Self.Patches) do
+  begin
+    travel := Self.Patches[i].Travel;
+
+    if BASHFarmIsGuildFairyCIR(travel) then
+    begin
+      needGuildFairy := True;
+      Continue;
+    end;
+
+    if BASHFarmIsMagicTeleport(travel.teleportType) then
+      Continue;
+
+    itemKey := BASHFarmTravelItemKey(travel);
+    if Self.TravelKeyEquipped(itemKey) then
+      Continue;
+
+    if BASHFarmTeleportEquipped(travel) then
+    begin
+      WriteLn('[BASHFarm] Equipped teleport: ', Self.Patches[i].Data.Name,
+              ' (', travel.destination, ')');
+      Self.EquippedTravelKeys += itemKey;
+    end;
+  end;
+
+  if needGuildFairy or Self.TravelKeyEquipped(BASHFarmTravelItemKey(RSTeleportsV2.MONASTERY)) then
+  begin
+    Self.ArdyCloakEquipped := BASHFarmTeleportEquipped(RSTeleportsV2.MONASTERY);
+    if Self.ArdyCloakEquipped then
+      WriteLn('[BASHFarm] Ardougne cloak equipped - will cast from equipment');
+  end;
+
+  if not Self.ArdyCloakEquipped then
+    for i := 0 to High(Self.Patches) do
+    begin
+      travel := Self.Patches[i].Travel;
+      if (travel.teleportType = ETeleportType.DIARY_ITEM) and
+         ('ardougne cloak' in ToStr(travel.item).Lower()) then
+      begin
+        if BASHFarmTeleportEquipped(travel) then
+        begin
+          Self.ArdyCloakEquipped := True;
+          WriteLn('[BASHFarm] Ardougne cloak equipped - will cast from equipment');
+        end;
+        Break;
+      end;
+    end;
+
+  if needGuildFairy and (not Self.LumbyElite) then
+  begin
+    if Equipment.ContainsItem('Lunar staff') then
+    begin
+      Self.FairyStaffEquipped := True;
+      Self.FairyStaffName := 'Lunar staff';
+    end
+    else if Equipment.ContainsItem('Dramen staff') then
+    begin
+      Self.FairyStaffEquipped := True;
+      Self.FairyStaffName := 'Dramen staff';
+    end;
+
+    if Self.FairyStaffEquipped then
+      WriteLn('[BASHFarm] ', Self.FairyStaffName, ' equipped - skip withdraw / re-equip');
+  end;
+
+  Self.EquippedScanDone := True;
+  Inventory.Open();
+end;
+
 function TBASHFarmRunner.OnStart(): Boolean;
 var
   i, j, seedsNeeded: Int32;
@@ -476,15 +641,30 @@ var
   runeQtys: TIntegerArray;
   seenMagic, seenItems: TStringArray;
   magicKey, itemKey: String;
+  needGuildFairy: Boolean;
 begin
+  Self.EnsureEquippedTeleportCache();
+
+  { Cache may close an already-open bank; reopen if the host opened it for us }
   if not Bank.IsOpen() then
   begin
-    WriteLn('[BASHFarm] OnStart: bank is not open');
-    Exit(False);
+    if not Self.EnsureBankOpen() then
+    begin
+      WriteLn('[BASHFarm] OnStart: bank is not open');
+      Exit(False);
+    end;
   end;
 
   WriteLn('[BASHFarm] OnStart: depositing inventory');
   Bank.DepositAll();
+
+  needGuildFairy := False;
+  for i := 0 to High(Self.Patches) do
+    if BASHFarmIsGuildFairyCIR(Self.Patches[i].Travel) then
+    begin
+      needGuildFairy := True;
+      Break;
+    end;
 
   for i := 0 to High(Self.Patches) do
   begin
@@ -556,15 +736,14 @@ begin
     seenItems += itemKey;
 
     if BASHFarmIsGuildFairyCIR(travel) then
-    begin
       Continue;
-    end;
 
-    { Invent-only: Equipment.ContainsItem closes the bank }
-    if BASHFarmHasTeleportItem(travel, False) then
-    begin
+    if Self.TravelKeyEquipped(itemKey) then
       Continue;
-    end;
+
+    { Invent-only: equipment already cached }
+    if BASHFarmHasTeleportItem(travel, False) then
+      Continue;
 
     WriteLn('[BASHFarm] Withdrawing teleport for ', Self.Patches[i].Data.Name,
             ' -> ', travel.destination);
@@ -616,24 +795,30 @@ begin
       WriteLn('[BASHFarm] Warning: failed to withdraw teleport for ', Self.Patches[i].Data.Name);
   end;
 
-  for i := 0 to High(Self.Patches) do
+  if needGuildFairy then
   begin
-    if not BASHFarmIsGuildFairyCIR(Self.Patches[i].Travel) then
-      Continue;
-
     if not Self.EnsureBankOpen() then
       WriteLn('[BASHFarm] Warning: bank closed before guild fairy withdraw')
     else
     begin
-      if not Self.Transport.withdrawTeleportItem(RSTeleportsV2.MONASTERY) then
+      if Self.ArdyCloakEquipped then
+        WriteLn('[BASHFarm] Skipping Ardougne cloak withdraw (equipped)')
+      else if not Self.Transport.withdrawTeleportItem(RSTeleportsV2.MONASTERY) then
         WriteLn('[BASHFarm] Warning: could not withdraw Ardougne cloak for guild fairy');
+
       if not Self.LumbyElite then
       begin
-        if (not Inventory.ContainsItem('Dramen staff')) and (not Self.FarmWithdrawHelper('Dramen staff', 1)) then
-          WriteLn('[BASHFarm] Warning: could not withdraw Dramen staff');
+        if Self.FairyStaffEquipped or
+           Inventory.ContainsItem('Dramen staff') or
+           Inventory.ContainsItem('Lunar staff') then
+          WriteLn('[BASHFarm] Skipping Dramen/Lunar staff withdraw (already have)')
+        else if not Self.FarmWithdrawHelper('Dramen staff', 1) then
+        begin
+          if not Self.FarmWithdrawHelper('Lunar staff', 1) then
+            WriteLn('[BASHFarm] Warning: could not withdraw Dramen or Lunar staff');
+        end;
       end;
     end;
-    Break;
   end;
 
   for i := 0 to High(Self.ExtraRuneNames) do
@@ -675,6 +860,7 @@ end;
 
 procedure TBASHFarmRunner.OnComplete();
 begin
+  Bank.CachedQuantity := 0;
 end;
 
 function TBASHFarmRunner.UseDJPFairyRingCIR(): Boolean;
@@ -683,6 +869,10 @@ var
 begin
   if Self.LumbyElite then
     FairyRing.Item := 'null'
+  else if Self.FairyStaffEquipped and (Self.FairyStaffName <> '') then
+    FairyRing.Item := Self.FairyStaffName
+  else if Inventory.ContainsItem('Lunar staff') then
+    FairyRing.Item := 'Lunar staff'
   else
     FairyRing.Item := 'Dramen staff';
 
@@ -1281,6 +1471,9 @@ begin
     Self.Init();
 
   BASHEnsureRunZoom(5, 25);
+
+  { Before host OnStart opens the bank }
+  Self.EnsureEquippedTeleportCache();
 
   if not Self.OnStart() then
   begin

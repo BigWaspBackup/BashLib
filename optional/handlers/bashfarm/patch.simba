@@ -443,11 +443,13 @@ begin
     Exit(EBASHPatchState.SKIP);
 
   if Self.Planted and (not Self.Composted) then
+  begin
+    if Inventory.IsFull() then
+      Exit(EBASHPatchState.NOTE_ITEMS);
     Exit(EBASHPatchState.UNCOMPOSTED);
+  end;
   if Self.Planted then
     Exit(EBASHPatchState.GROWING);
-  if Self.Harvested and (not Self.Planted) then
-    Exit(EBASHPatchState.EMPTY);
 
   if Minimap.InPOH() then
     Exit(EBASHPatchState.TELEPORT_TO);
@@ -455,11 +457,14 @@ begin
   if not Map.Position().InBox(Self.Data.MapCoords) then
     Exit(EBASHPatchState.TELEPORT_TO);
 
-  if not Self.WalkFind() then
-    Exit(EBASHPatchState.NOT_FOUND);
-
   if Inventory.IsFull() then
     Exit(EBASHPatchState.NOTE_ITEMS);
+
+  if Self.Harvested and (not Self.Planted) then
+    Exit(EBASHPatchState.EMPTY);
+
+  if not Self.WalkFind() then
+    Exit(EBASHPatchState.NOT_FOUND);
 
   if Self.Data.PatchType = EBASHPatchType.HERB then
   begin
@@ -760,6 +765,8 @@ begin
       if colourEmpty then
       begin
         Self.DropEmptyBuckets();
+        if Inventory.IsFull() then
+          Self.NoteItems();
         LogHerbSoil('finished');
         Self.Harvested := True;
         Exit(True);
@@ -768,6 +775,8 @@ begin
       if (Self.Data.PatchType = EBASHPatchType.HERB) and (soilPct >= 0.75) then
       begin
         Self.DropEmptyBuckets();
+        if Inventory.IsFull() then
+          Self.NoteItems();
         LogHerbSoil('finished');
         Self.Harvested := True;
         Exit(True);
@@ -776,6 +785,8 @@ begin
       if Self.Hover() and (not MainScreen.IsUpText(Self.HarvestUpText)) then
       begin
         Self.DropEmptyBuckets();
+        if Inventory.IsFull() then
+          Self.NoteItems();
         LogHerbSoil('finished');
         Self.Harvested := True;
         Exit(True);
@@ -886,6 +897,17 @@ var
   clickAt: TPoint;
 begin
   Result := False;
+
+  if Inventory.IsFull() then
+  begin
+    WriteLn('[BASHFarm] Inventory full before planting - noting at leprechaun');
+    Self.NoteItems();
+    if Inventory.IsFull() then
+    begin
+      WriteLn('[BASHFarm] Inventory still full after note, cannot plant');
+      Exit(False);
+    end;
+  end;
 
   if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
     seedsNeeded := 3
@@ -1386,35 +1408,56 @@ end;
 function TBASHFarmPatch.WalkNearLeprechaun(keepOut: Int32 = 10): Boolean;
 var
   me, lep, dest: TPoint;
-  dist, scale: Double;
+  dist: Double;
   attempt: Int32;
+  targets: TPointArray;
+
+  function TryWebWalk(target: TPoint; untilDist: Int32): Boolean;
+  begin
+    Result := False;
+    try
+      Result := Map.Walker.WebWalk(target, untilDist, 0.15);
+    except
+      WriteLn('[BASHFarm] WebWalk connect failed to ', target, ' from ', Map.Position());
+      Result := False;
+    end;
+  end;
 begin
   lep := Self.Data.LeprechaunCoords;
   me := Map.Position();
   dist := me.DistanceTo(lep);
 
   if dist <= (keepOut + 8) then
-  begin
     Exit(True);
-  end;
-
-  scale := keepOut / dist;
-  dest.X := Round(lep.X + (me.X - lep.X) * scale);
-  dest.Y := Round(lep.Y + (me.Y - lep.Y) * scale);
 
   WriteLn('[BASHFarm] Walking to farm near leprechaun at ', Self.Data.Name);
 
-  for attempt := 1 to 3 do
+  if TryWebWalk(lep, keepOut + 4) then
   begin
-    if Map.Walker.WebWalk(dest, 4, 0.15) then
+    me := Map.Position();
+    Exit(me.DistanceTo(lep) <= (keepOut + 12));
+  end;
+
+  targets := [
+    Self.Data.MapCoords.Center(),
+    Self.Data.Coords,
+    lep
+  ];
+
+  for attempt := 0 to High(targets) do
+  begin
+    dest := targets[attempt];
+    WriteLn('[BASHFarm] Lep walk fallback ', attempt + 1, '/', Length(targets), ' -> ', dest);
+    if TryWebWalk(dest, Max(keepOut + 4, 8)) then
       Break;
-    WriteLn('[BASHFarm] Failed to walk near leprechaun at ', Self.Data.Name);
-    dest := Self.Data.MapCoords.Center();
   end;
 
   me := Map.Position();
   dist := me.DistanceTo(lep);
   Result := dist <= (keepOut + 12);
+  if not Result then
+    WriteLn('[BASHFarm] Failed to walk near leprechaun at ', Self.Data.Name,
+            ' (dist=', Round(dist), ')');
 end;
 
 function TBASHFarmPatch.FindLeprechaun(out lepPoints: TPointArray): Boolean;
@@ -1448,6 +1491,21 @@ var
     Result := True;
   end;
 
+  function TryUnderPlayer(): Boolean;
+  begin
+    Result := False;
+    me := Map.Position();
+    if me.DistanceTo(lep) > 20 then
+      Exit;
+    if not Minimap.HasDotUnder() then
+      Exit;
+
+    SetLength(lepPoints, 1);
+    lepPoints[0] := Map.GetTileMS(me).Mean;
+    WriteLn('[BASHFarm] Lep under player at ', Self.Data.Name, ' (minimap dot)');
+    Result := True;
+  end;
+
 begin
   SetLength(lepPoints, 0);
   me := Map.Position();
@@ -1473,6 +1531,9 @@ begin
 
     Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(35, 70) * (1 - 2 * (attempt mod 2)), 10);
   end;
+
+  if TryUnderPlayer() then
+    Exit(True);
 
   me := Map.Position();
   dist := me.DistanceTo(lep);

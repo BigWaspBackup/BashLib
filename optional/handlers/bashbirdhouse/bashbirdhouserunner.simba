@@ -52,7 +52,6 @@ type
     CurrentBirdHouseIndex: Int32;
     HasRunFinished, ShouldTeleport, AlwaysUseBestLog,
     IsDisabled, TerminateOnNoLogs, Initialized: Boolean;
-    ReplaceMapOnEnsure: Boolean;
 
     Transport: TUniversalTransportV2;
     ScriptIntervalTimer, NextRunSpewTimer: TCountdown;
@@ -310,13 +309,14 @@ begin
   end;
 end;
 
-procedure TBASHBirdHouseRunner.EnsureChunks();
+function TBASHBirdHouseRunner.CollectChunks(): array of TRSMapChunk;
 begin
-  if Map.IsSetup and (not Self.ReplaceMapOnEnsure) then
-    Map.AddChunk(ERSChunk.FOSSIL_ISLAND)
-  else
-    Map.SetupChunk(ERSChunk.FOSSIL_ISLAND);
+  SetLength(Result, 1);
+  Result[0] := ERSChunk.FOSSIL_ISLAND.Get();
+end;
 
+procedure TBASHBirdHouseRunner.BindMapObjects();
+begin
   Map.Walker.AdaptiveWalk := True;
   MushTree.Mushrooms.Walker := @Map.Walker;
 
@@ -327,6 +327,17 @@ begin
   Banks.NPCsCache := [];
   Objects.Setup(Map.Objects(), @Map.Walker);
   NPCs.Setup(Map.NPCs(), @Map.Walker);
+end;
+
+procedure TBASHBirdHouseRunner.EnsureChunks();
+begin
+  if not Map.IsSetup then
+  begin
+    WriteLn('[BASHBirdHouse] EnsureChunks: map not loaded');
+    Exit;
+  end;
+
+  Self.BindMapObjects();
 end;
 
 procedure TBASHBirdHouseRunner.Init();
@@ -1112,6 +1123,7 @@ end;
 
 procedure TBASHBirdHouseRunner.OnComplete();
 begin
+  Bank.CachedQuantity := 0;
 end;
 
 function TBASHBirdHouseRunner.HasAllItemsForRun(): Boolean;
