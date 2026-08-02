@@ -334,7 +334,7 @@ begin
     [10224, 36210, 10428, 36446],
     '',
     CTS2(0, 0, 0, 0),
-    _BASHChunks([Chunk(Box(55, 58, 57, 54), 0)])
+    _BASHChunks([Chunk(Box(54, 56, 58, 53), 0)])
   ];
   BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_HERB].Outline := [
     [10324, 36310], [10328, 36310], [10324, 36314], [10328, 36314]
@@ -351,7 +351,7 @@ begin
     [10224, 36210, 10428, 36446],
     '',
     CTS2(0, 0, 0, 0),
-    _BASHChunks([Chunk(Box(55, 58, 57, 54), 0)])
+    _BASHChunks([Chunk(Box(54, 56, 58, 53), 0)])
   ];
   BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_FLOWER].Outline := [
     [10308, 36326], [10312, 36326], [10308, 36330], [10312, 36330]
@@ -368,7 +368,7 @@ begin
     [10224, 36210, 10428, 36446],
     '',
     CTS2(0, 0, 0, 0),
-    _BASHChunks([Chunk(Box(55, 58, 57, 54), 0)])
+    _BASHChunks([Chunk(Box(54, 56, 58, 53), 0)])
   ];
   BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_ALLOT_N].Outline := [
     [10292, 36310], [10296, 36310], [10300, 36310], [10304, 36310], [10308, 36310],
@@ -390,7 +390,7 @@ begin
     [10224, 36210, 10428, 36446],
     '',
     CTS2(0, 0, 0, 0),
-    _BASHChunks([Chunk(Box(55, 58, 57, 54), 0)])
+    _BASHChunks([Chunk(Box(54, 56, 58, 53), 0)])
   ];
   BASHFarmPatchData[EBASHFarmPatch.PHASMATYS_ALLOT_S].Outline := [
     [10324, 36326], [10328, 36326],
