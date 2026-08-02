@@ -1,3 +1,12 @@
+## [8.3.1](https://github.com/BigWaspBackup/BashLib/compare/v8.3.0...v8.3.1) (2026-08-02)
+
+
+### Bug Fixes
+
+* Fxes for Phasmaty teleport ([4f79c2f](https://github.com/BigWaspBackup/BashLib/commit/4f79c2f56db003335fe59f7af891226d7cefa696))
+
+
+
 # [8.3.0](https://github.com/BigWaspBackup/BashLib/compare/v8.2.4...v8.3.0) (2026-08-02)
 
 
