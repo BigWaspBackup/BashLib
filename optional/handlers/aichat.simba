@@ -11,7 +11,9 @@ Message checks run automatically from `Antiban.DoAntiban` when enabled.
 {$I BashLib/optional/handlers/aichat.simba}
 
 // Discord notifications use aichat's own client (AIChatDiscord), not a script-level Discord var.
-// Include discord.simba before aichat to enable them; AIChatbot.Init() loads discord.json.
+// Include discord.simba before aichat to enable them.
+// Host scripts can set AIChatDiscord.Webhook.URL from Accounts Discord settings before Init();
+// Init() preserves that URL when loading discord.json defaults.
 
 // Custom nav UI: create a panel, then:
 AIChatbot.LoadSettings();
@@ -2164,6 +2166,8 @@ begin
 end;
 
 procedure TAIChatbot.Init();
+var
+  preconfiguredWebhookURL: String;
 begin
   Self.DebugMode := False;
   Self.SendKeyDelay := RandomRange(30, 100);
@@ -2210,8 +2214,11 @@ begin
   WriteLn('[AI Chatbot] Chat antibans disabled while AI Chatbot is enabled');
 
 {$IFDEF WL_DISCORD_INCLUDED}
-  if AIChatDiscord.Webhook.URL = '' then
+  preconfiguredWebhookURL := AIChatDiscord.Webhook.URL;
+  if AIChatDiscord.HTTP = 0 then
     AIChatDiscord.Setup();
+  if preconfiguredWebhookURL <> '' then
+    AIChatDiscord.Webhook.URL := preconfiguredWebhookURL;
 {$ENDIF}
 
   Self.SendSessionStartNotification();

@@ -191,6 +191,7 @@ begin
     Map.SetupChunks(chunks, 8);
 
   Map.Walker.AdaptiveWalk := True;
+  Map.Walker._DoorHandler.Enabled := True;
 
   Objects.Data := nil;
   NPCs.Data := nil;
@@ -678,101 +679,96 @@ procedure TBASHFarmRunner.OnComplete();
 begin
 end;
 
-function TBASHFarmRunner.TeleportGuildFairyCIR(): Boolean;
+function TBASHFarmRunner.UseDJPFairyRingCIR(): Boolean;
 var
-  startPos, monastery, djpRing, cirLand, guildDest: TPoint;
-  cloakVariants: TRSItemArray;
-  cloak: TRSItem;
-  cloaked: Boolean;
+  savedFairyWalker, savedRSWalker: Boolean;
 begin
-  Result := False;
-  startPos := Map.Position();
-  monastery := RSTeleportsV2.MONASTERY.worldPoint;
-  djpRing := RSTeleportsV2.DJP_TOWER_OF_LIFE.worldPoint;
-  cirLand := RSTeleportsV2.CIR_NORTHEAST_OF_THE_FARMING_GUILD.worldPoint;
-  guildDest := RSTeleportsV2.FARMING_GUILD.worldPoint;
-
-  if Map.Walker.InRange(guildDest, 40) then
-  begin
-    Exit(True);
-  end;
-
-  if Map.Walker.InRange(cirLand, 30) then
-  begin
-    WriteLn('[BASHFarm] At CIR landing, walking to Farming Guild');
-    Result := Map.Walker.WebWalk(guildDest, 6, 0.15);
-    Exit;
-  end;
-
-  WriteLn('[BASHFarm] Teleporting to Farming Guild via Fairy CIR');
-
-  if not Map.Walker.InRange(djpRing, 40) then
-  begin
-    cloaked := False;
-    cloakVariants := [];
-    for cloak in getNumberedDiaryItems('Ardougne Cloak') do
-      cloakVariants += cloak.GetArray();
-
-    for cloak in cloakVariants do
-      if Inventory.ContainsItem(cloak) then
-      begin
-        if Inventory.ClickItem(cloak, 'Monastery') then
-          cloaked := True;
-        Break;
-      end;
-
-    if not cloaked then
-      for cloak in cloakVariants do
-        if Equipment.ContainsItem(cloak) then
-        begin
-          if Equipment.ClickItem(cloak, 'Monastery') then
-            cloaked := True;
-          Break;
-        end;
-
-    if not cloaked then
-    begin
-      WriteLn('[BASHFarm] Guild Fairy CIR: no Ardougne cloak to Monastery');
-      Exit(False);
-    end;
-
-    if not WaitUntil(not Map.Position().InRange(startPos, 10), 35, 12000) then
-    begin
-      WriteLn('[BASHFarm] Guild Fairy CIR: Monastery teleport failed');
-      Exit(False);
-    end;
-
-    if not Map.Walker.InRange(monastery, 50) then
-      WriteLn('[BASHFarm] Fairy CIR: not near Monastery after cloak teleport');
-  end;
-
-  WriteLn('[BASHFarm] Walking to DJP fairy ring');
-  if not Map.Walker.WebWalk(djpRing, 5, 0.15) then
-  begin
-    WriteLn('[BASHFarm] Guild Fairy CIR: failed to walk to DJP ring');
-    Exit(False);
-  end;
-
   if Self.LumbyElite then
     FairyRing.Item := 'null'
   else
     FairyRing.Item := 'Dramen staff';
 
-  startPos := Map.Position();
-  WriteLn('[BASHFarm] Teleporting Fairy Ring to CIR');
-  if not FairyRing.WalkTeleport('CIR') then
+  FairyRing.SetupFairyRings();
+  savedFairyWalker := FairyRing.FairyRings.Filter.Walker;
+  savedRSWalker := RSObjects.FairyRing.Filter.Walker;
+  FairyRing.FairyRings.Filter.Walker := False;
+  RSObjects.FairyRing.Filter.Walker := False;
+
+  Result := FairyRing.Teleport('CIR');
+
+  FairyRing.FairyRings.Filter.Walker := savedFairyWalker;
+  RSObjects.FairyRing.Filter.Walker := savedRSWalker;
+end;
+
+function TBASHFarmRunner.TeleportGuildFairyCIR(): Boolean;
+var
+  cirLand, djpTile, me: TPoint;
+  savedScreenWalk, savedAdaptiveWalk: Boolean;
+  i: Int32;
+begin
+  Result := False;
+  cirLand := RSTeleportsV2.CIR_NORTHEAST_OF_THE_FARMING_GUILD.worldPoint;
+  djpTile := [6528, 37510];
+
+  Map.Walker._DoorHandler.Enabled := True;
+
+  if Map.Position().InBox(BASH_GUILD_MAP) then
+    Exit(True);
+
+  if Map.Walker.InRange(cirLand, 40) or Map.Walker.AnyInRange(BASH_GUILD_DOOR_FRONT_TILES, 20) then
+    Exit(True);
+
+  if not Map.Walker.AnyInRange(BASH_DJP_FAIRY_RING_TILES, 12) then
   begin
-    WriteLn('[BASHFarm] Guild Fairy CIR: WalkTeleport(CIR) failed');
+    if not Map.Position().InBox(BASH_ARDY_MONASTERY_LANDING) then
+    begin
+      if not Self.Transport.Run(RSTeleportsV2.MONASTERY) then
+      begin
+        WriteLn('[BASHFarm] Guild Fairy CIR: Monastery teleport failed');
+        Exit(False);
+      end;
+
+      if not WaitUntil(Map.Position().InBox(BASH_ARDY_MONASTERY_LANDING), 35, 6000) then
+      begin
+        WriteLn('[BASHFarm] Guild Fairy CIR: not in monastery landing box after cloak');
+        Exit(False);
+      end;
+    end;
+
+    if not Map.Walker.WebWalk(djpTile, 5, 0.15) then
+    begin
+      WriteLn('[BASHFarm] Guild Fairy CIR: WebWalk to DJP ring failed');
+      Exit(False);
+    end;
+  end;
+
+  savedScreenWalk := Map.Walker.ScreenWalk;
+  savedAdaptiveWalk := Map.Walker.AdaptiveWalk;
+  Map.Walker.ScreenWalk := False;
+  Map.Walker.AdaptiveWalk := False;
+
+  if not Self.UseDJPFairyRingCIR() then
+  begin
+    Map.Walker.ScreenWalk := savedScreenWalk;
+    Map.Walker.AdaptiveWalk := savedAdaptiveWalk;
+    WriteLn('[BASHFarm] Guild Fairy CIR: fairy ring use failed');
     Exit(False);
   end;
 
-  if not WaitUntil(Map.Walker.InRange(cirLand, 40) or (not Map.Position().InRange(startPos, 20)), 35, 15000) then
-    WriteLn('[BASHFarm] Guild Fairy CIR: CIR arrival uncertain, walking to guild');
+  Map.Walker.ScreenWalk := savedScreenWalk;
+  Map.Walker.AdaptiveWalk := savedAdaptiveWalk;
 
-  WriteLn('[BASHFarm] Walking to Farming Guild');
-  Result := Map.Walker.WebWalk(guildDest, 6, 0.15);
-  if not Result then
-    WriteLn('[BASHFarm] Guild Fairy CIR: WebWalk to guild failed');
+  Minimap.WaitMoving();
+  for i := 0 to 200 do
+  begin
+    me := Map.Position();
+    if me.InBox(BASH_GUILD_MAP) or me.InRange(BASH_GUILD_DOOR_FRONT, 400) or me.InRange(cirLand, 150) then
+      Break;
+    Wait(50);
+  end;
+
+  Map.Walker._DoorHandler.Enabled := True;
+  Result := True;
 end;
 
 function TBASHFarmRunner.TeleportTo(travel: TTeleportLocation): Boolean;
@@ -1075,8 +1071,28 @@ begin
   Result := Self.TeleportOrtusCivitasAfterArrive();
 end;
 
+function BASHFarmIsGuildPatch(id: EBASHFarmPatch): Boolean;
+begin
+  Result := id in [
+    EBASHFarmPatch.GUILD_HERB,
+    EBASHFarmPatch.GUILD_FLOWER,
+    EBASHFarmPatch.GUILD_ALLOT_N,
+    EBASHFarmPatch.GUILD_ALLOT_S,
+    EBASHFarmPatch.GUILD_BUSH,
+    EBASHFarmPatch.GUILD_CACTUS,
+    EBASHFarmPatch.GUILD_ANIMA,
+    EBASHFarmPatch.GUILD_TREE,
+    EBASHFarmPatch.GUILD_REDWOOD,
+    EBASHFarmPatch.GUILD_FRUIT,
+    EBASHFarmPatch.GUILD_CELASTRUS
+  ];
+end;
+
 function BASHFarmSameLocation(constref a, b: TBASHFarmPatch): Boolean;
 begin
+  if BASHFarmIsGuildPatch(a.Id) and BASHFarmIsGuildPatch(b.Id) then
+    Exit(True);
+
   Result := (a.Data.LeprechaunCoords.X = b.Data.LeprechaunCoords.X) and
             (a.Data.LeprechaunCoords.Y = b.Data.LeprechaunCoords.Y);
 end;

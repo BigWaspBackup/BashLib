@@ -271,7 +271,7 @@ begin
 
   for i := 1 to attempts do
   begin
-    WriteLn('[Quetzal] Renu → ', ToStr(Destination), ' (attempt ', i, '/', attempts, ')');
+    WriteLn('[Quetzal] Renu ', ToStr(Destination), ' (attempt ', i, '/', attempts, ')');
 
     if preferLast and (Self.LastDestination = Destination) then
     begin
