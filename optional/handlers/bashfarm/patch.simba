@@ -113,6 +113,44 @@ begin
     WriteLn('[BASHFarm] Failed to climb Stronghold rocks');
 end;
 
+function TBASHFarmPatch.HandlePhasmatysApproach(): Boolean;
+var
+  walked: Boolean;
+
+  function TryWalk(target: TPoint; untilDist: Int32): Boolean;
+  begin
+    Result := False;
+    try
+      Result := Map.Walker.WebWalk(target, untilDist, 0.15);
+    except
+      WriteLn('[BASHFarm] WebWalk connect failed to ', target, ' from ', Map.Position());
+      Result := False;
+    end;
+  end;
+begin
+  Result := True;
+  if not (Self.Id in [
+    EBASHFarmPatch.PHASMATYS_HERB,
+    EBASHFarmPatch.PHASMATYS_FLOWER,
+    EBASHFarmPatch.PHASMATYS_ALLOT_N,
+    EBASHFarmPatch.PHASMATYS_ALLOT_S
+  ]) then
+    Exit;
+
+  if Self.AtFarm() then
+    Exit;
+
+  if not Map.Walker.InRange(BASH_PHASMATYS_ECTOFUNTUS, 55) then
+    Exit;
+
+  WriteLn('[BASHFarm] Leaving Ectofuntus toward Port Phasmatys farm');
+  walked := TryWalk(BASH_PHASMATYS_FARM_APPROACH, 14);
+  if not walked then
+    walked := TryWalk(Self.Data.Coords, 16);
+  if not walked then
+    WriteLn('[BASHFarm] Phasmatys approach walk failed - will retry via leprechaun walk');
+end;
+
 function TBASHFarmPatch.OutlineToMS(): TPointArray;
 var
   p: TPoint;
@@ -353,7 +391,6 @@ begin
       Exit(Result);
   end;
 
-  { Allot-style: empty = Inspect + patch type name (Herb/Flower/Allotment), not soil colour }
   if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
   begin
     if not Self.Hover() then
@@ -585,7 +622,6 @@ begin
       ChooseOption.Close();
       if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
       begin
-        { Right-click option text may still include patch type when empty }
         if Self.Hover() then
         begin
           upText := MainScreen.GetUpText();
@@ -701,7 +737,6 @@ begin
 
   WriteLn('[BASHFarm] Harvesting ', Self.Data.Name);
 
-  { Flowers are 1-click; note herbs/produce first so invent stays clear. }
   if Self.Data.PatchType = EBASHPatchType.FLOWER then
     Self.NoteItems();
 
@@ -1302,11 +1337,7 @@ begin
   waitMs := Self.WalkWaitMs(5000);
   XPBar.Read();
   XPBar.EarnedXP();
-
-  {
-    Dead allot-style: click Clear → wait XP → uptext becomes Inspect (empty).
-    Do not rely on soil colour.
-  }
+  
   if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
   begin
     gotXp := WaitUntil(XPBar.EarnedXP(), 35, waitMs);
@@ -1416,7 +1447,6 @@ var
   begin
     me := Map.Position();
     dist := me.DistanceTo(lep);
-    // Never treat standing on the lep tile as success.
     Result := (dist > 1) and (dist <= (keepOut + 12));
   end;
 begin
@@ -1424,21 +1454,29 @@ begin
   me := Map.Position();
   dist := me.DistanceTo(lep);
 
-  // Already near and not on his tile.
   if (dist > 1) and (dist <= (keepOut + 8)) then
     Exit(True);
 
   WriteLn('[BASHFarm] Walking to farm near leprechaun at ', Self.Data.Name);
 
-  // Never path to the lep tile itself — stop short on an offset tile.
-  targets := [
-    [lep.X + 3, lep.Y + 3],
-    [lep.X - 3, lep.Y + 3],
-    [lep.X + 3, lep.Y - 3],
-    [lep.X - 3, lep.Y - 3],
-    Self.Data.MapCoords.Center(),
-    Self.Data.Coords
-  ];
+  if dist > 80 then
+    targets := [
+      Self.Data.Coords,
+      [lep.X - 3, lep.Y + 3],
+      [lep.X + 3, lep.Y - 3],
+      [lep.X - 3, lep.Y - 3],
+      [lep.X + 3, lep.Y + 3],
+      Self.Data.MapCoords.Center()
+    ]
+  else
+    targets := [
+      [lep.X + 3, lep.Y + 3],
+      [lep.X - 3, lep.Y + 3],
+      [lep.X + 3, lep.Y - 3],
+      [lep.X - 3, lep.Y - 3],
+      Self.Data.MapCoords.Center(),
+      Self.Data.Coords
+    ];
 
   for attempt := 0 to High(targets) do
   begin
@@ -1498,7 +1536,6 @@ var
     Result := True;
   end;
 
-  // Standing on him: interact under us — no need to move off.
   function TryUnderPlayer(): Boolean;
   begin
     Result := False;
@@ -1520,7 +1557,6 @@ begin
   lep := Self.Data.LeprechaunCoords;
   dist := me.DistanceTo(lep);
 
-  // 1) Look for lep. 2) If not visible and dot under us, interact under us (stay put).
   if TryColor() then
     Exit(True);
   if TryUnderPlayer() then
@@ -1528,7 +1564,6 @@ begin
 
   for attempt := 0 to 5 do
   begin
-    // Don't walk onto him when already adjacent.
     if dist > 3 then
       Map.Walker.MakePointVisible(Self.Data.LeprechaunCoords);
 
@@ -2189,9 +2224,6 @@ begin
   Inventory.SetSelectedSlot(-1);
 end;
 
-// Shared state machine for both patch phases. When plantPhase is False
-// (harvest phase) the EMPTY/UNCOMPOSTED states end the phase so planting
-// and composting can be batched later; when True they are handled here.
 procedure TBASHFarmPatch.RunPhase(var journal: TBASHFarmJournal; plantPhase: Boolean);
 var
   timeout: TCountdown;
@@ -2255,7 +2287,6 @@ begin
         end;
       EBASHPatchState.EMPTY:
         begin
-          { Remember empty so plant phase / next Inspect skips uptext }
           Self.Harvested := True;
           if not plantPhase then
             Exit;

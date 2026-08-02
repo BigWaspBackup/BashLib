@@ -3,6 +3,11 @@ const
   BASH_STRONGHOLD_SHORTCUT_BOTTOM: TPoint = [7280, 35658];
   BASH_STRONGHOLD_SHORTCUT_TOP: TPoint = [7256, 35658];
 
+  // Ectophial lands inside the temple; farm web nodes near the lep often fail
+  // PathBetweenEx from that tile. Walk to this approach first, then to the lep.
+  BASH_PHASMATYS_ECTOFUNTUS: TPoint = [10548, 36342];
+  BASH_PHASMATYS_FARM_APPROACH: TPoint = [10320, 36342];
+
   BASH_GUILD_LEP_SE: TPoint = [952, 35506];
   BASH_GUILD_LEP_SW: TPoint = [848, 35502];
   BASH_GUILD_LEP_NE: TPoint = [912, 35406];

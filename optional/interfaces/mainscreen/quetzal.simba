@@ -244,20 +244,18 @@ procedure TQuetzal.EnsureRenu();
 begin
   Self.Renu.Walker := @Map.Walker;
 
-  if Self.Renu.Name = 'Renu' then
-    Exit;
+  if Self.Renu.Name <> 'Renu' then
+  begin
+    Self.Renu.Name := 'Renu';
+    Self.Renu.Finder.Colors := [CTS2(9809513, 14, 0.16, 1.68)];
+    Self.Renu.SetupEx([4], [3, 3, 4], [[2692, 37862]]);
+    Self.Renu.Filter.Minimap := True;
+    Self.Renu.DotType := ERSMinimapDot.NPC;
+  end;
 
-  Self.Renu.Name := 'Renu';
-  Self.Renu.Finder.Colors := [CTS2(9809513, 14, 0.16, 1.68)];
-  Self.Renu.SetupEx([4], [3, 3, 4], [[2692, 37862]]);
-  Self.Renu.SetupUpText(['Travel', 'Renu']);
-  Self.Renu.Filter.Minimap := True;
-  Self.Renu.DotType := ERSMinimapDot.NPC;
+  Self.Renu.SetupUpText(['Travel Renu', 'Renu']);
 end;
 
-(*!
-  Walk to Renu (Civitas), open the Quetzal map, travel to Destination.
-*)
 function TQuetzal.TravelFromRenu(
   Destination: EQuetzalLanding;
   preferLast: Boolean = True;
@@ -275,7 +273,7 @@ begin
 
     if preferLast and (Self.LastDestination = Destination) then
     begin
-      if Self.Renu.WalkSelectOption(['Last-destination'], 2) then
+      if Self.Renu.WalkSelectOption(['Last-destination Renu'], 2) then
       begin
         Result := Self.WaitArrived();
         if Result then
@@ -290,7 +288,7 @@ begin
         Exit;
     end;
 
-    if Self.Renu.WalkSelectOption(['Travel'], 3) then
+    if Self.Renu.WalkSelectOption(['Travel Renu'], 3) then
     begin
       if Self.IsOpen(10000) then
       begin
@@ -303,7 +301,7 @@ begin
     end
     else if Self.Renu.WalkClick() then
     begin
-      // Left-click fallback (uptext Travel)
+      // Left-click fallback (uptext Travel Renu)
       if Self.IsOpen(10000) then
       begin
         Result := Self.Travel(Destination);

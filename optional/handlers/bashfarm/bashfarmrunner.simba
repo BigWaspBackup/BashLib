@@ -1452,6 +1452,8 @@ begin
     Exit(False);
   end;
 
+  patch.HandlePhasmatysApproach();
+
   if not patch.AtFarm() then
   begin
     if not patch.WalkNearLeprechaun(10) then
