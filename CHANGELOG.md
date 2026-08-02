@@ -1,3 +1,12 @@
+## [8.3.2](https://github.com/BigWaspBackup/BashLib/compare/v8.3.1...v8.3.2) (2026-08-02)
+
+
+### Bug Fixes
+
+* Faster loading of banks, Fixed seed dibber for those without barb dibber. ([a4d8d05](https://github.com/BigWaspBackup/BashLib/commit/a4d8d05204f1e32dcf26c65e853d475c337d8090))
+
+
+
 ## [8.3.1](https://github.com/BigWaspBackup/BashLib/compare/v8.3.0...v8.3.1) (2026-08-02)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Added compost retrys if fails, Improved timing for compost. ([6dcc3f8](https://github.com/BigWaspBackup/BashLib/commit/6dcc3f8476d55577ef5cb32d7111b8cc10a370f5))
-
-
-
-## [8.2.2](https://github.com/BigWaspBackup/BashLib/compare/v8.2.1...v8.2.2) (2026-08-01)
-
-
-### Bug Fixes
-
-* allow aichat enums ([2b4768a](https://github.com/BigWaspBackup/BashLib/commit/2b4768a8bb662e8e54db9bbd1d5dca9573254b32))
 
 
 
