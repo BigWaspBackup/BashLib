@@ -1,3 +1,12 @@
+## [8.2.4](https://github.com/BigWaspBackup/BashLib/compare/v8.2.3...v8.2.4) (2026-08-01)
+
+
+### Bug Fixes
+
+* Proper declarations to fix issues compiling ([0375aa7](https://github.com/BigWaspBackup/BashLib/commit/0375aa7889354cb6aeb05baa51085845cd98e334))
+
+
+
 ## [8.2.3](https://github.com/BigWaspBackup/BashLib/compare/v8.2.2...v8.2.3) (2026-08-01)
 
 
