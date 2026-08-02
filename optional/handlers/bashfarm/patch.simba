@@ -124,6 +124,8 @@ end;
 
 function TBASHFarmPatch.UsesTileList(): Boolean;
 begin
+  if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
+    Exit(Length(Self.Data.Outline) >= 3);
   if Length(Self.Data.Outline) > 8 then
     Exit(True);
   Result := (Length(Self.Data.Outline) = 4) and
@@ -430,6 +432,26 @@ begin
   Result := False;
 end;
 
+function TBASHFarmPatch.ClickUpText(text: String): Boolean;
+begin
+  Result := False;
+  if MainScreen.IsUpText(text) then
+  begin
+    Mouse.Click(MOUSE_LEFT);
+    Exit(True);
+  end;
+
+  if not Self.Hover() then
+    Exit;
+
+  if MainScreen.IsUpText(text) then
+    Mouse.Click(MOUSE_LEFT)
+  else if not ChooseOption.Select(text) then
+    Exit;
+
+  Result := True;
+end;
+
 function TBASHFarmPatch.Inspect(): EBASHPatchState;
 label
   doInspect;
@@ -652,11 +674,7 @@ var
   function ResumePick(): Boolean;
   begin
     Result := False;
-    if not Self.Hover() then
-      Exit;
-    if MainScreen.IsUpText(Self.HarvestUpText) then
-      Mouse.Click(MOUSE_LEFT)
-    else if not ChooseOption.Select(Self.HarvestUpText) then
+    if not Self.ClickUpText(Self.HarvestUpText) then
       Exit;
     if not MainScreen.DidRedClick() then
       Exit;
@@ -687,12 +705,7 @@ begin
   if Self.Data.PatchType = EBASHPatchType.FLOWER then
     Self.NoteItems();
 
-  if not Self.Hover() then
-    Exit(False);
-
-  if MainScreen.IsUpText(Self.HarvestUpText) then
-    Mouse.Click(MOUSE_LEFT)
-  else if not ChooseOption.Select(Self.HarvestUpText) then
+  if not Self.ClickUpText(Self.HarvestUpText) then
     Exit(False);
 
   if not MainScreen.DidRedClick() then
@@ -1164,12 +1177,7 @@ function TBASHFarmPatch.CheckHealth(): Boolean;
 var
   waitMs: Int32;
 begin
-  if not Self.Hover() then
-    Exit(False);
-
-  if MainScreen.IsUpText('eck-hea') then
-    Mouse.Click(MOUSE_LEFT)
-  else if not ChooseOption.Select('eck-hea') then
+  if not Self.ClickUpText('eck-hea') then
     Exit(False);
 
   if not MainScreen.DidRedClick() then
@@ -1236,23 +1244,23 @@ begin
   begin
     Inventory.SetSelectedSlot(-1);
 
-    if not Self.Hover() then
-    begin
-      Self.WalkFind();
-      Continue;
-    end;
-
     if not MainScreen.IsUpText('Rake') then
     begin
-      Self.DropWeeds();
-      Exit(True);
+      if not Self.Hover() then
+      begin
+        Self.WalkFind();
+        Continue;
+      end;
+      if not MainScreen.IsUpText('Rake') then
+      begin
+        Self.DropWeeds();
+        Exit(True);
+      end;
     end;
 
     WriteLn('[BASHFarm] Raking weeds at ', Self.Data.Name);
 
-    if MainScreen.IsUpText('Rake') then
-      Mouse.Click(MOUSE_LEFT)
-    else if not ChooseOption.Select('Rake') then
+    if not Self.ClickUpText('Rake') then
       Continue;
 
     if not MainScreen.DidRedClick() then
@@ -1285,12 +1293,7 @@ var
   waitMs: Int32;
   gotXp: Boolean;
 begin
-  if not Self.Hover() then
-    Exit(False);
-
-  if MainScreen.IsUpText('lear') then
-    Mouse.Click(MOUSE_LEFT)
-  else if not ChooseOption.Select('lear') then
+  if not Self.ClickUpText('lear') then
     Exit(False);
 
   if not MainScreen.DidRedClick() then
@@ -1327,15 +1330,10 @@ end;
 
 function TBASHFarmPatch.Clear(): Boolean;
 begin
-  if not Self.Hover() then
-    Exit(False);
-
   case Self.Data.PatchType of
     EBASHPatchType.TREE:
       begin
-        if MainScreen.IsUpText('lear') then
-          Mouse.Click(MOUSE_LEFT)
-        else if not ChooseOption.Select('lear') then
+        if not Self.ClickUpText('lear') then
           Exit(False);
 
         if Chat.FindMessage('Pay') or WaitUntil(Chat.GetChatTitle() = 'Pay 200', 35, 1500) then
@@ -1348,15 +1346,11 @@ begin
       end;
     EBASHPatchType.FRUIT:
       begin
-        if MainScreen.IsUpText('Chop') then
-          Mouse.Click(MOUSE_LEFT)
-        else if not ChooseOption.Select('Chop') then
+        if not Self.ClickUpText('Chop') then
           Exit(False);
 
         WaitUntil(MainScreen.IsUpText('lear'), 35, 5000);
-        if MainScreen.IsUpText('lear') then
-          Mouse.Click(MOUSE_LEFT)
-        else if not ChooseOption.Select('lear') then
+        if not Self.ClickUpText('lear') then
           Exit(False);
 
         Result := WaitUntil(Self.IsEmpty(), 35, 5000);
@@ -1380,12 +1374,7 @@ begin
   if not Inventory.SetSelectedSlot(slot) then
     Exit(False);
 
-  if not Self.Hover() then
-    Exit(False);
-
-  if MainScreen.IsUpText('seas') then
-    Mouse.Click(MOUSE_LEFT)
-  else if not ChooseOption.Select('seas') then
+  if not Self.ClickUpText('seas') then
     Exit(False);
 
   if not MainScreen.DidRedClick() then
@@ -1422,42 +1411,52 @@ var
       Result := False;
     end;
   end;
+
+  function NearButNotOnLep(): Boolean;
+  begin
+    me := Map.Position();
+    dist := me.DistanceTo(lep);
+    // Never treat standing on the lep tile as success.
+    Result := (dist > 1) and (dist <= (keepOut + 12));
+  end;
 begin
   lep := Self.Data.LeprechaunCoords;
   me := Map.Position();
   dist := me.DistanceTo(lep);
 
-  if dist <= (keepOut + 8) then
+  // Already near and not on his tile.
+  if (dist > 1) and (dist <= (keepOut + 8)) then
     Exit(True);
 
   WriteLn('[BASHFarm] Walking to farm near leprechaun at ', Self.Data.Name);
 
-  if TryWebWalk(lep, keepOut + 4) then
-  begin
-    me := Map.Position();
-    Exit(me.DistanceTo(lep) <= (keepOut + 12));
-  end;
-
+  // Never path to the lep tile itself — stop short on an offset tile.
   targets := [
+    [lep.X + 3, lep.Y + 3],
+    [lep.X - 3, lep.Y + 3],
+    [lep.X + 3, lep.Y - 3],
+    [lep.X - 3, lep.Y - 3],
     Self.Data.MapCoords.Center(),
-    Self.Data.Coords,
-    lep
+    Self.Data.Coords
   ];
 
   for attempt := 0 to High(targets) do
   begin
     dest := targets[attempt];
-    WriteLn('[BASHFarm] Lep walk fallback ', attempt + 1, '/', Length(targets), ' -> ', dest);
-    if TryWebWalk(dest, Max(keepOut + 4, 8)) then
-      Break;
+    if dest.DistanceTo(lep) <= 1 then
+      Continue;
+
+    if attempt > 0 then
+      WriteLn('[BASHFarm] Lep walk fallback ', attempt + 1, '/', Length(targets), ' -> ', dest);
+
+    if TryWebWalk(dest, Max(keepOut + 4, 8)) and NearButNotOnLep() then
+      Exit(True);
   end;
 
-  me := Map.Position();
-  dist := me.DistanceTo(lep);
-  Result := dist <= (keepOut + 12);
+  Result := NearButNotOnLep();
   if not Result then
     WriteLn('[BASHFarm] Failed to walk near leprechaun at ', Self.Data.Name,
-            ' (dist=', Round(dist), ')');
+            ' (dist=', Round(Map.Position().DistanceTo(lep)), ')');
 end;
 
 function TBASHFarmPatch.FindLeprechaun(out lepPoints: TPointArray): Boolean;
@@ -1467,6 +1466,14 @@ var
   atpa: T2DPointArray;
   attempt: Int32;
   dist: Double;
+  playerBox: TBox;
+
+  function UnderClickPoint(): TPoint;
+  begin
+    playerBox := MainScreen.GetPlayerBox();
+    playerBox.Y1 := playerBox.Y1 - Floor(playerBox.Height / 2);
+    Result := playerBox.Middle;
+  end;
 
   function TryColor(): Boolean;
   begin
@@ -1491,6 +1498,7 @@ var
     Result := True;
   end;
 
+  // Standing on him: interact under us — no need to move off.
   function TryUnderPlayer(): Boolean;
   begin
     Result := False;
@@ -1501,7 +1509,7 @@ var
       Exit;
 
     SetLength(lepPoints, 1);
-    lepPoints[0] := Map.GetTileMS(me).Mean;
+    lepPoints[0] := UnderClickPoint();
     WriteLn('[BASHFarm] Lep under player at ', Self.Data.Name, ' (minimap dot)');
     Result := True;
   end;
@@ -1512,31 +1520,29 @@ begin
   lep := Self.Data.LeprechaunCoords;
   dist := me.DistanceTo(lep);
 
+  // 1) Look for lep. 2) If not visible and dot under us, interact under us (stay put).
+  if TryColor() then
+    Exit(True);
+  if TryUnderPlayer() then
+    Exit(True);
+
   for attempt := 0 to 5 do
   begin
-    if TryColor() then
-    begin
-      me := Map.Position();
-      dist := me.DistanceTo(lep);
-      Exit(True);
-    end;
+    // Don't walk onto him when already adjacent.
+    if dist > 3 then
+      Map.Walker.MakePointVisible(Self.Data.LeprechaunCoords);
 
-    Map.Walker.MakePointVisible(Self.Data.LeprechaunCoords);
+    me := Map.Position();
+    dist := me.DistanceTo(lep);
+
     if TryColor() then
-    begin
-      me := Map.Position();
-      dist := me.DistanceTo(lep);
       Exit(True);
-    end;
+    if TryUnderPlayer() then
+      Exit(True);
 
     Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(35, 70) * (1 - 2 * (attempt mod 2)), 10);
   end;
 
-  if TryUnderPlayer() then
-    Exit(True);
-
-  me := Map.Position();
-  dist := me.DistanceTo(lep);
   WriteLn('[BASHFarm] Could not find leprechaun at ', Self.Data.Name);
   Result := False;
 end;
