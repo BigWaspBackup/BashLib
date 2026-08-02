@@ -52,6 +52,7 @@ type
     CurrentBirdHouseIndex: Int32;
     HasRunFinished, ShouldTeleport, AlwaysUseBestLog,
     IsDisabled, TerminateOnNoLogs, Initialized: Boolean;
+    ReplaceMapOnEnsure: Boolean;
 
     Transport: TUniversalTransportV2;
     ScriptIntervalTimer, NextRunSpewTimer: TCountdown;
@@ -311,7 +312,7 @@ end;
 
 procedure TBASHBirdHouseRunner.EnsureChunks();
 begin
-  if Map.IsSetup then
+  if Map.IsSetup and (not Self.ReplaceMapOnEnsure) then
     Map.AddChunk(ERSChunk.FOSSIL_ISLAND)
   else
     Map.SetupChunk(ERSChunk.FOSSIL_ISLAND);
@@ -1199,12 +1200,12 @@ begin
   if not Self.Initialized then
     Self.Init();
 
-  Self.EnsureChunks();
-
   BASHEnsureRunZoom(5, 25);
 
   if not Self.OnStart() then
     Exit;
+
+  Self.EnsureChunks();
 
   if (not Self.IsOnFossilIsland())
   and (not Self.TeleportToIsland()) then

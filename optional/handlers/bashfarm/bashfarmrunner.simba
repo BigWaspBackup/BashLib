@@ -30,6 +30,8 @@ type
     MagicSecateurs: Boolean;
     LumbyElite: Boolean;
     Initialized: Boolean;
+    // SetupChunks instead of AddChunks when the host script already has a large map.
+    ReplaceMapOnEnsure: Boolean;
     PatchesCompleted, PatchesSkipped, RunsComplete: Int32;
 
     ExtraRuneNames: TRSItemArray;
@@ -80,6 +82,7 @@ begin
   patch.CompostItem := Self.CompostItemName();
   patch.UseFertileSoil := Self.CompostMethod = EBASHCompostMethod.FERTILE_SOIL;
   patch.MagicSecateurs := Self.MagicSecateurs;
+  patch.BarbDibber := Self.BarbDibber;
   Self.SetupUpTexts(patch);
 
   patch.Seed := Self.Contract.ApplyContractOverride(patchId, seed);
@@ -174,9 +177,7 @@ begin
         Break;
       end;
     if not exists then
-    begin
       chunks += chunk;
-    end;
   end;
 
   if Length(chunks) = 0 then
@@ -185,7 +186,7 @@ begin
     Exit;
   end;
 
-  if Map.IsSetup then
+  if Map.IsSetup and (not Self.ReplaceMapOnEnsure) then
     Map.AddChunks(chunks, 8)
   else
     Map.SetupChunks(chunks, 8);
@@ -484,9 +485,6 @@ begin
 
   WriteLn('[BASHFarm] OnStart: depositing inventory');
   Bank.DepositAll();
-
-  if not Self.BarbDibber then
-    Self.FarmWithdrawHelper('Seed dibber', 1);
 
   for i := 0 to High(Self.Patches) do
   begin
@@ -1282,8 +1280,6 @@ begin
   if not Self.Initialized then
     Self.Init();
 
-  Self.EnsureChunks();
-
   BASHEnsureRunZoom(5, 25);
 
   if not Self.OnStart() then
@@ -1291,6 +1287,8 @@ begin
     WriteLn('[BASHFarm] OnStart returned False, aborting');
     Exit;
   end;
+
+  Self.EnsureChunks();
 
   Self.ShufflePatchesByLocation();
 

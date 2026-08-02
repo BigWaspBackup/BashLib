@@ -418,7 +418,7 @@ begin
   lcb.SetTooltip('Compost type applied after planting. Keep compost in leprechaun storage.');
 
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_barbdibber', 'Barbarian dibber', 24, 250, BASHFarmConfig.BarbDibber);
-  cb.SetTooltip('You completed Barbarian training and can plant without a Seed dibber - skips withdrawing one.');
+  cb.SetTooltip('You completed Barbarian training and can plant without a Seed dibber - skips taking one from the leprechaun.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_magicsecs', 'Magic Secateurs', BASH_GUI_COMBO_COL2 - 150, 250, BASHFarmConfig.MagicSecateurs);
   cb.SetTooltip('Withdraw Magic secateurs from the tool leprechaun. Unticked skips withdrawing any secateurs.');
   Self.AddCheck(Self.PatchesSection, cb, 'cb_bash_runnow', 'Run farm now', BASH_GUI_COMBO_COL2 + 1, 250, BASHFarmConfig.RunNow);

@@ -1873,6 +1873,16 @@ begin
   );
 end;
 
+function TBASHFarmPatch.WithdrawLepDibber(closeAfter: Boolean = True): Boolean;
+begin
+  Result := Self.WithdrawLepTool(
+    ['Seed dibber'],
+    BASH_LEP_SLOT_DIBBER,
+    'Seed dibber',
+    closeAfter
+  );
+end;
+
 function TBASHFarmPatch.WithdrawLepRake(closeAfter: Boolean = True): Boolean;
 begin
   Result := Self.WithdrawLepTool(
@@ -2006,7 +2016,8 @@ end;
 
 function TBASHFarmPatch.EnsureLepTools(includeCompost: Boolean = True): Boolean;
 var
-  needSecs, needSpade, needCompost, okSecs, okSpade, okCompost: Boolean;
+  needSecs, needSpade, needDibber, needCompost: Boolean;
+  okSecs, okSpade, okDibber, okCompost: Boolean;
 begin
   Self.NoteItems();
 
@@ -2014,10 +2025,11 @@ begin
               (not Inventory.ContainsItem('Magic secateurs')) and
               (not Equipment.ContainsItem('Magic secateurs'));
   needSpade := not Inventory.ContainsItem('Spade');
+  needDibber := (not Self.BarbDibber) and (not Inventory.ContainsItem('Seed dibber'));
   needCompost := includeCompost and (not Self.UseFertileSoil) and (Self.CompostItem <> '') and
                  (not Inventory.ContainsItem(Self.CompostItem));
 
-  if (not needSecs) and (not needSpade) and (not needCompost) then
+  if (not needSecs) and (not needSpade) and (not needDibber) and (not needCompost) then
     Exit(True);
 
   if not Self.OpenLepExchange() then
@@ -2032,6 +2044,9 @@ begin
   if needSpade then
     Self.WithdrawLepSpade(False);
 
+  if needDibber then
+    Self.WithdrawLepDibber(False);
+
   if needCompost then
     Self.WithdrawLepCompost(1, False);
 
@@ -2041,6 +2056,7 @@ begin
     ((not needSecs) or Inventory.ContainsItem('Magic secateurs')
       or Equipment.ContainsItem('Magic secateurs')) and
     ((not needSpade) or Inventory.ContainsItem('Spade')) and
+    ((not needDibber) or Inventory.ContainsItem('Seed dibber')) and
     ((not needCompost) or Inventory.ContainsItem(Self.CompostItem)),
     35,
     350
@@ -2049,16 +2065,19 @@ begin
   okSecs := (not needSecs) or Inventory.ContainsItem('Magic secateurs')
     or Equipment.ContainsItem('Magic secateurs');
   okSpade := (not needSpade) or Inventory.ContainsItem('Spade');
+  okDibber := (not needDibber) or Inventory.ContainsItem('Seed dibber');
   okCompost := (not needCompost) or Inventory.ContainsItem(Self.CompostItem);
 
   if needSecs and not okSecs then
     WriteLn('[BASHFarm] Failed to withdraw Magic secateurs from leprechaun');
   if needSpade and not okSpade then
     WriteLn('[BASHFarm] Failed to withdraw spade from leprechaun');
+  if needDibber and not okDibber then
+    WriteLn('[BASHFarm] Failed to withdraw Seed dibber from leprechaun');
   if needCompost and not okCompost then
     WriteLn('[BASHFarm] Failed to withdraw ', Self.CompostItem, ' from leprechaun');
 
-  Result := okSecs and okSpade and okCompost;
+  Result := okSecs and okSpade and okDibber and okCompost;
 end;
 
 procedure TBASHFarmPatch.NoteItems();
