@@ -11,7 +11,7 @@ begin
   Self.CombatHpWatch := False;
   Self.CombatStartHp := 0;
 end;
-//
+
 procedure TBASHFarmPatch.SkipPatch(reason: String);
 begin
   WriteLn('[BASHFarm] Skipping ' + Self.Data.Name + ': ' + reason);
