@@ -1,3 +1,12 @@
+## [8.3.5](https://github.com/BigWaspBackup/BashLib/compare/v8.3.4...v8.3.5) (2026-08-02)
+
+
+### Bug Fixes
+
+* Phasmatys fixes, Renu improvemens. ([44dba50](https://github.com/BigWaspBackup/BashLib/commit/44dba50f51e8de4dfa13cc45c035fe64b91c9e07))
+
+
+
 ## [8.3.4](https://github.com/BigWaspBackup/BashLib/compare/v8.3.3...v8.3.4) (2026-08-02)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Fxes for Phasmaty teleport ([4f79c2f](https://github.com/BigWaspBackup/BashLib/commit/4f79c2f56db003335fe59f7af891226d7cefa696))
-
-
-
-# [8.3.0](https://github.com/BigWaspBackup/BashLib/compare/v8.2.4...v8.3.0) (2026-08-02)
-
-
-### Features
-
-* Bash Farm runs now support farming guild via fairy ring/ardy cloak or Skills necklace. ([9bcac99](https://github.com/BigWaspBackup/BashLib/commit/9bcac99a041e484e01f2bd1b6158feed5820c119))
 
 
 
