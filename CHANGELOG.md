@@ -1,3 +1,12 @@
+## [8.3.4](https://github.com/BigWaspBackup/BashLib/compare/v8.3.3...v8.3.4) (2026-08-02)
+
+
+### Bug Fixes
+
+* Fix for farming guild allotment patches ([47e93b6](https://github.com/BigWaspBackup/BashLib/commit/47e93b675b0517ddef2d9419d708684be7c137cd))
+
+
+
 ## [8.3.3](https://github.com/BigWaspBackup/BashLib/compare/v8.3.2...v8.3.3) (2026-08-02)
 
 
@@ -31,15 +40,6 @@
 ### Features
 
 * Bash Farm runs now support farming guild via fairy ring/ardy cloak or Skills necklace. ([9bcac99](https://github.com/BigWaspBackup/BashLib/commit/9bcac99a041e484e01f2bd1b6158feed5820c119))
-
-
-
-## [8.2.4](https://github.com/BigWaspBackup/BashLib/compare/v8.2.3...v8.2.4) (2026-08-01)
-
-
-### Bug Fixes
-
-* Proper declarations to fix issues compiling ([0375aa7](https://github.com/BigWaspBackup/BashLib/commit/0375aa7889354cb6aeb05baa51085845cd98e334))
 
 
 
