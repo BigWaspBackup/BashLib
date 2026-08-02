@@ -1,3 +1,12 @@
+## [8.3.3](https://github.com/BigWaspBackup/BashLib/compare/v8.3.2...v8.3.3) (2026-08-02)
+
+
+### Bug Fixes
+
+* Update chunk handling in BASHBirdHouse and BASHFarm.. ([abe7a61](https://github.com/BigWaspBackup/BashLib/commit/abe7a619f19148c321ad6a3fc3ed15487b09e539))
+
+
+
 ## [8.3.2](https://github.com/BigWaspBackup/BashLib/compare/v8.3.1...v8.3.2) (2026-08-02)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Proper declarations to fix issues compiling ([0375aa7](https://github.com/BigWaspBackup/BashLib/commit/0375aa7889354cb6aeb05baa51085845cd98e334))
-
-
-
-## [8.2.3](https://github.com/BigWaspBackup/BashLib/compare/v8.2.2...v8.2.3) (2026-08-01)
-
-
-### Bug Fixes
-
-* Added compost retrys if fails, Improved timing for compost. ([6dcc3f8](https://github.com/BigWaspBackup/BashLib/commit/6dcc3f8476d55577ef5cb32d7111b8cc10a370f5))
 
 
 
