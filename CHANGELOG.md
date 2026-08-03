@@ -1,3 +1,12 @@
+## [8.3.6](https://github.com/BigWaspBackup/BashLib/compare/v8.3.5...v8.3.6) (2026-08-03)
+
+
+### Bug Fixes
+
+* Farm run fixes for allotments patches, improved rake handling for those without auto weed, tweaks to AI Chatbot ([9eb7a89](https://github.com/BigWaspBackup/BashLib/commit/9eb7a89174543a20a3f663da7f7ab662801fcb13))
+
+
+
 ## [8.3.5](https://github.com/BigWaspBackup/BashLib/compare/v8.3.4...v8.3.5) (2026-08-02)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Faster loading of banks, Fixed seed dibber for those without barb dibber. ([a4d8d05](https://github.com/BigWaspBackup/BashLib/commit/a4d8d05204f1e32dcf26c65e853d475c337d8090))
-
-
-
-## [8.3.1](https://github.com/BigWaspBackup/BashLib/compare/v8.3.0...v8.3.1) (2026-08-02)
-
-
-### Bug Fixes
-
-* Fxes for Phasmaty teleport ([4f79c2f](https://github.com/BigWaspBackup/BashLib/commit/4f79c2f56db003335fe59f7af891226d7cefa696))
 
 
 
