@@ -263,17 +263,55 @@ function TQuetzal.TravelFromRenu(
 ): Boolean;
 var
   i: Int32;
+  renuTile: TPoint;
+
+  function TryWalkSelect(opts: TStringArray; att: Int32): Boolean;
+  begin
+    Result := False;
+    try
+      Result := Self.Renu.WalkSelectOption(opts, att);
+    except
+      WriteLn('[Quetzal] WalkSelectOption failed from ', Map.Position(),
+              ': ', GetExceptionMessage());
+      Result := False;
+    end;
+  end;
+
+  function TryWalkClick(): Boolean;
+  begin
+    Result := False;
+    try
+      Result := Self.Renu.WalkClick();
+    except
+      WriteLn('[Quetzal] WalkClick failed from ', Map.Position(),
+              ': ', GetExceptionMessage());
+      Result := False;
+    end;
+  end;
 begin
   Result := False;
   Self.EnsureRenu();
+  renuTile := [2692, 37862];
 
   for i := 1 to attempts do
   begin
     WriteLn('[Quetzal] Renu ', ToStr(Destination), ' (attempt ', i, '/', attempts, ')');
 
+    // After a teleport the walker position can still be at the old tile —
+    // wait to settle near Renu before pathing, else WalkHover raises.
+    if Map.Position().DistanceTo(renuTile) > 90 then
+    begin
+      WriteLn('[Quetzal] Waiting to settle near Renu (pos ', Map.Position(), ')');
+      if not WaitUntil(Map.Position().DistanceTo(renuTile) <= 90, 50, 8000) then
+      begin
+        WriteLn('[Quetzal] Still far from Renu at ', Map.Position(), ' - retrying path anyway');
+        Wait(Random(400, 900));
+      end;
+    end;
+
     if preferLast and (Self.LastDestination = Destination) then
     begin
-      if Self.Renu.WalkSelectOption(['Last-destination Renu'], 2) then
+      if TryWalkSelect(['Last-destination Renu'], 2) then
       begin
         Result := Self.WaitArrived();
         if Result then
@@ -288,7 +326,7 @@ begin
         Exit;
     end;
 
-    if Self.Renu.WalkSelectOption(['Travel Renu'], 3) then
+    if TryWalkSelect(['Travel Renu'], 3) then
     begin
       if Self.IsOpen(10000) then
       begin
@@ -299,7 +337,7 @@ begin
       else
         WriteLn('[Quetzal] Renu clicked - Quetzal UI did not open');
     end
-    else if Self.Renu.WalkClick() then
+    else if TryWalkClick() then
     begin
       // Left-click fallback (uptext Travel Renu)
       if Self.IsOpen(10000) then

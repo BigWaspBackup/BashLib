@@ -276,17 +276,7 @@ begin
       end;
 
   if didTeleport then
-  begin
     Result := WaitUntil(not ScriptWalker^.AtTile(startPosition, 10), 300, 10000);
-    // Ectophial pour animation blocks movement after landing.
-    if Result then
-      for teleportItem in teleportItems do
-        if 'ectophial' in ToStr(teleportItem).Lower() then
-        begin
-          Wait(2000);
-          Break;
-        end;
-  end;
 end;
 
 function TUniversalTransport.handleDiaryTeleport(constref teleportLocation: TTeleportLocation): Boolean;

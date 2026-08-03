@@ -1,39 +1,3 @@
-(*
-# AI Chatbot
-In-game public chat watcher that replies via `LLMClient`.
-Message checks run automatically from `Antiban.DoAntiban` when enabled.
-
-## Usage
-```pascal
-{$I SRL-B/osr.simba}
-{$I BashLib/osr.simba}
-{$I BashLib/optional/handlers/discord.simba} // optional
-{$I BashLib/optional/handlers/aichat.simba}
-
-// Discord notifications use aichat's own client (AIChatDiscord), not a script-level Discord var.
-// Include discord.simba before aichat to enable them.
-// Host scripts can set AIChatDiscord.Webhook.URL from Accounts Discord settings before Init();
-// Init() preserves that URL when loading discord.json defaults.
-
-// Custom nav UI: create a panel, then:
-AIChatbot.LoadSettings();
-AIChatbot.BuildSettings(MyAIChatSection);
-
-// On start:
-AIChatbot.ApplyFromGUI();
-if AIChatbot.Enabled then
-  AIChatbot.Init();
-
-// Tip: scripts can prefill activity after LoadSettings:
-//   AIChatbot.SetScriptDefaults('prif agility');
-// Users can still edit it in the AI Chat GUI.
-
-// No ProcessMessages call needed - DoAntiban handles it.
-```
-
-TScriptForm scripts can use `Form.CreateAIChatSettings()` instead of BuildSettings
-*)
-
 {$DEFINE WL_AICHAT_INCLUDED}
 {$IFNDEF WL_OSR}
   {$I BashLib/osr.simba}
@@ -1089,7 +1053,7 @@ begin
   RSClient.Image().DrawText(text, textPoint, $FFFF00);
 
   textPoint.X := textPoint.X + 95;
-  if ChatButtons.IsActive(ERSChatButton.ALL_CHAT) then
+  if ChatButtons.IsActive(ERSChatButton.ALL_CHAT) or ChatButtons.IsActive(ERSChatButton.PUBLIC_CHAT) then
   begin
     Self.ChatboxEnable := True;
     RSClient.Image().DrawText('Enabled', Point(textPoint.X + 1, textPoint.Y + 1), $000000);
@@ -1108,10 +1072,14 @@ const
   CHAT_TAB_CHECK_INTERVAL = 30000;
 var
   currentTime: Int64;
-  needsAllTab, needsPublicEnabled: Boolean;
+  onAllOrPublic, needsPublicEnabled, needsAllTab: Boolean;
 begin
-  needsAllTab := not ChatButtons.IsActive(ERSChatButton.ALL_CHAT);
+  onAllOrPublic := ChatButtons.IsActive(ERSChatButton.ALL_CHAT) or
+                   ChatButtons.IsActive(ERSChatButton.PUBLIC_CHAT);
   needsPublicEnabled := ChatButtons.GetState(ERSChatButton.PUBLIC_CHAT) <> ERSChatButtonState.ENABLED;
+
+  needsAllTab := not onAllOrPublic;
+
   if (not needsAllTab) and (not needsPublicEnabled) then
     Exit;
 
@@ -1126,7 +1094,7 @@ begin
     if needsPublicEnabled then
     begin
       if Self.DebugMode then
-        WriteLn('[AI Chatbot] Enabling PUBLIC_CHAT so messages can be read...');
+        WriteLn('[AI Chatbot] Enabling PUBLIC_CHAT filter so messages can be read...');
       ChatButtons.ChangeState(ERSChatButton.PUBLIC_CHAT, ERSChatButtonState.ENABLED);
       Wait(RandomRange(200, 500));
     end;
@@ -1134,7 +1102,7 @@ begin
     if needsAllTab then
     begin
       if Self.DebugMode then
-        WriteLn('[AI Chatbot] Opening ALL_CHAT so messages can be read...');
+        WriteLn('[AI Chatbot] Opening ALL_CHAT (not already on All/Public)...');
       ChatButtons.Open(ERSChatButton.ALL_CHAT);
       Wait(RandomRange(400, 900));
     end;
@@ -2251,7 +2219,8 @@ begin
 
   Self.CheckAndFixChatTabs();
 
-  Self.ChatboxEnable := ChatButtons.IsActive(ERSChatButton.ALL_CHAT);
+  Self.ChatboxEnable := ChatButtons.IsActive(ERSChatButton.ALL_CHAT) or
+                        ChatButtons.IsActive(ERSChatButton.PUBLIC_CHAT);
 
   if ((GetSystemTime() - Self.LastDrawTime) > 10000) and (RSClient.RemoteInput.IsSetup) then
   begin

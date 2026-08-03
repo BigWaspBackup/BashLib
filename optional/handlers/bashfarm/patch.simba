@@ -115,15 +115,28 @@ end;
 
 function TBASHFarmPatch.HandlePhasmatysApproach(): Boolean;
 var
+  me, target, blindDest: TPoint;
+  dist, step: Double;
   walked: Boolean;
 
-  function TryWalk(target: TPoint; untilDist: Int32): Boolean;
+  function TryWalk(dest: TPoint; untilDist: Int32): Boolean;
   begin
     Result := False;
     try
-      Result := Map.Walker.WebWalk(target, untilDist, 0.15);
+      Result := Map.Walker.WebWalk(dest, untilDist, 0.15);
     except
-      WriteLn('[BASHFarm] WebWalk connect failed to ', target, ' from ', Map.Position());
+      WriteLn('[BASHFarm] WebWalk connect failed to ', dest, ' from ', Map.Position());
+      Result := False;
+    end;
+  end;
+
+  function TryBlind(dest: TPoint; untilDist: Int32): Boolean;
+  begin
+    Result := False;
+    try
+      Result := Map.Walker.WalkBlind(dest, untilDist);
+    except
+      WriteLn('[BASHFarm] WalkBlind failed to ', dest, ' from ', Map.Position());
       Result := False;
     end;
   end;
@@ -144,6 +157,19 @@ begin
     Exit;
 
   WriteLn('[BASHFarm] Leaving Ectofuntus toward Port Phasmatys farm');
+
+  me := Map.Position();
+  target := Self.Data.LeprechaunCoords;
+  dist := me.DistanceTo(target);
+  if dist < 1 then
+    dist := 1;
+  step := Min(36, dist * 0.25);
+  if step < 16 then
+    step := Min(16, dist);
+  blindDest.X := Round(me.X + (target.X - me.X) * (step / dist));
+  blindDest.Y := Round(me.Y + (target.Y - me.Y) * (step / dist));
+  TryBlind(blindDest, 8);
+
   walked := TryWalk(BASH_PHASMATYS_FARM_APPROACH, 14);
   if not walked then
     walked := TryWalk(Self.Data.Coords, 16);
@@ -255,6 +281,38 @@ begin
   target.X := Round(nearest.X + (dx / len) * pastLip);
   target.Y := Round(nearest.Y + (dy / len) * pastLip);
   Result := tiles.NearestPoint(target);
+end;
+
+function TBASHFarmPatch.GetInteractMS(): TPoint;
+var
+  interior: TPoint;
+  dx, dy, len: Double;
+begin
+  if Length(Self.Data.Outline) >= 3 then
+  begin
+    Result := Map.GetTileMS(Self.GetInteractTile()).Mean;
+    if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
+    begin
+      if Length(Self.TPA) > 0 then
+        interior := Self.TPA.Mean
+      else
+        interior := Self.SearchBox.Center();
+      dx := interior.X - Result.X;
+      dy := interior.Y - Result.Y;
+      len := Sqrt(dx * dx + dy * dy);
+      if len > 0.1 then
+      begin
+        Result.X := Round(Result.X + (dx / len) * 5);
+        Result.Y := Round(Result.Y + (dy / len) * 5);
+      end;
+    end;
+    Exit;
+  end;
+
+  if Length(Self.TPA) > 0 then
+    Result := Self.TPA.Mean
+  else
+    Result := Self.SearchBox.Center();
 end;
 
 function TBASHFarmPatch.Find(): Boolean;
@@ -449,16 +507,16 @@ begin
     if Self.Find() then
     begin
       Mouse.OnMovingEx := @Self._UpdateTarget;
+      p := Self.GetInteractMS();
       if Length(Self.Data.Outline) >= 3 then
       begin
-        p := Map.GetTileMS(Self.GetInteractTile()).Mean;
-        Mouse.Move(SRL.RandomPoint(p, MainScreen.NormalizeDistance(6)));
+        if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
+          Mouse.Move(SRL.RandomPoint(p, MainScreen.NormalizeDistance(3)))
+        else
+          Mouse.Move(SRL.RandomPoint(p, MainScreen.NormalizeDistance(6)));
       end
       else
-      begin
-        p := Self.TPA.Mean;
         Mouse.Move(SRL.RandomPoint(p, MainScreen.NormalizeDistance(25)));
-      end;
       Exit(True);
     end;
 
@@ -803,8 +861,37 @@ begin
       end
       else
         stall.Restart();
-    end
-    else if started and stall.IsFinished() then
+    end;
+
+    // Allotments: invent full beats stall — note now, don't wait for XP/item silence.
+    if started and
+       (Self.Data.PatchType = EBASHPatchType.ALLOTMENT) and
+       Inventory.IsFull() then
+    begin
+      WriteLn('[BASHFarm] Harvest: allotment invent full - noting');
+      Self.DropEmptyBuckets();
+      Self.NoteItems();
+
+      Self.Find();
+      soilPct := Self.SoilPercent();
+      colourEmpty := (soilPct >= 0) and (soilPct > 0.99);
+      if colourEmpty then
+      begin
+        Self.Harvested := True;
+        Exit(True);
+      end;
+      if Self.Hover() and (not MainScreen.IsUpText(Self.HarvestUpText)) then
+      begin
+        Self.Harvested := True;
+        Exit(True);
+      end;
+
+      // Still grown after noting — invent freed; outer phase will resume pick.
+      Self.Harvested := False;
+      Exit(True);
+    end;
+
+    if started and (not gotActivity) and stall.IsFinished() then
     begin
       Self.Find();
       soilPct := Self.SoilPercent();
@@ -943,8 +1030,69 @@ var
   attempt, seedBefore, seedsNeeded: Int32;
   hadSelection: Boolean;
   clickAt: TPoint;
+  justRaked: Boolean;
+
+  function TryPlantSeed(): Boolean;
+  begin
+    Result := False;
+
+    seedBefore := Inventory.CountItemStack(Self.Seed);
+    if seedBefore < seedsNeeded then
+    begin
+      WriteLn('[BASHFarm] Not enough seeds to plant (have ', seedBefore, ', need ', seedsNeeded, ')');
+      Exit(False);
+    end;
+    if Inventory.GetSelectedSlot() = -1 then
+      if not Inventory.SetSelectedItem(Self.Seed) then
+        Exit(False);
+
+    if not Self.Find() then
+    begin
+      Self.WalkFind();
+      if not Self.Find() then
+        Exit(False);
+    end;
+
+    clickAt := SRL.RandomPoint(Self.GetInteractMS(), MainScreen.NormalizeDistance(10));
+    Mouse.Move(clickAt);
+    Mouse.Click(MOUSE_LEFT);
+
+    if not MainScreen.DidRedClick() then
+      Exit(False);
+
+    if Chat.HasContinue() then
+      Chat.ClickContinue(True);
+
+    Result := WaitUntil(
+      (Inventory.CountItemStack(Self.Seed) <= seedBefore - seedsNeeded) or
+      (Inventory.CountItemStack(Self.Seed) < seedBefore) or
+      ((seedBefore <= seedsNeeded) and (not Inventory.ContainsItem(Self.Seed))) or
+      XPBar.EarnedXP(),
+      35,
+      8000
+    );
+  end;
+
+  // Single rake path is ClearWeeds — then plant immediately (drop weeds after).
+  function RakeThenPlant(): Boolean;
+  begin
+    Result := False;
+    if not Self.ClearWeeds(False) then
+      Exit(False);
+
+    WriteLn('[BASHFarm] Weeds cleared - planting seed immediately');
+    Result := TryPlantSeed();
+    if Result then
+    begin
+      Inventory.SetSelectedSlot(-1);
+      Self.DropWeeds();
+      Self.Planted := True;
+      Self.Harvested := False;
+    end;
+  end;
 begin
   Result := False;
+  justRaked := False;
 
   if Inventory.IsFull() then
   begin
@@ -972,13 +1120,6 @@ begin
       WriteLn('[BASHFarm] Not enough seeds to plant (have ', seedBefore, ', need ', seedsNeeded, ')');
       Exit(False);
     end;
-
-    for 1 to 2 do
-      if Inventory.SetSelectedItem(Self.Seed) then
-        Break;
-
-    if Inventory.GetSelectedSlot() = -1 then
-      Exit(False);
   end
   else if seedBefore < 0 then
     seedBefore := seedsNeeded;
@@ -988,59 +1129,51 @@ begin
   XPBar.Read();
   XPBar.EarnedXP();
 
+  // Already weeded (Inspect/hover saw Rake) — rake then seed via ClearWeeds.
+  Inventory.SetSelectedSlot(-1);
+  if MainScreen.IsUpText('Rake') or (Self.Hover() and MainScreen.IsUpText('Rake')) then
+  begin
+    if RakeThenPlant() then
+      Exit(True);
+  end;
+
   for attempt := 1 to 5 do
   begin
-    if Inventory.GetSelectedSlot() = -1 then
-    begin
-      seedBefore := Inventory.CountItemStack(Self.Seed);
-      if seedBefore < seedsNeeded then
-      begin
-        WriteLn('[BASHFarm] Not enough seeds to plant (have ', seedBefore, ', need ', seedsNeeded, ')');
-        Exit(False);
-      end;
-      if not Inventory.SetSelectedItem(Self.Seed) then
-        Exit(False);
-    end;
-
-    if not Self.Find() then
-    begin
-      Self.WalkFind();
-      Continue;
-    end;
-
-    if Length(Self.TPA) > 0 then
-      clickAt := SRL.RandomPoint(Self.TPA.Mean, MainScreen.NormalizeDistance(15))
-    else
-      clickAt := SRL.RandomPoint(Self.SearchBox.Center(), MainScreen.NormalizeDistance(10));
-
-    Mouse.Move(clickAt);
-    Mouse.Click(MOUSE_LEFT);
-
-    if not MainScreen.DidRedClick() then
-      Continue;
-
-    if Chat.HasContinue() then
-      Chat.ClickContinue(True);
-
-    if WaitUntil(
-      (Inventory.CountItemStack(Self.Seed) <= seedBefore - seedsNeeded) or
-      (Inventory.CountItemStack(Self.Seed) < seedBefore) or
-      ((seedBefore <= seedsNeeded) and (not Inventory.ContainsItem(Self.Seed))) or
-      XPBar.EarnedXP(),
-      35,
-      8000
-    ) then
+    if TryPlantSeed() then
     begin
       Wait(Random(600, 1000));
       Inventory.SetSelectedSlot(-1);
+      Self.DropWeeds();
       Self.Planted := True;
       Self.Harvested := False;
       Result := True;
       Exit;
     end;
+
+    // Seed didn't plant — deselect and check uptext. "Rake" = weeds flag.
+    Inventory.SetSelectedSlot(-1);
+    WriteLn('[BASHFarm] Plant attempt ', attempt, ' failed at ', Self.Data.Name,
+            ' - hovering for Rake uptext');
+
+    if not Self.Hover() then
+    begin
+      if not Self.Find() then
+        Self.WalkFind();
+      if not Self.Hover() then
+        Continue;
+    end;
+
+    if MainScreen.IsUpText('Rake') then
+    begin
+      if RakeThenPlant() then
+        Exit(True);
+      justRaked := True;
+    end;
   end;
 
   Inventory.SetSelectedSlot(-1);
+  if justRaked then
+    Self.DropWeeds();
   Result := False;
 end;
 
@@ -1111,10 +1244,7 @@ begin
         Continue;
       end;
 
-      if Length(Self.TPA) > 0 then
-        Mouse.Move(SRL.RandomPoint(Self.TPA.Mean, MainScreen.NormalizeDistance(15)))
-      else
-        Mouse.Move(SRL.RandomPoint(Self.SearchBox.Center(), MainScreen.NormalizeDistance(10)));
+      Mouse.Move(SRL.RandomPoint(Self.GetInteractMS(), MainScreen.NormalizeDistance(10)));
 
       Mouse.Click(MOUSE_LEFT);
       clicked := True;
@@ -1191,10 +1321,7 @@ begin
       Continue;
     end;
 
-    if Length(Self.TPA) > 0 then
-      Mouse.Move(SRL.RandomPoint(Self.TPA.Mean, MainScreen.NormalizeDistance(15)))
-    else
-      Mouse.Move(SRL.RandomPoint(Self.SearchBox.Center(), MainScreen.NormalizeDistance(10)));
+    Mouse.Move(SRL.RandomPoint(Self.GetInteractMS(), MainScreen.NormalizeDistance(10)));
 
     Mouse.Click(MOUSE_LEFT);
     Break;
@@ -1229,6 +1356,9 @@ begin
   if not Inventory.FindItems(['Weeds'], slots) then
     Exit(True);
 
+  // Give the seed plant action time to finish before leaving the patch to drop.
+  Wait(Random(1000, 2000));
+
   WriteLn('[BASHFarm] Dropping ', Length(slots), ' weed slot(s)');
   Result := Inventory.ShiftDrop(slots);
 end;
@@ -1257,10 +1387,11 @@ begin
   Result := Inventory.ShiftDrop(slots);
 end;
 
-function TBASHFarmPatch.ClearWeeds(): Boolean;
+function TBASHFarmPatch.ClearWeeds(dropWeedsAfter: Boolean = False): Boolean;
 var
-  attempt: Int32;
-  waitMs: Int32;
+  xpWaitMs: Int32;
+  gotXp: Boolean;
+  overall: TCountdown;
 begin
   Result := False;
 
@@ -1275,49 +1406,80 @@ begin
     end;
   end;
 
-  for attempt := 1 to 4 do
+  if not Self.Hover() then
   begin
-    Inventory.SetSelectedSlot(-1);
+    Self.WalkFind();
+    if not Self.Hover() then
+      Exit(False);
+  end;
 
-    if not MainScreen.IsUpText('Rake') then
-    begin
-      if not Self.Hover() then
-      begin
-        Self.WalkFind();
-        Continue;
-      end;
-      if not MainScreen.IsUpText('Rake') then
-      begin
-        Self.DropWeeds();
-        Exit(True);
-      end;
-    end;
-
-    WriteLn('[BASHFarm] Raking weeds at ', Self.Data.Name);
-
-    if not Self.ClickUpText('Rake') then
-      Continue;
-
-    if not MainScreen.DidRedClick() then
-      Continue;
-
-    waitMs := Self.WalkWaitMs(25000);
-    WaitUntil(Self.IsEmpty() or (Self.Hover() and (not MainScreen.IsUpText('Rake'))),
-      35,
-      waitMs);
-
-    Self.DropWeeds();
-
-    if Self.Hover() and MainScreen.IsUpText('Rake') then
-    begin
-      WriteLn('[BASHFarm] Weeds regrew after rake');
-      Continue;
-    end;
-
+  if not MainScreen.IsUpText('Rake') then
+  begin
+    if dropWeedsAfter then
+      Self.DropWeeds();
     Exit(True);
   end;
 
-  Self.DropWeeds();
+  WriteLn('[BASHFarm] Raking weeds at ', Self.Data.Name);
+
+  if not Self.ClickUpText('Rake') then
+    Exit(False);
+  if not MainScreen.DidRedClick() then
+    Exit(False);
+
+  XPBar.Read();
+  XPBar.EarnedXP();
+  xpWaitMs := Self.WalkWaitMs(8000);
+  overall.Init(Self.WalkWaitMs(30000));
+
+  while not overall.IsFinished() do
+  begin
+    gotXp := WaitUntil(XPBar.EarnedXP(), 35, xpWaitMs);
+    if not gotXp then
+    begin
+      Inventory.SetSelectedSlot(-1);
+      if not Self.Hover() then
+        Exit(False);
+      if not MainScreen.IsUpText('Rake') then
+        Break;
+      WriteLn('[BASHFarm] No rake XP - re-clicking Rake');
+      if not Self.ClickUpText('Rake') then
+        Exit(False);
+      if not MainScreen.DidRedClick() then
+        Exit(False);
+      XPBar.Read();
+      XPBar.EarnedXP();
+      Continue;
+    end;
+
+    Inventory.SetSelectedSlot(-1);
+    if not Self.Hover() then
+    begin
+      Self.WalkFind();
+      if not Self.Hover() then
+        Exit(False);
+    end;
+
+    if 'spect' in MainScreen.GetUpText() then
+    begin
+      WriteLn('[BASHFarm] Patch shows Inspect - weeds cleared');
+      Break;
+    end;
+
+    if MainScreen.IsUpText('Rake') then
+    begin
+      WriteLn('[BASHFarm] Still Rake after XP - waiting for next weed XP');
+      Continue;
+    end;
+
+    WriteLn('[BASHFarm] After rake XP uptext=', MainScreen.GetUpText());
+    Break;
+  end;
+
+  if dropWeedsAfter then
+    Self.DropWeeds();
+
+  Inventory.SetSelectedSlot(-1);
   Result := Self.Hover() and (not MainScreen.IsUpText('Rake'));
   if not Result then
     WriteLn('[BASHFarm] Failed to clear weeds at ', Self.Data.Name);
@@ -1556,6 +1718,15 @@ begin
   me := Map.Position();
   lep := Self.Data.LeprechaunCoords;
   dist := me.DistanceTo(lep);
+
+  if dist > 35 then
+  begin
+    WriteLn('[BASHFarm] Walking to nearby lep for ', Self.Data.Name,
+            ' (dist=', Round(dist), ')');
+    Self.WalkNearLeprechaun(10);
+    me := Map.Position();
+    dist := me.DistanceTo(lep);
+  end;
 
   if TryColor() then
     Exit(True);
@@ -2268,7 +2439,29 @@ begin
         Self.CheckHealth();
       EBASHPatchState.OVERGROWN:
         begin
-          if Self.ClearWeeds() then
+          if plantPhase then
+          begin
+            // Plant() calls ClearWeeds then seeds — one path, drop weeds after.
+            Self.Harvested := True;
+            if Self.Plant() then
+            begin
+              Self.DropWeeds();
+              journal.RecordPlant(Self.Id, Self.Data.PatchType, ToStr(Self.Seed));
+              if Self.Composted then
+              begin
+                Self.Complete := True;
+                Exit;
+              end;
+            end
+            else
+              Self.SkipPatch('Failed to plant after rake');
+          end
+          else if Self.Data.PatchType in [
+            EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT
+          ] then
+            // Don't rake in harvest — Plant() will rake→seed immediately.
+            Self.Harvested := True
+          else if Self.ClearWeeds(False) then
             Self.Harvested := True
           else
             Self.SkipPatch('Failed to rake weeds');
@@ -2293,6 +2486,7 @@ begin
 
           if Self.Plant() then
           begin
+            Self.DropWeeds();
             journal.RecordPlant(Self.Id, Self.Data.PatchType, ToStr(Self.Seed));
             if Self.Composted then
             begin

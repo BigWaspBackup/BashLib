@@ -1040,7 +1040,7 @@ begin
 
       if Inventory.ClickItem(item, 'Reminisce') then
       begin
-        WaitUntil(Chat.IsOpen(), 35, 350);
+        Wait(Random(3000, 4000));
         Keyboard.Send('1');
         Result := True;
         Break;
@@ -1056,7 +1056,7 @@ begin
 
         if Equipment.ClickItem(item, 'Reminisce') then
         begin
-          WaitUntil(Chat.IsOpen(), 35, 350);
+          Wait(Random(3000, 4000));
           Keyboard.Send('1');
           Result := True;
           Break;
@@ -1115,22 +1115,46 @@ function TBASHFarmRunner.OrtusWalkNorthToFarm(): Boolean;
 var
   me, lep, dest: TPoint;
   dist, scale: Double;
+  attempt: Int32;
 begin
   WriteLn('[BASHFarm] Ortus: walking north from Hunter Guild to farm');
   lep := BASH_ORTUS_LEP;
-  me := Map.Position();
-  dist := me.DistanceTo(lep);
 
-  if dist <= 14 then
-    Exit(True);
+  for attempt := 1 to 3 do
+  begin
+    me := Map.Position();
+    dist := me.DistanceTo(lep);
 
-  scale := 10 / dist;
-  dest.X := Round(lep.X + (me.X - lep.X) * scale);
-  dest.Y := Round(lep.Y + (me.Y - lep.Y) * scale);
+    if dist <= 14 then
+      Exit(True);
 
-  Result := Map.Walker.WebWalk(dest, 3, 0.15);
-  if not Result then
-    Result := Map.Position().InBox(BASH_ORTUS_MAP);
+    if me.DistanceTo(BASH_ORTUS_HUNTER_LANDING) > 120 then
+    begin
+      WriteLn('[BASHFarm] Ortus: waiting to settle near Hunter Guild (pos ', me, ')');
+      if not WaitUntil(Map.Position().DistanceTo(BASH_ORTUS_HUNTER_LANDING) <= 120, 50, 8000) then
+        Wait(Random(400, 900));
+      Continue;
+    end;
+
+    scale := 10 / dist;
+    dest.X := Round(lep.X + (me.X - lep.X) * scale);
+    dest.Y := Round(lep.Y + (me.Y - lep.Y) * scale);
+
+    try
+      Result := Map.Walker.WebWalk(dest, 3, 0.15);
+    except
+      WriteLn('[BASHFarm] Ortus WebWalk failed from ', Map.Position(),
+              ' to ', dest, ': ', GetExceptionMessage());
+      Result := False;
+      Wait(Random(400, 900));
+      Continue;
+    end;
+
+    if Result or Map.Position().InBox(BASH_ORTUS_MAP) then
+      Exit(True);
+  end;
+
+  Result := Map.Position().InBox(BASH_ORTUS_MAP);
 end;
 
 function TBASHFarmRunner.OrtusUseQuetzalWhistle(): Boolean;
@@ -1207,8 +1231,13 @@ begin
 end;
 
 function TBASHFarmRunner.TeleportOrtusCivitasAfterArrive(): Boolean;
+const
+  RENU_TILE: TPoint = [2692, 37862];
 begin
-  WaitUntil((Minimap.PercentBlack() < 25), 35, 1200);
+  WaitUntil((Minimap.PercentBlack() < 25), 35, 3000);
+
+  if not WaitUntil(Map.Position().DistanceTo(RENU_TILE) <= 90, 50, 10000) then
+    WriteLn('[BASHFarm] Ortus: walker not near Renu yet (pos ', Map.Position(), ')');
 
   if not Self.OrtusUseRenuToHunterGuild() then
     Exit(False);
@@ -1278,9 +1307,8 @@ end;
 
 function BASHFarmSameLocation(constref a, b: TBASHFarmPatch): Boolean;
 begin
-  if BASHFarmIsGuildPatch(a.Id) and BASHFarmIsGuildPatch(b.Id) then
-    Exit(True);
-
+  // Farming Guild has multiple leps (east / west / north) — group by lep tile,
+  // not the whole guild, so we use the nearby lep for that wing.
   Result := (a.Data.LeprechaunCoords.X = b.Data.LeprechaunCoords.X) and
             (a.Data.LeprechaunCoords.Y = b.Data.LeprechaunCoords.Y);
 end;
@@ -1439,7 +1467,10 @@ begin
 
   if not patch.AtFarm() then
   begin
-    if not Self.TeleportTo(patch.Travel) then
+    // Already inside the guild — just walk to this wing's lep (don't re-teleport).
+    if BASHFarmIsGuildPatch(patch.Id) and Map.Position().InBox(BASH_GUILD_MAP) then
+      WriteLn('[BASHFarm] Already in Farming Guild - walking to lep for ', patch.Data.Name)
+    else if not Self.TeleportTo(patch.Travel) then
     begin
       patch.SkipPatch('Teleport failed');
       Exit(False);
