@@ -1,3 +1,79 @@
+function BASHFarmMenuHas(needle: String; caseSensitive: Boolean = False): Boolean;
+var
+  hay, n: String;
+  option: TRSChooseOption_Option;
+begin
+  Result := False;
+  if not ChooseOption.IsOpen() then
+    if not ChooseOption.Open() then
+      Exit(False);
+
+  n := needle;
+  if not caseSensitive then
+    n := LowerCase(n);
+
+  for option in ChooseOption.GetOptions() do
+  begin
+    hay := option.Text;
+    if not caseSensitive then
+      hay := LowerCase(hay);
+    if n in hay then
+      Exit(True);
+  end;
+end;
+
+function BASHFarmMenuSelect(needles: TStringArray; caseSensitive: Boolean = False): Boolean; overload;
+var
+  hay, n: String;
+  option: TRSChooseOption_Option;
+  i: Int32;
+begin
+  Result := False;
+  if not ChooseOption.IsOpen() then
+    if not ChooseOption.Open() then
+      Exit(False);
+
+  for option in ChooseOption.GetOptions() do
+  begin
+    hay := option.Text;
+    if not caseSensitive then
+      hay := LowerCase(hay);
+
+    for i := 0 to High(needles) do
+    begin
+      n := needles[i];
+      if not caseSensitive then
+        n := LowerCase(n);
+      if n in hay then
+      begin
+        ChooseOption.Select(option, MOUSE_LEFT);
+        Exit(True);
+      end;
+    end;
+  end;
+
+  ChooseOption.Close();
+end;
+
+function BASHFarmMenuSelect(needle: String; caseSensitive: Boolean = False): Boolean; overload;
+begin
+  Result := BASHFarmMenuSelect([needle], caseSensitive);
+end;
+
+procedure BASHFarmCloseLepInterface();
+begin
+  if not RSInterface.IsOpen() then
+    Exit;
+
+  if not RSInterface.ClickClose(True) then
+    RSInterface.ClickClose(False);
+  if not WaitUntil(not RSInterface.IsOpen(), 40, 700) then
+  begin
+    RSInterface.Close(False);
+    WaitUntil(not RSInterface.IsOpen(), 40, 700);
+  end;
+end;
+
 procedure TBASHFarmPatch.Reset();
 begin
   Self.Harvested := False;
@@ -113,41 +189,83 @@ begin
     WriteLn('[BASHFarm] Failed to climb Stronghold rocks');
 end;
 
-function TBASHFarmPatch.HandlePhasmatysApproach(): Boolean;
-var
-  me, target, blindDest: TPoint;
-  dist, step: Double;
-  walked: Boolean;
-
-  function TryWalk(dest: TPoint; untilDist: Int32): Boolean;
-  begin
-    Result := False;
-    try
-      Result := Map.Walker.WebWalk(dest, untilDist, 0.15);
-    except
-      WriteLn('[BASHFarm] WebWalk connect failed to ', dest, ' from ', Map.Position());
-      Result := False;
-    end;
-  end;
-
-  function TryBlind(dest: TPoint; untilDist: Int32): Boolean;
-  begin
-    Result := False;
-    try
-      Result := Map.Walker.WalkBlind(dest, untilDist);
-    except
-      WriteLn('[BASHFarm] WalkBlind failed to ', dest, ' from ', Map.Position());
-      Result := False;
-    end;
-  end;
+function TBASHFarmPatch.IsPhasmatys(): Boolean;
 begin
-  Result := True;
-  if not (Self.Id in [
+  Result := Self.Id in [
     EBASHFarmPatch.PHASMATYS_HERB,
     EBASHFarmPatch.PHASMATYS_FLOWER,
     EBASHFarmPatch.PHASMATYS_ALLOT_N,
     EBASHFarmPatch.PHASMATYS_ALLOT_S
-  ]) then
+  ];
+end;
+
+function TBASHFarmPatch.TryWalkToward(dest: TPoint; untilDist: Int32; blindStep: Int32 = 42; maxAttempts: Int32 = 8): Boolean;
+var
+  me, mid: TPoint;
+  dist, step: Double;
+  attempt: Int32;
+
+  function TryWeb(target: TPoint; stopDist: Int32): Boolean;
+  begin
+    Result := False;
+    try
+      Result := Map.Walker.WebWalk(target, stopDist, 0.15);
+    except
+      WriteLn('[BASHFarm] WebWalk connect failed to ', target, ' from ', Map.Position());
+      Result := False;
+    end;
+  end;
+
+  function TryBlind(target: TPoint; stopDist: Int32): Boolean;
+  begin
+    Result := False;
+    try
+      Result := Map.Walker.WalkBlind(target, stopDist);
+    except
+      WriteLn('[BASHFarm] WalkBlind failed to ', target, ' from ', Map.Position());
+      Result := False;
+    end;
+  end;
+begin
+  if maxAttempts < 1 then
+    maxAttempts := 1;
+
+  for attempt := 1 to maxAttempts do
+  begin
+    if Map.Walker.InRange(dest, untilDist) then
+      Exit(True);
+
+    if TryWeb(dest, untilDist) then
+      Exit(True);
+
+    me := Map.Position();
+    dist := me.DistanceTo(dest);
+    if dist <= untilDist then
+      Exit(True);
+    if dist < 1 then
+      dist := 1;
+
+    step := Min(Double(blindStep), dist);
+    if step < 12 then
+      step := Min(12, dist);
+
+    mid.X := Round(me.X + (dest.X - me.X) * (step / dist));
+    mid.Y := Round(me.Y + (dest.Y - me.Y) * (step / dist));
+
+    WriteLn('[BASHFarm] Phasmatys WalkBlind ', attempt, '/', maxAttempts, ' -> ', mid,
+            ' (dest=', dest, ', dist=', Round(dist), ')');
+    TryBlind(mid, 6);
+  end;
+
+  Result := Map.Walker.InRange(dest, untilDist + 10);
+end;
+
+function TBASHFarmPatch.HandlePhasmatysApproach(): Boolean;
+var
+  walked: Boolean;
+begin
+  Result := True;
+  if not Self.IsPhasmatys() then
     Exit;
 
   if Self.AtFarm() then
@@ -158,33 +276,16 @@ begin
 
   WriteLn('[BASHFarm] Leaving Ectofuntus toward Port Phasmatys farm');
 
-  me := Map.Position();
-  target := Self.Data.LeprechaunCoords;
-  dist := me.DistanceTo(target);
-  if dist < 1 then
-    dist := 1;
-  step := Min(36, dist * 0.25);
-  if step < 16 then
-    step := Min(16, dist);
-  blindDest.X := Round(me.X + (target.X - me.X) * (step / dist));
-  blindDest.Y := Round(me.Y + (target.Y - me.Y) * (step / dist));
-  TryBlind(blindDest, 8);
+  walked := Self.TryWalkToward(BASH_PHASMATYS_FARM_APPROACH, 14);
+  if not walked then
+    walked := Self.TryWalkToward(Self.Data.Coords, 16);
+  if not walked then
+    walked := Self.TryWalkToward(Self.Data.LeprechaunCoords, 14);
 
-  walked := TryWalk(BASH_PHASMATYS_FARM_APPROACH, 14);
   if not walked then
-    walked := TryWalk(Self.Data.Coords, 16);
-  if not walked then
-    WriteLn('[BASHFarm] Phasmatys approach walk failed - will retry via leprechaun walk');
+    WriteLn('[BASHFarm] Phasmatys approach walk failed - will retry via farm walk');
 end;
 
-function TBASHFarmPatch.OutlineToMS(): TPointArray;
-var
-  p: TPoint;
-begin
-  SetLength(Result, 0);
-  for p in Self.Data.Outline do
-    Result += Map.GetTileMS(p).Mean;
-end;
 
 function TBASHFarmPatch.UsesTileList(): Boolean;
 begin
@@ -222,10 +323,10 @@ begin
         Result += [x, y];
 end;
 
-function TBASHFarmPatch.GetInteractTile(): TPoint;
+function TBASHFarmPatch.GetInteractTile(me: TPoint): TPoint; overload;
 var
   tiles: TPointArray;
-  me, nearest, target, interior, toward, p: TPoint;
+  nearest, target, interior, toward, p: TPoint;
   d, lateral, score, bestScore, tx, ty, tlen, dx, dy, len, lipDist, pastLip: Double;
 begin
   if Length(Self.Data.Outline) < 3 then
@@ -235,7 +336,6 @@ begin
   if Length(tiles) = 0 then
     Exit(Self.Data.Coords);
 
-  me := Map.Position();
   toward := Self.Data.Coords;
   tx := toward.X - me.X;
   ty := toward.Y - me.Y;
@@ -283,20 +383,22 @@ begin
   Result := tiles.NearestPoint(target);
 end;
 
+function TBASHFarmPatch.GetInteractTile(): TPoint; overload;
+begin
+  Result := Self.GetInteractTile(Map.Position());
+end;
+
 function TBASHFarmPatch.GetInteractMS(): TPoint;
 var
   interior: TPoint;
   dx, dy, len: Double;
 begin
-  if Length(Self.Data.Outline) >= 3 then
+  if Self.SearchBox.Area > 0 then
   begin
-    Result := Map.GetTileMS(Self.GetInteractTile()).Mean;
-    if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
+    Result := Self.SearchBox.Center();
+    if (Self.Data.PatchType = EBASHPatchType.ALLOTMENT) and (Length(Self.TPA) > 0) then
     begin
-      if Length(Self.TPA) > 0 then
-        interior := Self.TPA.Mean
-      else
-        interior := Self.SearchBox.Center();
+      interior := Self.TPA.Mean;
       dx := interior.X - Result.X;
       dy := interior.Y - Result.Y;
       len := Sqrt(dx * dx + dy * dy);
@@ -306,6 +408,12 @@ begin
         Result.Y := Round(Result.Y + (dy / len) * 5);
       end;
     end;
+    Exit;
+  end;
+
+  if Length(Self.Data.Outline) >= 3 then
+  begin
+    Result := Map.GetTileMS(Self.GetInteractTile()).Mean;
     Exit;
   end;
 
@@ -320,25 +428,25 @@ var
   borderTPA: TPointArray;
   borderATPA: T2DPointArray;
   i, searchMod, bestIdx: Int32;
-  filterPt, centerSearch, interact: TPoint;
+  filterPt, centerSearch, interact, me: TPoint;
   bestDist, dist, nearTol: Double;
   hull: TPointArray;
 begin
   Self.SearchBox := [0, 0, 0, 0];
   Self.TPA := [];
 
-  interact := Self.GetInteractTile();
-  filterPt := Map.GetTileMS(interact).Mean;
+  me := Map.Position();
+  interact := Self.GetInteractTile(me);
+  filterPt := Map.GetTileMS(me, interact).Mean;
   if not (filterPt in MainScreen.Bounds) then
     Exit(False);
 
   if Length(Self.Data.Outline) >= 3 then
   begin
-    Self.TPA := Self.OutlineToMS();
-    if Length(Self.TPA) < 3 then
-      Exit(False);
-
+    Self.TPA := [filterPt];
     searchMod := MainScreen.NormalizeDistance(14);
+    if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
+      searchMod := MainScreen.NormalizeDistance(18);
     centerSearch := filterPt;
     Self.SearchBox.X1 := centerSearch.X - searchMod;
     Self.SearchBox.Y1 := centerSearch.Y - searchMod;
@@ -444,8 +552,11 @@ var
 begin
   if Self.Data.PatchType = EBASHPatchType.TREE then
   begin
-    Result := Self.Hover() and MainScreen.IsUpText(Self.EmptyUpText);
-    if not MainScreen.IsUpText('Rake') then
+    if not Self.Hover() then
+      Exit(False);
+    upText := MainScreen.GetUpText();
+    Result := Self.EmptyUpText in upText;
+    if not ('Rake' in upText) then
       Exit(Result);
   end;
 
@@ -481,16 +592,17 @@ begin
 
   sender^.OnMovingEx := nil;
 
-  if not (done := Self.Find()) then
+  if Self.SearchBox.Area = 0 then
+  begin
+    done := False;
     Exit;
+  end;
 
+  done := True;
   if PointInBox(destination, Self.SearchBox) then
     Exit;
 
-  if Length(Self.Data.Outline) >= 3 then
-    p := SRL.RandomPoint(Self.SearchBox.Center(), MainScreen.NormalizeDistance(8))
-  else
-    p := SRL.RandomPoint(Self.TPA.Mean, MainScreen.NormalizeDistance(10));
+  p := SRL.RandomPoint(Self.SearchBox.Center(), MainScreen.NormalizeDistance(8));
   x := p.X;
   y := p.Y;
 end;
@@ -500,13 +612,14 @@ var
   attempt: Int32;
   p, interact: TPoint;
 begin
-  interact := Self.GetInteractTile();
+  Mouse.OnMovingEx := nil;
 
   for attempt := 1 to 4 do
   begin
     if Self.Find() then
     begin
-      Mouse.OnMovingEx := @Self._UpdateTarget;
+      if Length(Self.Data.Outline) < 3 then
+        Mouse.OnMovingEx := @Self._UpdateTarget;
       p := Self.GetInteractMS();
       if Length(Self.Data.Outline) >= 3 then
       begin
@@ -517,9 +630,11 @@ begin
       end
       else
         Mouse.Move(SRL.RandomPoint(p, MainScreen.NormalizeDistance(25)));
+      Mouse.OnMovingEx := nil;
       Exit(True);
     end;
 
+    interact := Self.GetInteractTile();
     Map.Walker.MakePointVisible(interact);
     Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(35, 70) * (1 - 2 * (attempt mod 2)), 10);
   end;
@@ -528,9 +643,13 @@ begin
 end;
 
 function TBASHFarmPatch.ClickUpText(text: String): Boolean;
+var
+  up: String;
 begin
   Result := False;
-  if MainScreen.IsUpText(text) then
+
+  up := MainScreen.GetUpText();
+  if text in up then
   begin
     Mouse.Click(MOUSE_LEFT);
     Exit(True);
@@ -539,9 +658,23 @@ begin
   if not Self.Hover() then
     Exit;
 
-  if MainScreen.IsUpText(text) then
-    Mouse.Click(MOUSE_LEFT)
-  else if not ChooseOption.Select(text) then
+  Wait(35, 60);
+  up := MainScreen.GetUpText();
+  if text in up then
+  begin
+    Mouse.Click(MOUSE_LEFT);
+    Exit(True);
+  end;
+
+  if MainScreen.IsUpText(text, 120) then
+  begin
+    Mouse.Click(MOUSE_LEFT);
+    Exit(True);
+  end;
+
+  WriteLn('[BASHFarm] ClickUpText: "', text, '" missing after hover at ',
+          Self.Data.Name, ' (got="', MainScreen.GetUpText(), '") - ChooseOption');
+  if not BASHFarmMenuSelect(text, False) then
     Exit;
 
   Result := True;
@@ -595,6 +728,13 @@ begin
     Exit(EBASHPatchState.NOT_FOUND);
 
   upText := MainScreen.GetUpText();
+  for 1 to 6 do
+  begin
+    if (upText <> '') and (not ('Walk here' in upText)) then
+      Break;
+    Wait(45, 80);
+    upText := MainScreen.GetUpText();
+  end;
 
   if 'Rake' in upText then
     Exit(EBASHPatchState.OVERGROWN);
@@ -620,7 +760,9 @@ begin
     if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
     begin
       if Self.EmptyUpText in upText then
+      begin
         Exit(EBASHPatchState.EMPTY);
+      end;
       Exit(EBASHPatchState.GROWING);
     end;
 
@@ -639,43 +781,44 @@ begin
       Exit(EBASHPatchState.GROWING);
   end;
 
+  WriteLn('[BASHFarm] Inspect ambiguous uptext at ', Self.Data.Name, ' ("', upText, '") - menu probe');
   if Self.Hover() then
   begin
     ChooseOption.Open();
-    if ChooseOption.HasOption(Self.HarvestUpText, False, False) then
+    if BASHFarmMenuHas(Self.HarvestUpText, False) then
     begin
       ChooseOption.Close();
       Exit(EBASHPatchState.GROWN);
     end;
-    if ChooseOption.HasOption('Rake', False, False) then
+    if BASHFarmMenuHas('Rake', False) then
     begin
       ChooseOption.Close();
       Exit(EBASHPatchState.OVERGROWN);
     end;
-    if ChooseOption.HasOption('ead', False, False) then
+    if BASHFarmMenuHas('ead', False) then
     begin
       ChooseOption.Close();
       Exit(EBASHPatchState.DEAD);
     end;
-    if ChooseOption.HasOption('seas', False, False) then
+    if BASHFarmMenuHas('seas', False) then
     begin
       ChooseOption.Close();
       Exit(EBASHPatchState.DISEASED);
     end;
-    if ChooseOption.HasOption('eck-hea', False, False) then
+    if BASHFarmMenuHas('eck-hea', False) then
     begin
       ChooseOption.Close();
       Exit(EBASHPatchState.FRESH);
     end;
     if (not Self.DontClear) and
-       (ChooseOption.HasOption('lear', False, False) or ChooseOption.HasOption('Chop', False, False)) then
+       (BASHFarmMenuHas('lear', False) or BASHFarmMenuHas('Chop', False)) then
     begin
       ChooseOption.Close();
       if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
         Exit(EBASHPatchState.DEAD);
       Exit(EBASHPatchState.NEED_CLEAR);
     end;
-    if ChooseOption.HasOption('spect', False, False) then
+    if BASHFarmMenuHas('spect', False) then
     begin
       ChooseOption.Close();
       if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
@@ -703,7 +846,7 @@ begin
       if 'spect' in upText then
         goto doInspect;
       ChooseOption.Open();
-      if ChooseOption.HasOption('spect', False, False) then
+      if BASHFarmMenuHas('spect', False) then
         goto doInspect;
       ChooseOption.Close();
     end;
@@ -714,7 +857,7 @@ begin
 doInspect:
   if ChooseOption.IsOpen() then
   begin
-    if not ChooseOption.Select('spect') then
+    if not BASHFarmMenuSelect('spect', False) then
       Exit(EBASHPatchState.NOT_FOUND);
   end
   else
@@ -787,6 +930,45 @@ var
     end;
     lastCount := Inventory.Count();
     lastEmpty := Inventory.CountEmptySlots();
+  end;
+
+  function PostNotePatchCheck(): Boolean;
+  var
+    upText: String;
+  begin
+    Minimap.WaitPlayerMoving(250, 1200);
+
+    Self.Find();
+    soilPct := Self.SoilPercent();
+    colourEmpty := (soilPct >= 0) and (soilPct > 0.99);
+    if colourEmpty then
+    begin
+      Self.Harvested := True;
+      Exit(True);
+    end;
+
+    if not Self.Hover() then
+    begin
+      WriteLn('[BASHFarm] Harvest: post-note hover missed - will recheck');
+      Self.Harvested := False;
+      Exit(True);
+    end;
+
+    upText := MainScreen.GetUpText();
+    if Self.HarvestUpText in upText then
+    begin
+      Self.Harvested := False;
+      Exit(True);
+    end;
+    if ('spect' in upText) and (Self.EmptyUpText in upText) and (not ('Rake' in upText)) then
+    begin
+      Self.Harvested := True;
+      Exit(True);
+    end;
+
+    WriteLn('[BASHFarm] Harvest: post-note uptext ambiguous ("', upText, '") - will recheck');
+    Self.Harvested := False;
+    Result := True;
   end;
 begin
   Result := False;
@@ -863,7 +1045,6 @@ begin
         stall.Restart();
     end;
 
-    // Allotments: invent full beats stall — note now, don't wait for XP/item silence.
     if started and
        (Self.Data.PatchType = EBASHPatchType.ALLOTMENT) and
        Inventory.IsFull() then
@@ -871,24 +1052,7 @@ begin
       WriteLn('[BASHFarm] Harvest: allotment invent full - noting');
       Self.DropEmptyBuckets();
       Self.NoteItems();
-
-      Self.Find();
-      soilPct := Self.SoilPercent();
-      colourEmpty := (soilPct >= 0) and (soilPct > 0.99);
-      if colourEmpty then
-      begin
-        Self.Harvested := True;
-        Exit(True);
-      end;
-      if Self.Hover() and (not MainScreen.IsUpText(Self.HarvestUpText)) then
-      begin
-        Self.Harvested := True;
-        Exit(True);
-      end;
-
-      // Still grown after noting — invent freed; outer phase will resume pick.
-      Self.Harvested := False;
-      Exit(True);
+      Exit(PostNotePatchCheck());
     end;
 
     if started and (not gotActivity) and stall.IsFinished() then
@@ -917,7 +1081,7 @@ begin
         Exit(True);
       end;
 
-      if Self.Hover() and (not MainScreen.IsUpText(Self.HarvestUpText)) then
+      if Self.Hover() and (not (Self.HarvestUpText in MainScreen.GetUpText())) then
       begin
         Self.DropEmptyBuckets();
         if Inventory.IsFull() then
@@ -943,7 +1107,7 @@ begin
           Continue;
         end;
 
-        if Self.Hover() and MainScreen.IsUpText(Self.HarvestUpText) then
+        if Self.Hover() and (Self.HarvestUpText in MainScreen.GetUpText()) then
         begin
           WriteLn('[BASHFarm] Harvest: resume failed, still grown');
           Self.Harvested := False;
@@ -961,7 +1125,7 @@ begin
         Continue;
       end;
 
-      if Self.Hover() and MainScreen.IsUpText(Self.HarvestUpText) then
+      if Self.Hover() and (Self.HarvestUpText in MainScreen.GetUpText()) then
       begin
         WriteLn('[BASHFarm] Harvest: resume failed, still grown');
         Self.Harvested := False;
@@ -1005,7 +1169,7 @@ begin
   if Inventory.IsFull() then
     FreeInventForPick();
 
-  if Self.Hover() and MainScreen.IsUpText(Self.HarvestUpText) then
+  if Self.Hover() and (Self.HarvestUpText in MainScreen.GetUpText()) then
   begin
     WriteLn('[BASHFarm] Harvest timeout: still harvestable');
     Self.Harvested := False;
@@ -1031,10 +1195,58 @@ var
   hadSelection: Boolean;
   clickAt: TPoint;
   justRaked: Boolean;
+  tClick, deadline: UInt64;
+  up: String;
+  compostPrepped: Boolean;
 
-  function TryPlantSeed(): Boolean;
+  function WillCompostAfterPlant(): Boolean;
+  begin
+    Result := (not Self.Composted) and
+              (Self.UseFertileSoil or (Self.CompostItem <> ''));
+  end;
+
+  function PlantFinished(): Boolean;
+  begin
+    Result :=
+      (Inventory.CountItemStack(Self.Seed) <= seedBefore - seedsNeeded) or
+      (Inventory.CountItemStack(Self.Seed) < seedBefore) or
+      ((seedBefore <= seedsNeeded) and (not Inventory.ContainsItem(Self.Seed))) or
+      XPBar.EarnedXP();
+  end;
+
+  function PrepBucketCompost(): Boolean;
   begin
     Result := False;
+    if Self.UseFertileSoil or (Self.CompostItem = '') then
+      Exit;
+    if not Inventory.ContainsItem(Self.CompostItem) then
+      Exit;
+    Result := Inventory.SetSelectedItem(Self.CompostItem);
+    if Result and (Random(100) < 78) then
+      Self.Hover();
+  end;
+
+  function FinishWithCompost(): Boolean;
+  begin
+    Result := False;
+    if not WillCompostAfterPlant() then
+      Exit(True);
+
+    if Self.UseFertileSoil then
+    begin
+      Result := Self.FertileSoil();
+      Exit;
+    end;
+
+    Result := Self.Compost();
+  end;
+
+  function TryPlantSeed(): Boolean;
+  var
+    seedUp: String;
+  begin
+    Result := False;
+    compostPrepped := False;
 
     seedBefore := Inventory.CountItemStack(Self.Seed);
     if seedBefore < seedsNeeded then
@@ -1055,6 +1267,22 @@ var
 
     clickAt := SRL.RandomPoint(Self.GetInteractMS(), MainScreen.NormalizeDistance(10));
     Mouse.Move(clickAt);
+    Wait(40, 80);
+    seedUp := MainScreen.GetUpText();
+
+    if not (Self.EmptyUpText in seedUp) then
+    begin
+      WriteLn('[BASHFarm] Plant: seed uptext not empty patch at ', Self.Data.Name,
+              ' (got="', seedUp, '", want "', Self.EmptyUpText, '")');
+      Inventory.SetSelectedSlot(-1);
+      if (Self.HarvestUpText in seedUp) or
+         ('plant' in LowerCase(seedUp)) or
+         ('ick' in seedUp) or
+         ('arves' in seedUp) then
+        Self.Harvested := False;
+      Exit(False);
+    end;
+
     Mouse.Click(MOUSE_LEFT);
 
     if not MainScreen.DidRedClick() then
@@ -1063,17 +1291,35 @@ var
     if Chat.HasContinue() then
       Chat.ClickContinue(True);
 
-    Result := WaitUntil(
-      (Inventory.CountItemStack(Self.Seed) <= seedBefore - seedsNeeded) or
-      (Inventory.CountItemStack(Self.Seed) < seedBefore) or
-      ((seedBefore <= seedsNeeded) and (not Inventory.ContainsItem(Self.Seed))) or
-      XPBar.EarnedXP(),
-      35,
-      8000
-    );
+    tClick := GetTickCount();
+    deadline := tClick + 8000;
+    while GetTickCount() < deadline do
+    begin
+      if PlantFinished() then
+      begin
+        Result := True;
+        Break;
+      end;
+
+      if (not compostPrepped) and
+         WillCompostAfterPlant() and
+         (not Self.UseFertileSoil) and
+         (GetTickCount() >= tClick + 350) then
+        compostPrepped := PrepBucketCompost();
+
+      Wait(35);
+    end;
   end;
 
-  // Single rake path is ClearWeeds — then plant immediately (drop weeds after).
+  function MarkPlantedAndCompost(): Boolean;
+  begin
+    Self.Planted := True;
+    Self.Harvested := False;
+    FinishWithCompost();
+    Self.DropWeeds();
+    Result := True;
+  end;
+
   function RakeThenPlant(): Boolean;
   begin
     Result := False;
@@ -1083,16 +1329,12 @@ var
     WriteLn('[BASHFarm] Weeds cleared - planting seed immediately');
     Result := TryPlantSeed();
     if Result then
-    begin
-      Inventory.SetSelectedSlot(-1);
-      Self.DropWeeds();
-      Self.Planted := True;
-      Self.Harvested := False;
-    end;
+      Result := MarkPlantedAndCompost();
   end;
 begin
   Result := False;
   justRaked := False;
+  compostPrepped := False;
 
   if Inventory.IsFull() then
   begin
@@ -1129,31 +1371,34 @@ begin
   XPBar.Read();
   XPBar.EarnedXP();
 
-  // Already weeded (Inspect/hover saw Rake) — rake then seed via ClearWeeds.
   Inventory.SetSelectedSlot(-1);
-  if MainScreen.IsUpText('Rake') or (Self.Hover() and MainScreen.IsUpText('Rake')) then
+  up := MainScreen.GetUpText();
+  if ('Rake' in up) or (Self.Hover() and ('Rake' in MainScreen.GetUpText())) then
   begin
     if RakeThenPlant() then
+    begin
       Exit(True);
+    end;
   end;
 
   for attempt := 1 to 5 do
   begin
     if TryPlantSeed() then
     begin
-      Wait(Random(600, 1000));
-      Inventory.SetSelectedSlot(-1);
-      Self.DropWeeds();
-      Self.Planted := True;
-      Self.Harvested := False;
-      Result := True;
+      Result := MarkPlantedAndCompost();
       Exit;
     end;
 
-    // Seed didn't plant — deselect and check uptext. "Rake" = weeds flag.
+    if not Self.Harvested then
+    begin
+      Inventory.SetSelectedSlot(-1);
+      WriteLn('[BASHFarm] Plant aborted at ', Self.Data.Name, ' - patch still needs harvest');
+      Exit(False);
+    end;
+
     Inventory.SetSelectedSlot(-1);
     WriteLn('[BASHFarm] Plant attempt ', attempt, ' failed at ', Self.Data.Name,
-            ' - hovering for Rake uptext');
+            ' - hovering for Rake/harvest uptext');
 
     if not Self.Hover() then
     begin
@@ -1163,10 +1408,20 @@ begin
         Continue;
     end;
 
-    if MainScreen.IsUpText('Rake') then
+    up := MainScreen.GetUpText();
+    if Self.HarvestUpText in up then
+    begin
+      WriteLn('[BASHFarm] Plant: harvest uptext after fail at ', Self.Data.Name);
+      Self.Harvested := False;
+      Exit(False);
+    end;
+
+    if 'Rake' in up then
     begin
       if RakeThenPlant() then
+      begin
         Exit(True);
+      end;
       justRaked := True;
     end;
   end;
@@ -1179,7 +1434,7 @@ end;
 
 function TBASHFarmPatch.Compost(): Boolean;
 var
-  slot, i, attempt, beforeStack, maxTries: Int32;
+  slot, i, attempt, beforeStack, maxTries, selected: Int32;
   clicked: Boolean;
   isBottomless: Boolean;
   waitMs: Int32;
@@ -1208,35 +1463,55 @@ begin
   else
     maxTries := 3;
 
-  for 1 to 2 do
-    if Inventory.FindItem(Self.CompostItem, slot) then
-      Break;
-
-  if slot < 0 then
+  selected := Inventory.GetSelectedSlot();
+  if selected > -1 then
+    slot := selected
+  else
   begin
-    Inventory.SetSelectedSlot(-1);
-    if not Self.WithdrawLepCompost() then
-      Exit(False);
-    if not Inventory.FindItem(Self.CompostItem, slot) then
-      Exit(False);
+    for 1 to 2 do
+      if Inventory.FindItem(Self.CompostItem, slot) then
+        Break;
+
+    if slot < 0 then
+    begin
+      if not Self.WithdrawLepCompost() then
+        Exit(False);
+      if not Inventory.FindItem(Self.CompostItem, slot) then
+        Exit(False);
+    end;
   end;
 
   WriteLn('[BASHFarm] Composting ', Self.Data.Name);
 
   for attempt := 1 to maxTries do
   begin
-    if not Inventory.FindItem(Self.CompostItem, slot) then
-      Break;
+    selected := Inventory.GetSelectedSlot();
+    if selected > -1 then
+      slot := selected
+    else
+    begin
+      if not Inventory.FindItem(Self.CompostItem, slot) then
+        Break;
+      if not Inventory.SetSelectedSlot(slot) then
+        Continue;
+    end;
 
     beforeStack := Inventory.CountItemStack(Self.CompostItem);
     XPBar.Read();
     XPBar.EarnedXP();
     clicked := False;
 
+    Wait(Random(1000, 1200));
+
     for 1 to 4 do
     begin
-      if not Inventory.SetSelectedSlot(slot) then
-        Continue;
+      if Inventory.GetSelectedSlot() < 0 then
+      begin
+        if not Inventory.FindItem(Self.CompostItem, slot) then
+          Break;
+        if not Inventory.SetSelectedSlot(slot) then
+          Continue;
+      end;
 
       if not Self.Find() then
       begin
@@ -1267,7 +1542,8 @@ begin
       waitMs
     );
 
-    if (not Result) and (not isBottomless) and (Inventory.CountItemStack(Self.CompostItem) < beforeStack) then
+    if (not Result) and (not isBottomless) and (beforeStack > 0) and
+       (Inventory.CountItemStack(Self.CompostItem) < beforeStack) then
     begin
       Result := WaitUntil(XPBar.EarnedXP(), 35, 2500);
       if not Result then
@@ -1277,7 +1553,7 @@ begin
     if Result then
       Break;
 
-    if isBottomless or (Inventory.CountItemStack(Self.CompostItem) < beforeStack) then
+    if isBottomless or ((beforeStack > 0) and (Inventory.CountItemStack(Self.CompostItem) < beforeStack)) then
       Break;
 
     if attempt < maxTries then
@@ -1356,8 +1632,7 @@ begin
   if not Inventory.FindItems(['Weeds'], slots) then
     Exit(True);
 
-  // Give the seed plant action time to finish before leaving the patch to drop.
-  Wait(Random(1000, 2000));
+  Wait(Random(400, 800));
 
   WriteLn('[BASHFarm] Dropping ', Length(slots), ' weed slot(s)');
   Result := Inventory.ShiftDrop(slots);
@@ -1392,9 +1667,9 @@ var
   xpWaitMs: Int32;
   gotXp: Boolean;
   overall: TCountdown;
+  up: String;
 begin
   Result := False;
-
   Inventory.SetSelectedSlot(-1);
 
   if not Inventory.ContainsItem('Rake') then
@@ -1413,7 +1688,8 @@ begin
       Exit(False);
   end;
 
-  if not MainScreen.IsUpText('Rake') then
+  up := MainScreen.GetUpText();
+  if not ('Rake' in up) then
   begin
     if dropWeedsAfter then
       Self.DropWeeds();
@@ -1440,7 +1716,8 @@ begin
       Inventory.SetSelectedSlot(-1);
       if not Self.Hover() then
         Exit(False);
-      if not MainScreen.IsUpText('Rake') then
+      up := MainScreen.GetUpText();
+      if not ('Rake' in up) then
         Break;
       WriteLn('[BASHFarm] No rake XP - re-clicking Rake');
       if not Self.ClickUpText('Rake') then
@@ -1460,19 +1737,20 @@ begin
         Exit(False);
     end;
 
-    if 'spect' in MainScreen.GetUpText() then
+    up := MainScreen.GetUpText();
+    if 'spect' in up then
     begin
       WriteLn('[BASHFarm] Patch shows Inspect - weeds cleared');
       Break;
     end;
 
-    if MainScreen.IsUpText('Rake') then
+    if 'Rake' in up then
     begin
       WriteLn('[BASHFarm] Still Rake after XP - waiting for next weed XP');
       Continue;
     end;
 
-    WriteLn('[BASHFarm] After rake XP uptext=', MainScreen.GetUpText());
+    WriteLn('[BASHFarm] After rake XP uptext=', up);
     Break;
   end;
 
@@ -1480,7 +1758,10 @@ begin
     Self.DropWeeds();
 
   Inventory.SetSelectedSlot(-1);
-  Result := Self.Hover() and (not MainScreen.IsUpText('Rake'));
+  if not Self.Hover() then
+    Result := False
+  else
+    Result := not ('Rake' in MainScreen.GetUpText());
   if not Result then
     WriteLn('[BASHFarm] Failed to clear weeds at ', Self.Data.Name);
 end;
@@ -1489,6 +1770,8 @@ function TBASHFarmPatch.ClearDead(): Boolean;
 var
   waitMs: Int32;
   gotXp: Boolean;
+  deadline: UInt64;
+  up: String;
 begin
   if not Self.ClickUpText('lear') then
     Exit(False);
@@ -1499,18 +1782,33 @@ begin
   waitMs := Self.WalkWaitMs(5000);
   XPBar.Read();
   XPBar.EarnedXP();
-  
+
   if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
   begin
     gotXp := WaitUntil(XPBar.EarnedXP(), 35, waitMs);
     if gotXp then
-      waitMs := 3000;
+      waitMs := 2500
+    else
+      waitMs := Min(waitMs, 4000);
 
-    Result := WaitUntil(
-      Self.Hover() and ('spect' in MainScreen.GetUpText()) and (not MainScreen.IsUpText('lear')),
-      35,
-      waitMs
-    );
+    Result := False;
+    if not Self.Hover() then
+      Exit(False);
+
+    deadline := GetTickCount() + UInt64(waitMs);
+    while GetTickCount() < deadline do
+    begin
+      up := MainScreen.GetUpText();
+      if ('spect' in up) and (not ('lear' in up)) then
+      begin
+        Result := True;
+        Break;
+      end;
+      if (Length(up) < 3) or (Random(100) < 12) then
+        Self.Hover();
+      Wait(40);
+    end;
+
     if Result then
       WriteLn('[BASHFarm] ClearDead done at ', Self.Data.Name, ' uptext=', MainScreen.GetUpText())
     else
@@ -1587,58 +1885,148 @@ begin
             Map.Walker.InRange(Self.Data.Coords, BASH_ATFARM_PATCH_DIST);
 end;
 
+function TBASHFarmPatch.UsesReusableCompost(): Boolean;
+begin
+  Result := Self.UseFertileSoil or (Self.CompostItem = 'Bottomless compost bucket');
+end;
+
+function TBASHFarmPatch.HasFarmToolsReady(includeCompost: Boolean = True): Boolean;
+var
+  needCompost: Boolean;
+begin
+  if Self.MagicSecateurs and
+     (not Inventory.ContainsItem('Magic secateurs')) and
+     (not Equipment.ContainsItem('Magic secateurs')) then
+    Exit(False);
+  if not Inventory.ContainsItem('Spade') then
+    Exit(False);
+  if (not Self.BarbDibber) and (not Inventory.ContainsItem('Seed dibber')) then
+    Exit(False);
+
+  needCompost := includeCompost and (not Self.UseFertileSoil) and (Self.CompostItem <> '');
+  if needCompost and (not Inventory.ContainsItem(Self.CompostItem)) then
+    Exit(False);
+
+  Result := True;
+end;
+
+function TBASHFarmPatch.WalkNearPatch(untilDist: Int32 = 8): Boolean;
+var
+  me, dest: TPoint;
+  attempt: Int32;
+  targets: TPointArray;
+  stopDist: Int32;
+
+  function TryWebWalk(target: TPoint; stopAt: Int32): Boolean;
+  begin
+    Result := False;
+    try
+      Result := Map.Walker.WebWalk(target, stopAt, 0.15);
+    except
+      WriteLn('[BASHFarm] WebWalk connect failed to ', target, ' from ', Map.Position());
+      Result := False;
+    end;
+  end;
+begin
+  me := Map.Position();
+  if Map.Walker.InRange(Self.Data.Coords, untilDist + 6) then
+    Exit(True);
+
+  WriteLn('[BASHFarm] Walking to patch at ', Self.Data.Name);
+
+  targets := [
+    Self.Data.Coords,
+    Self.GetInteractTile(),
+    Self.Data.MapCoords.Center()
+  ];
+  stopDist := Max(untilDist, 6);
+
+  for attempt := 0 to High(targets) do
+  begin
+    dest := targets[attempt];
+    if attempt > 0 then
+      WriteLn('[BASHFarm] Patch walk fallback ', attempt + 1, '/', Length(targets), ' -> ', dest);
+
+    if Self.IsPhasmatys() then
+    begin
+      if Self.TryWalkToward(dest, stopDist, 42, 5) then
+        Exit(True);
+    end
+    else if TryWebWalk(dest, stopDist) then
+      Exit(True);
+  end;
+
+  Result := Map.Walker.InRange(Self.Data.Coords, untilDist + 10);
+  if not Result then
+    WriteLn('[BASHFarm] Failed to walk near patch at ', Self.Data.Name,
+            ' (dist=', Round(Map.Position().DistanceTo(Self.Data.Coords)), ')');
+end;
+
+function TBASHFarmPatch.WalkToFarmWork(keepOut: Int32 = 10): Boolean;
+var
+  needCompost: Boolean;
+begin
+  needCompost := (not Self.UseFertileSoil) and (Self.CompostItem <> '');
+  if not Self.HasFarmToolsReady(needCompost) then
+  begin
+    WriteLn('[BASHFarm] Tools/compost needed - walking to lep first at ', Self.Data.Name);
+    Exit(Self.WalkNearLeprechaun(keepOut));
+  end;
+  Result := Self.WalkNearPatch(Max(keepOut - 2, 6));
+end;
+
 function TBASHFarmPatch.WalkNearLeprechaun(keepOut: Int32 = 10): Boolean;
 var
   me, lep, dest: TPoint;
   dist: Double;
   attempt: Int32;
   targets: TPointArray;
+  untilDist: Int32;
 
-  function TryWebWalk(target: TPoint; untilDist: Int32): Boolean;
+  function TryWebWalk(target: TPoint; stopDist: Int32): Boolean;
   begin
     Result := False;
     try
-      Result := Map.Walker.WebWalk(target, untilDist, 0.15);
+      Result := Map.Walker.WebWalk(target, stopDist, 0.15);
     except
       WriteLn('[BASHFarm] WebWalk connect failed to ', target, ' from ', Map.Position());
       Result := False;
     end;
   end;
 
-  function NearButNotOnLep(): Boolean;
+  function NearLep(): Boolean;
   begin
     me := Map.Position();
     dist := me.DistanceTo(lep);
-    Result := (dist > 1) and (dist <= (keepOut + 12));
+    Result := (dist > 1) and (dist <= (keepOut + 18));
   end;
 begin
   lep := Self.Data.LeprechaunCoords;
   me := Map.Position();
   dist := me.DistanceTo(lep);
 
-  if (dist > 1) and (dist <= (keepOut + 8)) then
+  if NearLep() then
+  begin
+    Map.Walker.MakePointVisible(lep);
     Exit(True);
+  end;
 
   WriteLn('[BASHFarm] Walking to farm near leprechaun at ', Self.Data.Name);
 
-  if dist > 80 then
-    targets := [
-      Self.Data.Coords,
-      [lep.X - 3, lep.Y + 3],
-      [lep.X + 3, lep.Y - 3],
-      [lep.X - 3, lep.Y - 3],
-      [lep.X + 3, lep.Y + 3],
-      Self.Data.MapCoords.Center()
-    ]
-  else
-    targets := [
-      [lep.X + 3, lep.Y + 3],
-      [lep.X - 3, lep.Y + 3],
-      [lep.X + 3, lep.Y - 3],
-      [lep.X - 3, lep.Y - 3],
-      Self.Data.MapCoords.Center(),
-      Self.Data.Coords
-    ];
+  targets := [
+    [lep.X + 3, lep.Y + 3],
+    [lep.X - 3, lep.Y + 3],
+    [lep.X + 3, lep.Y - 3],
+    [lep.X - 3, lep.Y - 3],
+    [lep.X + 4, lep.Y],
+    [lep.X - 4, lep.Y],
+    [lep.X, lep.Y + 4],
+    [lep.X, lep.Y - 4],
+    Self.Data.MapCoords.Center(),
+    Self.Data.Coords
+  ];
+
+  untilDist := Max(keepOut + 8, 14);
 
   for attempt := 0 to High(targets) do
   begin
@@ -1649,12 +2037,34 @@ begin
     if attempt > 0 then
       WriteLn('[BASHFarm] Lep walk fallback ', attempt + 1, '/', Length(targets), ' -> ', dest);
 
-    if TryWebWalk(dest, Max(keepOut + 4, 8)) and NearButNotOnLep() then
+    if Self.IsPhasmatys() then
+    begin
+      if Self.TryWalkToward(dest, untilDist, 42, 5) and NearLep() then
+      begin
+        Map.Walker.MakePointVisible(lep);
+        Exit(True);
+      end;
+    end
+    else if TryWebWalk(dest, untilDist) then
+    begin
+      if NearLep() then
+      begin
+        Map.Walker.MakePointVisible(lep);
+        Exit(True);
+      end;
+    end;
+
+    if NearLep() then
+    begin
+      Map.Walker.MakePointVisible(lep);
       Exit(True);
+    end;
   end;
 
-  Result := NearButNotOnLep();
-  if not Result then
+  Result := NearLep();
+  if Result then
+    Map.Walker.MakePointVisible(lep)
+  else
     WriteLn('[BASHFarm] Failed to walk near leprechaun at ', Self.Data.Name,
             ' (dist=', Round(Map.Position().DistanceTo(lep)), ')');
 end;
@@ -1701,9 +2111,6 @@ var
   function TryUnderPlayer(): Boolean;
   begin
     Result := False;
-    me := Map.Position();
-    if me.DistanceTo(lep) > 20 then
-      Exit;
     if not Minimap.HasDotUnder() then
       Exit;
 
@@ -1719,14 +2126,16 @@ begin
   lep := Self.Data.LeprechaunCoords;
   dist := me.DistanceTo(lep);
 
-  if dist > 35 then
+  if dist > 28 then
   begin
     WriteLn('[BASHFarm] Walking to nearby lep for ', Self.Data.Name,
             ' (dist=', Round(dist), ')');
     Self.WalkNearLeprechaun(10);
     me := Map.Position();
     dist := me.DistanceTo(lep);
-  end;
+  end
+  else
+    Map.Walker.MakePointVisible(Self.Data.LeprechaunCoords);
 
   if TryColor() then
     Exit(True);
@@ -1757,6 +2166,8 @@ function TBASHFarmPatch.HoverLeprechaun(): Boolean;
 var
   tpa: TPointArray;
   i: Int32;
+  playerBox: TBox;
+  under: TPoint;
 begin
   if not Self.FindLeprechaun(tpa) then
     Exit(False);
@@ -1768,6 +2179,19 @@ begin
       Exit(True);
   end;
 
+  if Minimap.HasDotUnder() then
+  begin
+    playerBox := MainScreen.GetPlayerBox();
+    playerBox.Y1 := playerBox.Y1 - Floor(playerBox.Height / 2);
+    under := playerBox.Middle;
+    Mouse.Move(SRL.RandomPoint(under, MainScreen.NormalizeDistance(6)));
+    if MainScreen.IsUpText('Lepr') then
+    begin
+      WriteLn('[BASHFarm] Lep under player at ', Self.Data.Name, ' (minimap dot)');
+      Exit(True);
+    end;
+  end;
+
   Result := MainScreen.IsUpText('Lepr');
 end;
 
@@ -1775,6 +2199,8 @@ function TBASHFarmPatch.ClickLeprechaun(): Boolean;
 var
   tpa: TPointArray;
   i: Int32;
+  playerBox: TBox;
+  under: TPoint;
 begin
   if not Self.FindLeprechaun(tpa) then
     Exit(False);
@@ -1784,6 +2210,16 @@ begin
     Mouse.Move(tpa[i]);
     if MainScreen.IsUpText('Lepr') then
       Break;
+  end;
+
+  if (not MainScreen.IsUpText('Lepr')) and Minimap.HasDotUnder() then
+  begin
+    playerBox := MainScreen.GetPlayerBox();
+    playerBox.Y1 := playerBox.Y1 - Floor(playerBox.Height / 2);
+    under := playerBox.Middle;
+    Mouse.Move(under);
+    if MainScreen.IsUpText('Lepr') then
+      WriteLn('[BASHFarm] Lep under player at ', Self.Data.Name, ' (minimap dot)');
   end;
 
   if MainScreen.IsUpText('Lepr') then
@@ -1957,7 +2393,7 @@ begin
     end;
 
     Mouse.Click(MOUSE_RIGHT);
-    if not ChooseOption.Select('Exchange') then
+    if not BASHFarmMenuSelect('Exchange', False) then
       Continue;
 
     if WaitUntil(RSInterface.IsOpen(), 35, 7500) then
@@ -2012,7 +2448,7 @@ begin
   begin
     if closeAfter then
     begin
-      RSInterface.Close(True);
+      BASHFarmCloseLepInterface();
       _BASHLepClearSlots();
     end;
     Exit(True);
@@ -2027,7 +2463,7 @@ begin
   begin
     if closeAfter then
     begin
-      RSInterface.Close(True);
+      BASHFarmCloseLepInterface();
       _BASHLepClearSlots();
     end;
     Exit(True);
@@ -2038,7 +2474,7 @@ begin
   if isBottomless then
   begin
     Mouse.Move(_BASHLepStoreSlot(slot));
-    if not ChooseOption.Select('Remove') then
+    if not BASHFarmMenuSelect('Remove', False) then
       Result := False
     else
       Result := Self.WaitLepInvSlotGreen(slot, 5000);
@@ -2048,7 +2484,7 @@ begin
     for i := 1 to need do
     begin
       Mouse.Move(_BASHLepStoreSlot(slot));
-      if not ChooseOption.Select('Remove-1') then
+      if not BASHFarmMenuSelect('Remove-1', False) then
       begin
         Result := False;
         Break;
@@ -2067,7 +2503,7 @@ begin
 
   if closeAfter then
   begin
-    RSInterface.Close(True);
+    BASHFarmCloseLepInterface();
     _BASHLepClearSlots();
     if Result then
     begin
@@ -2107,22 +2543,22 @@ begin
 
   if Self.CompostItem = 'Bottomless compost bucket' then
   begin
-    if not ChooseOption.Select('Store') then
+    if not BASHFarmMenuSelect('Store', False) then
     begin
-      RSInterface.Close(True);
+      BASHFarmCloseLepInterface();
       _BASHLepClearSlots();
       Exit(False);
     end;
   end
-  else if not ChooseOption.Select('Store-All') then
+  else if not BASHFarmMenuSelect('Store-All', False) then
   begin
-    RSInterface.Close(True);
+    BASHFarmCloseLepInterface();
     _BASHLepClearSlots();
     Exit(False);
   end;
 
   Result := Self.WaitLepInvSlotNotGreen(slot, 5000);
-  RSInterface.Close(True);
+  BASHFarmCloseLepInterface();
   _BASHLepClearSlots();
 end;
 
@@ -2189,12 +2625,12 @@ begin
     Exit(True);
 
   Mouse.Move(_BASHLepStoreSlot(slot));
-  if not ChooseOption.Select(['Remove-1', 'Remove']) then
+  if not BASHFarmMenuSelect(['Remove-1', 'Remove'], False) then
   begin
     WriteLn('[BASHFarm] Lep store Remove failed for ', labelName);
     if closeAfter then
     begin
-      RSInterface.Close(True);
+      BASHFarmCloseLepInterface();
       _BASHLepClearSlots();
     end;
     Exit(False);
@@ -2209,7 +2645,7 @@ begin
 
   if closeAfter then
   begin
-    RSInterface.Close(True);
+    BASHFarmCloseLepInterface();
     _BASHLepClearSlots();
   end;
 end;
@@ -2265,7 +2701,7 @@ begin
     end;
 
     Mouse.Click(MOUSE_RIGHT);
-    if not ChooseOption.Select(['Deposit-all', 'Deposit-All', 'Deposit all']) then
+    if not BASHFarmMenuSelect(['Deposit-all', 'Deposit-All', 'Deposit all'], False) then
     begin
       WriteLn('[BASHFarm] Deposit-all option not found');
       ChooseOption.Close();
@@ -2292,7 +2728,7 @@ var
   needSecs, needSpade, needDibber, needCompost: Boolean;
   okSecs, okSpade, okDibber, okCompost: Boolean;
 begin
-  Self.NoteItems();
+  Mouse.OnMovingEx := nil;
 
   needSecs := Self.MagicSecateurs and
               (not Inventory.ContainsItem('Magic secateurs')) and
@@ -2304,6 +2740,8 @@ begin
 
   if (not needSecs) and (not needSpade) and (not needDibber) and (not needCompost) then
     Exit(True);
+
+  Self.NoteItems();
 
   if not Self.OpenLepExchange() then
   begin
@@ -2323,7 +2761,7 @@ begin
   if needCompost then
     Self.WithdrawLepCompost(1, False);
 
-  RSInterface.Close(True);
+  BASHFarmCloseLepInterface();
   _BASHLepClearSlots();
   WaitUntil(
     ((not needSecs) or Inventory.ContainsItem('Magic secateurs')
@@ -2393,6 +2831,8 @@ begin
   end;
 
   Inventory.SetSelectedSlot(-1);
+  Minimap.WaitPlayerMoving(250, 5000);
+  Wait(Random(150, 350));
 end;
 
 procedure TBASHFarmPatch.RunPhase(var journal: TBASHFarmJournal; plantPhase: Boolean);
@@ -2441,7 +2881,6 @@ begin
         begin
           if plantPhase then
           begin
-            // Plant() calls ClearWeeds then seeds — one path, drop weeds after.
             Self.Harvested := True;
             if Self.Plant() then
             begin
@@ -2453,13 +2892,17 @@ begin
                 Exit;
               end;
             end
+            else if not Self.Harvested then
+            begin
+              WriteLn('[BASHFarm] Plant deferred at ', Self.Data.Name, ' - rechecking patch');
+              Continue;
+            end
             else
               Self.SkipPatch('Failed to plant after rake');
           end
           else if Self.Data.PatchType in [
             EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT
           ] then
-            // Don't rake in harvest — Plant() will rake→seed immediately.
             Self.Harvested := True
           else if Self.ClearWeeds(False) then
             Self.Harvested := True
@@ -2493,6 +2936,11 @@ begin
               Self.Complete := True;
               Exit;
             end;
+          end
+          else if not Self.Harvested then
+          begin
+            WriteLn('[BASHFarm] Plant deferred at ', Self.Data.Name, ' - rechecking patch');
+            Continue;
           end
           else
             Self.SkipPatch('Failed to plant');

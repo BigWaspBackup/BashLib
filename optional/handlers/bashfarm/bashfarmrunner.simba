@@ -135,8 +135,16 @@ begin
   end;
 
   if cfg.RunNow then
+  begin
     Self.ReadyTimer.Init(0);
-
+    WriteLn('[BASHFarm] Run farm now enabled - first run ready immediately');
+  end
+  else
+  begin
+    Self.ReadyTimer.Init(Random(86 * ONE_MINUTE, 97 * ONE_MINUTE));
+    WriteLn('[BASHFarm] Next farm run in ',
+            SRL.MsToTime(Self.ReadyTimer.TimeRemaining(), TTimeFormat.Time_Short));
+  end;
 end;
 
 function BASHFarmIsGuildFairyCIR(constref travel: TTeleportLocation): Boolean;
@@ -226,7 +234,7 @@ begin
 
   Self.Journal.Load();
   Self.Contract.Clear();
-  Self.ReadyTimer.Init(0);
+  // ReadyTimer is armed by BuildFromConfig (RunNow vs delayed interval).
   Self.Initialized := True;
 end;
 
@@ -1467,9 +1475,9 @@ begin
 
   if not patch.AtFarm() then
   begin
-    // Already inside the guild — just walk to this wing's lep (don't re-teleport).
+    // Already inside the guild — walk to this wing's work area (don't re-teleport).
     if BASHFarmIsGuildPatch(patch.Id) and Map.Position().InBox(BASH_GUILD_MAP) then
-      WriteLn('[BASHFarm] Already in Farming Guild - walking to lep for ', patch.Data.Name)
+      WriteLn('[BASHFarm] Already in Farming Guild - walking for ', patch.Data.Name)
     else if not Self.TeleportTo(patch.Travel) then
     begin
       patch.SkipPatch('Teleport failed');
@@ -1485,11 +1493,8 @@ begin
 
   patch.HandlePhasmatysApproach();
 
-  if not patch.AtFarm() then
-  begin
-    if not patch.WalkNearLeprechaun(10) then
-      WriteLn('[BASHFarm] Warning: could not walk to farm near leprechaun at ', patch.Data.Name);
-  end;
+  if not patch.WalkToFarmWork(10) then
+    WriteLn('[BASHFarm] Warning: could not walk to farm work area at ', patch.Data.Name);
 
   Result := patch.AtFarm();
 end;
@@ -1574,7 +1579,10 @@ begin
     else
       WriteLn('[BASHFarm] Sequential patch flow at ', Self.Patches[i].Data.Name, ' group (', (j - i + 1), ' patches)');
 
-    if not Self.Patches[i].EnsureLepTools(not usePhased) then
+    // Bucket compost in phased mode is bulk-withdrawn after harvest. Bottomless
+    // / fertile soil can pull once with tools and then skip the lep entirely.
+    if not Self.Patches[i].EnsureLepTools(
+         (not usePhased) or Self.Patches[i].UsesReusableCompost()) then
       WriteLn('[BASHFarm] Warning: could not withdraw tools/compost from leprechaun at ', Self.Patches[i].Data.Name);
 
     if phasWatch and (Minimap.GetHPLevel() < phasStartHp) then
@@ -1612,7 +1620,7 @@ begin
             Continue;
           end;
           if not patch.AtFarm() then
-            patch.WalkNearLeprechaun(10);
+            patch.WalkToFarmWork(10);
         end;
 
         patch.RunHarvestPhase(Self.Journal);
@@ -1649,6 +1657,15 @@ begin
         if patch.UseFertileSoil or (patch.CompostItem = '') then
           Continue;
         Inc(needCompost);
+      end;
+
+      if needCompost > 0 then
+      begin
+        patch := Self.Patches[i];
+        // Bottomless is withdrawn once with tools; skip a second lep trip.
+        if (patch.CompostItem = 'Bottomless compost bucket') and
+           Inventory.ContainsItem(patch.CompostItem) then
+          needCompost := 0;
       end;
 
       if needCompost > 0 then
@@ -1692,7 +1709,7 @@ begin
         end;
 
         if not patch.AtFarm() then
-          patch.WalkNearLeprechaun(10);
+          patch.WalkToFarmWork(10);
 
         patch.RunPlantCompostPhase(Self.Journal);
         Self.RecordPatchResult(patch);
@@ -1743,12 +1760,16 @@ begin
 
           if not patch.AtFarm() then
           begin
-            if not patch.WalkNearLeprechaun(10) then
-              WriteLn('[BASHFarm] Warning: could not walk to farm near leprechaun at ', patch.Data.Name);
+            if not patch.WalkToFarmWork(10) then
+              WriteLn('[BASHFarm] Warning: could not walk to farm work area at ', patch.Data.Name);
           end;
 
-          if not patch.EnsureLepTools() then
-            WriteLn('[BASHFarm] Warning: could not withdraw tools/compost from leprechaun at ', patch.Data.Name);
+          // Bucket compost needs a lep top-up each patch; bottomless already has it.
+          if (not patch.UsesReusableCompost()) or (not patch.HasFarmToolsReady(True)) then
+          begin
+            if not patch.EnsureLepTools() then
+              WriteLn('[BASHFarm] Warning: could not withdraw tools/compost from leprechaun at ', patch.Data.Name);
+          end;
         end;
 
         patch.Run(Self.Journal);
