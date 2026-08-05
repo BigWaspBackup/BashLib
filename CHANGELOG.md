@@ -1,3 +1,12 @@
+## [8.3.8](https://github.com/BigWaspBackup/BashLib/compare/v8.3.7...v8.3.8) (2026-08-05)
+
+
+### Bug Fixes
+
+* AIChatbot improvements; fixed allotments not noting all items in farm runs ([d036677](https://github.com/BigWaspBackup/BashLib/commit/d03667714a1e67db45051b80889299030e98efed))
+
+
+
 ## [8.3.7](https://github.com/BigWaspBackup/BashLib/compare/v8.3.6...v8.3.7) (2026-08-04)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Fix for farming guild allotment patches ([47e93b6](https://github.com/BigWaspBackup/BashLib/commit/47e93b675b0517ddef2d9419d708684be7c137cd))
-
-
-
-## [8.3.3](https://github.com/BigWaspBackup/BashLib/compare/v8.3.2...v8.3.3) (2026-08-02)
-
-
-### Bug Fixes
-
-* Update chunk handling in BASHBirdHouse and BASHFarm.. ([abe7a61](https://github.com/BigWaspBackup/BashLib/commit/abe7a619f19148c321ad6a3fc3ed15487b09e539))
 
 
 
