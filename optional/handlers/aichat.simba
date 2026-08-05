@@ -143,7 +143,6 @@ var
   hasLetter: Boolean;
 begin
   if Length(messageText) <= 1 then Exit(False);
-  if Pos(':', messageText) > 0 then Exit(False);
 
   hasLetter := False;
   for i := 1 to Length(messageText) do
@@ -152,7 +151,7 @@ begin
     begin
       hasLetter := True;
     end
-    else if not (messageText[i] in ['0'..'9', ' ', '?', '!', '.', ',', '''', '-']) then
+    else if not (messageText[i] in ['0'..'9', ' ', '?', '!', '.', ',', '''', '-', ':']) then
     begin
       Exit(False);
     end;
@@ -267,32 +266,10 @@ function TAIChatbot.FindPlayerIndex(playerName: String): Integer;
 var
   i: Integer;
 begin
-  if Self.DebugMode then
-  begin
-    WriteLn('=== FIND PLAYER DEBUG ===');
-    WriteLn('Looking for player: "' + playerName + '"');
-    WriteLn('Total players stored: ' + IntToStr(Length(Self.PlayerData)));
-  end;
-
-  Result := -1;
   for i := 0 to High(Self.PlayerData) do
-  begin
-    if Self.DebugMode then
-      WriteLn('Player ' + IntToStr(i) + ': "' + Self.PlayerData[i].Name + '"');
     if Self.PlayerData[i].Name = playerName then
-    begin
-      if Self.DebugMode then
-        WriteLn('MATCH FOUND at index ' + IntToStr(i));
-      Result := i;
-      Exit;
-    end;
-  end;
-
-  if Self.DebugMode then
-  begin
-    WriteLn('NO MATCH FOUND - will create new player');
-    WriteLn('========================');
-  end;
+      Exit(i);
+  Result := -1;
 end;
 
 procedure TAIChatbot.SendSessionSummaryNotification();
@@ -420,7 +397,7 @@ begin
                           '**Message Length:** ' + IntToStr(Length(messageText)) + ' characters' + LineEnding
   else if Pos('Contains invalid characters', reason) > 0 then
     detailedDescription := detailedDescription +
-                          '**Allowed Characters:** Letters, numbers, spaces, ?, !, ., ,' + LineEnding;
+                          '**Allowed Characters:** Letters, numbers, spaces and basic punctuation' + LineEnding;
 
   detailedDescription := detailedDescription + '**Timestamp:** ' + FormatDateTime('hh:nn:ss', Now);
   Self.NotifyDiscord('AI Chatbot - Message Blocked', '**Message Blocked** :warning:', detailedDescription, $FF8C00);
@@ -433,43 +410,23 @@ end;
 procedure TAIChatbot.UpdateChatHistory(playerIndex: Integer; messageText: String; isAI: Boolean);
 var
   newMessage: TAIChatMessage;
-  currentTime: Int64;
 begin
-  if Self.DebugMode then
-  begin
-    WriteLn('=== UPDATE CHAT HISTORY DEBUG ===');
-    WriteLn('Player Index: ' + IntToStr(playerIndex));
-    WriteLn('Player Name: ' + Self.PlayerData[playerIndex].Name);
-    WriteLn('Message: ' + messageText);
-    WriteLn('Is AI: ' + BoolToStr(isAI));
-    WriteLn('Current History Length: ' + IntToStr(Length(Self.PlayerData[playerIndex].ChatHistory)));
-  end;
-
-  currentTime := GetSystemTime();
-
   newMessage.Sender := Self.PlayerData[playerIndex].Name;
   if isAI then
     newMessage.Sender := AIC_SENDER_AI;
   newMessage.Message := messageText;
-  newMessage.Timestamp := currentTime;
+  newMessage.Timestamp := GetSystemTime();
 
   SetLength(Self.PlayerData[playerIndex].ChatHistory, Length(Self.PlayerData[playerIndex].ChatHistory) + 1);
   Self.PlayerData[playerIndex].ChatHistory[High(Self.PlayerData[playerIndex].ChatHistory)] := newMessage;
-
-  if Self.DebugMode then
-  begin
-    WriteLn('New History Length: ' + IntToStr(Length(Self.PlayerData[playerIndex].ChatHistory)));
-    WriteLn('Message stored: Sender=' + newMessage.Sender + ', Message=' + newMessage.Message);
-  end;
 
   if Length(Self.PlayerData[playerIndex].ChatHistory) > Self.MaxChatHistoryLength then
     Delete(Self.PlayerData[playerIndex].ChatHistory, 0, Length(Self.PlayerData[playerIndex].ChatHistory) - Self.MaxChatHistoryLength);
 
   if Self.DebugMode then
-  begin
-    WriteLn('Final History Length after cleanup: ' + IntToStr(Length(Self.PlayerData[playerIndex].ChatHistory)));
-    WriteLn('================================');
-  end;
+    WriteLn('[AI Chatbot] History updated for ' + Self.PlayerData[playerIndex].Name +
+            ' (' + IntToStr(Length(Self.PlayerData[playerIndex].ChatHistory)) + ' messages): ' +
+            newMessage.Sender + ' -> ' + messageText);
 end;
 
 function TAIChatbot.GetRelevantChatHistory(playerIndex: Integer; currentTime: Int64): String;
@@ -487,16 +444,6 @@ begin
     if Self.DebugMode then
       WriteLn('Conversation memory disabled - no history provided');
     Exit('');
-  end;
-
-  if Self.DebugMode then
-  begin
-    WriteLn('=== CHAT HISTORY DEBUG ===');
-    WriteLn('Player Index: ' + IntToStr(playerIndex));
-    WriteLn('Player Name: ' + Self.PlayerData[playerIndex].Name);
-    WriteLn('Chat History Length: ' + IntToStr(Length(Self.PlayerData[playerIndex].ChatHistory)));
-    WriteLn('Current Time: ' + IntToStr(currentTime));
-    WriteLn('Memory Duration: ' + IntToStr(Self.ConversationMemoryDuration) + ' (1 hour)');
   end;
 
   if (not Self.PlayerData[playerIndex].HistoryLoaded) then
@@ -517,28 +464,17 @@ begin
     msg := Self.PlayerData[playerIndex].ChatHistory[i];
     timeDiff := currentTime - msg.Timestamp;
 
-    if Self.DebugMode then
-      WriteLn('Message ' + IntToStr(i) + ': Sender=' + msg.Sender + ', Message=' + msg.Message + ', TimeDiff=' + IntToStr(timeDiff));
-
     if timeDiff <= Self.ConversationMemoryDuration then
     begin
       if msg.Sender = AIC_SENDER_AI then
         historyString := historyString + AIC_SENDER_AI + AIC_SENDER_SEP + msg.Message + LineEnding
       else
         historyString := historyString + AIC_SENDER_USER + AIC_SENDER_SEP + msg.Message + LineEnding;
-    end
-    else
-    begin
-      if Self.DebugMode then
-        WriteLn('Message ' + IntToStr(i) + ' excluded - too old (' + IntToStr(timeDiff) + 'ms > ' + IntToStr(Self.ConversationMemoryDuration) + 'ms)');
     end;
   end;
 
   if Self.DebugMode then
-  begin
-    WriteLn('Final History String: "' + historyString + '"');
-    WriteLn('========================');
-  end;
+    WriteLn('[AI Chatbot] History for ' + Self.PlayerData[playerIndex].Name + ': "' + historyString + '"');
 
   Result := historyString;
 end;
@@ -1291,30 +1227,33 @@ begin
   Self.ProcessedMessages[High(Self.ProcessedMessages)] := key;
 end;
 
-function TAIChatbot.ShouldProcessMessage(chatMessage: String): Boolean;
-begin
-  if chatMessage = '' then
-    Exit(False);
-
-  if Pos(Self.DisplayName, chatMessage) > 0 then
-    Exit(False);
-
-  if (Pos('[', chatMessage) > 0) or (Pos(']', chatMessage) > 0) then
-    Exit(False);
-
-  Result := True;
-end;
-
-function TAIChatbot.ExtractMessageInfo(chatMessage: String; var senderName, messageText: String): Boolean;
+function TAIChatbot.ReadPlayerMessage(line: Int32; transparent: Boolean; var senderName, messageText: String): Boolean;
 var
-  colonPos: Integer;
+  nameText: String;
 begin
-  colonPos := Pos(': ', chatMessage);
-  if colonPos <= 0 then
-    Exit(False);
+  Result := False;
+  senderName := '';
 
-  senderName := Copy(chatMessage, 1, colonPos - 1);
-  messageText := Copy(chatMessage, colonPos + 2, Length(chatMessage) - colonPos - 1);
+  messageText := Trim(Chat.GetMessage(line, [CHAT_COLOR_BLUE]));
+  if messageText = '' then
+    Exit;
+
+  if transparent then
+    nameText := Trim(Chat.GetMessage(line, [CHAT_COLOR_WHITE]))
+  else
+    nameText := Trim(Chat.GetMessage(line, [CHAT_COLOR_BLACK]));
+
+  if (nameText = '') or (nameText[Length(nameText)] <> ':') then
+    Exit;
+
+  senderName := Trim(Copy(nameText, 1, Length(nameText) - 1));
+
+  if not IsValidPlayerName(senderName) then
+    Exit;
+
+  if (Self.DisplayName <> '') and (Lowercase(senderName) = Lowercase(Self.DisplayName)) then
+    Exit;
+
   Result := True;
 end;
 
@@ -1331,14 +1270,6 @@ function TAIChatbot.ValidateMessage(senderName, messageText: String; var blockRe
 var
   i, playerIndex: Integer;
 begin
-  if not IsValidPlayerName(senderName) then
-  begin
-    blockReason := 'Invalid player name format';
-    if Self.DebugMode then
-      writeln('[AI Chatbot] Invalid Username');
-    Exit(False);
-  end;
-
   if (Length(messageText) > 0) and (messageText[1] = '!') then
   begin
     blockReason := 'Message starts with "!" (likely a command)';
@@ -1380,8 +1311,6 @@ begin
   begin
     if Length(messageText) <= 1 then
       blockReason := 'Message too short'
-    else if Pos(':', messageText) > 0 then
-      blockReason := 'Contains colon character'
     else
       blockReason := 'Contains invalid characters or no letters';
 
@@ -1551,12 +1480,6 @@ begin
   end;
 
   Result := False;
-end;
-
-procedure TAIChatbot.ApplyCooldown(reason: String = '');
-begin
-  if reason <> '' then
-    WriteLn('[AI Chatbot] Ignored. Reason: ' + reason);
 end;
 
 procedure TAIChatbot.LoadSettings(user: String = '');
@@ -1760,7 +1683,6 @@ end;
 
 procedure TAIChatbot.ApplyScriptDefaults();
 begin
-  // Script-provided activity always prefills the GUI; users can still edit it.
   if Trim(Self.DefaultActivity) <> '' then
     Self.Activity := Trim(Self.DefaultActivity);
   if (Trim(Self.ExtraInstructions) = '') and (Trim(Self.DefaultExtraInstructions) <> '') then
@@ -2185,8 +2107,7 @@ begin
   preconfiguredWebhookURL := AIChatDiscord.Webhook.URL;
   if AIChatDiscord.HTTP = 0 then
     AIChatDiscord.Setup();
-  if preconfiguredWebhookURL <> '' then
-    AIChatDiscord.Webhook.URL := preconfiguredWebhookURL;
+  AIChatDiscord.Webhook.URL := preconfiguredWebhookURL;
 {$ENDIF}
 
   Self.SendSessionStartNotification();
@@ -2199,7 +2120,7 @@ end;
 
 procedure TAIChatbot.ProcessMessages();
 var
-  chatMessage, aiResponse, messageText, senderName, aiMessage, blockReason: String;
+  aiResponse, messageText, senderName, aiMessage, blockReason: String;
   msgKey: String;
   playerIndex: Integer;
   currentTime: Int64;
@@ -2207,7 +2128,7 @@ var
   conversationHistory: String;
   i, line: Integer;
   logEntry: String;
-  foundMessage: Boolean;
+  foundMessage, transparent: Boolean;
 begin
   if not Self.Enabled then Exit;
 
@@ -2232,18 +2153,13 @@ begin
     Exit;
 
   foundMessage := False;
-  chatMessage := '';
   senderName := '';
   messageText := '';
+  transparent := Chat.IsTransparent();
 
   for line := 0 to 7 do
   begin
-    chatMessage := Chat.GetMessage(line, [CHAT_COLOR_BLACK, CHAT_COLOR_BLUE]);
-
-    if not Self.ShouldProcessMessage(chatMessage) then
-      Continue;
-
-    if not Self.ExtractMessageInfo(chatMessage, senderName, messageText) then
+    if not Self.ReadPlayerMessage(line, transparent, senderName, messageText) then
       Continue;
 
     msgKey := senderName + ':' + messageText;

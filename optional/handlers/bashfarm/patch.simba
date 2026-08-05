@@ -2810,10 +2810,16 @@ begin
   end;
 
   if Length(slots) < 1 then
+  begin
+    WriteLn('[BASHFarm] NoteItems: no noteable produce in invent');
     Exit;
+  end;
 
   if not Self.FindLeprechaun(tpa) then
+  begin
+    WriteLn('[BASHFarm] NoteItems: could not find leprechaun');
     Exit;
+  end;
 
   for i := 0 to High(slots) do
   begin
