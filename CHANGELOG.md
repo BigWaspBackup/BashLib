@@ -1,3 +1,12 @@
+## [8.3.7](https://github.com/BigWaspBackup/BashLib/compare/v8.3.6...v8.3.7) (2026-08-04)
+
+
+### Bug Fixes
+
+* BASHFarm Speed improvements for planting and harvesting, more fixes for mory patch, more antiban randomness, speed up composting after planting. ([8c47040](https://github.com/BigWaspBackup/BashLib/commit/8c47040498d2362f984d484decc9e159fdaeb9e5))
+
+
+
 ## [8.3.6](https://github.com/BigWaspBackup/BashLib/compare/v8.3.5...v8.3.6) (2026-08-03)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Update chunk handling in BASHBirdHouse and BASHFarm.. ([abe7a61](https://github.com/BigWaspBackup/BashLib/commit/abe7a619f19148c321ad6a3fc3ed15487b09e539))
-
-
-
-## [8.3.2](https://github.com/BigWaspBackup/BashLib/compare/v8.3.1...v8.3.2) (2026-08-02)
-
-
-### Bug Fixes
-
-* Faster loading of banks, Fixed seed dibber for those without barb dibber. ([a4d8d05](https://github.com/BigWaspBackup/BashLib/commit/a4d8d05204f1e32dcf26c65e853d475c337d8090))
 
 
 
