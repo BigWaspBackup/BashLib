@@ -28,6 +28,9 @@ type
     IsSetup: Boolean;
   end;
 
+const
+  GEAR_NEW_LOADOUT = 'New loadout...';
+
 procedure TRSGearHandler.Setup();
 var
   keys: TStringList;
@@ -278,13 +281,58 @@ begin
   combobox.getItems().EndUpdate();
 end;
 
+function TScriptForm._IsNewLoadoutSelected(combobox: TComboBox): Boolean;
+begin
+  Result := (combobox.getItemIndex() < 0) or
+            (combobox.getItemIndex() > High(GearHandler.Sets));
+end;
+
+function TScriptForm._PromptLoadoutName(title, prompt: String; var name: String): Boolean;
+begin
+  Result := False;
+
+  if not InputQuery(title, prompt, name) then
+    Exit;
+
+  name := Trim(name);
+  if name = '' then
+  begin
+    MessageDlg('Error', 'Loadout name cannot be empty.', TMsgDlgType.mtWarning, [mbOk]);
+    Exit;
+  end;
+
+  if name = GEAR_NEW_LOADOUT then
+  begin
+    MessageDlg('Error', 'That name is reserved. Choose a different loadout name.', TMsgDlgType.mtWarning, [mbOk]);
+    Exit;
+  end;
+
+  if GearHandler.Contains(name) then
+  begin
+    MessageDlg('Error', 'A loadout named "' + name + '" already exists.', TMsgDlgType.mtWarning, [mbOk]);
+    Exit;
+  end;
+
+  Result := True;
+end;
+
+procedure TScriptForm._ReadGearSlots(parent: TPanel; var gear: TRSGear);
+var
+  slot: ERSEquipmentSlot;
+  cb: TComboBox;
+begin
+  for slot := Low(ERSEquipmentSlot) to High(ERSEquipmentSlot) do
+  begin
+    cb := parent.GetChild(ToStr(slot).ToLower() + '_slot_combobox');
+    gear.Items[slot] := cb.getText();
+  end;
+end;
+
 procedure TScriptForm._RefreshSets(sender: TObject);
 var
-  combobox, cb: TComboBox;
+  combobox: TComboBox;
   parent: TPanel;
   gear: TRSGear;
-  slot: ERSEquipmentSlot;
-  name: String;
 begin
   parent := sender;
   GearHandler.Setup();
@@ -292,19 +340,9 @@ begin
   combobox.GetItems().Clear();
 
   for gear in GearHandler.Sets do
-  begin
     combobox.getItems().Add(gear.Name);
 
-    for slot := Low(ERSEquipmentSlot) to High(ERSEquipmentSlot) do
-    begin
-      name := ToStr(slot).ToLower();
-      cb := parent.GetChild(name + '_slot_combobox');
-      Self._RefreshList(cb, slot);
-      cb.setItemIndex(cb.getItems().IndexOf(gear.Items[slot]));
-    end;
-  end;
-
-  combobox.getItems().Add('New set');
+  combobox.getItems().Add(GEAR_NEW_LOADOUT);
   GearHandler._FormFiltered := False;
 end;
 
@@ -318,19 +356,42 @@ var
   slot: ERSEquipmentSlot;
   gear: TRSGear;
   item: TRSItem;
+  isExisting: Boolean;
 begin
   combobox := sender;
   if combobox.getItemIndex() = -1 then Exit;
 
   GearHandler._FormGearIndex := combobox.getItemIndex();
-
   parent := combobox.getParent().getParent();
+  isExisting := not Self._IsNewLoadoutSelected(combobox);
 
   button := parent.GetChild('duplicate_gear_button');
-  button.setEnabled(combobox.getItemIndex() <> (combobox.getItems().getCount() - 1));
+  button.setEnabled(isExisting);
+  button := parent.GetChild('remove_gear_button');
+  button.setEnabled(isExisting);
 
-  if GearHandler._FormGearIndex <= High(GearHandler.Sets) then
-    gear := GearHandler.Sets[GearHandler._FormGearIndex];
+  // Reset slots when creating a new loadout.
+  if not isExisting then
+  begin
+    for slot := Low(ERSEquipmentSlot) to High(ERSEquipmentSlot) do
+    begin
+      combobox := parent.GetChild(ToStr(slot).Lower() + '_slot_combobox');
+
+      if GearHandler._FormFiltered then
+        Self._RefreshList(combobox, slot);
+
+      combobox.setItemIndex(combobox.getItems().IndexOf('None'));
+      if combobox.getItemIndex() < 0 then
+        combobox.setItemIndex(0);
+
+      Self._OnGearChange(combobox);
+    end;
+
+    GearHandler._FormFiltered := False;
+    Exit;
+  end;
+
+  gear := GearHandler.Sets[GearHandler._FormGearIndex];
 
   for slot := Low(ERSEquipmentSlot) to High(ERSEquipmentSlot) do
   begin
@@ -356,32 +417,51 @@ end;
 procedure TScriptForm._OnSaveGear(sender: TObject);
 var
   button: TButton;
-  combobox, cb: TComboBox;
+  combobox: TComboBox;
   parent: TPanel;
   gear: TRSGear;
-  slot: ERSEquipmentSlot;
   name: String;
+  isNew: Boolean;
 begin
   button := sender;
   parent := button.getParent();
   combobox := parent.getChild('gear_selector_combobox');
-  gear.Name := combobox.getText();
+  isNew := Self._IsNewLoadoutSelected(combobox);
 
-  for slot := Low(ERSEquipmentSlot) to High(ERSEquipmentSlot) do
+  Self._ReadGearSlots(parent, gear);
+
+  if isNew then
   begin
-    name := ToStr(slot).ToLower();
-    cb := parent.GetChild(name + '_slot_combobox');
-    gear.Items[slot] := cb.getText();
+    name := '';
+    if not Self._PromptLoadoutName('Save loadout', 'Name this loadout:', name) then
+      Exit;
+
+    gear.Name := name;
+
+    if not GearHandler.Add(gear) then
+    begin
+      MessageDlg('Error', 'Could not save loadout. A duplicate name may already exist.', TMsgDlgType.mtWarning, [mbOk]);
+      Exit;
+    end;
+
+    Self._RefreshSets(parent);
+    combobox.setItemIndex(High(GearHandler.Sets));
+  end
+  else
+  begin
+    gear.Name := GearHandler.Sets[GearHandler._FormGearIndex].Name;
+
+    if not GearHandler.Edit(GearHandler._FormGearIndex, gear) then
+    begin
+      MessageDlg('Error', 'Could not update loadout "' + gear.Name + '".', TMsgDlgType.mtWarning, [mbOk]);
+      Exit;
+    end;
+
+    Self._RefreshSets(parent);
+    combobox.setItemIndex(GearHandler._FormGearIndex);
   end;
 
-  if not GearHandler.Edit(GearHandler._FormGearIndex, gear) then
-    MessageDlg('Error', 'Your gear was not saved for some reason. Probably a duplicate name.', TMsgDlgType.mtWarning, [mbOk]);
-
-  Self._RefreshSets(parent);
-  if combobox.getItems().getCount() > 1 then
-    combobox.setItemIndex(GearHandler._FormGearIndex)
-  else
-    combobox.setItemIndex(0);
+  Self._OnGearSelectorChange(combobox);
 end;
 
 procedure TScriptForm._OnDuplicateGear(sender: TObject);
@@ -390,21 +470,33 @@ var
   combobox: TComboBox;
   parent: TPanel;
   gear: TRSGear;
+  name: String;
 begin
   button := sender;
   parent := button.getParent();
   combobox := parent.getChild('gear_selector_combobox');
-  gear := GearHandler.Get(combobox.getItemIndex());
-  gear.Name += ' duplicate';
 
-  if not GearHandler.Edit(Length(GearHandler.Sets), gear) then
-    MessageDlg('Error', 'Your gear was not saved for some reason. Probably a duplicate name.', TMsgDlgType.mtWarning, [mbOk]);
+  if Self._IsNewLoadoutSelected(combobox) then
+    Exit;
+
+  gear := GearHandler.Get(combobox.getItemIndex());
+  Self._ReadGearSlots(parent, gear);
+
+  name := gear.Name + ' copy';
+  if not Self._PromptLoadoutName('Duplicate loadout', 'Name for the copy:', name) then
+    Exit;
+
+  gear.Name := name;
+
+  if not GearHandler.Add(gear) then
+  begin
+    MessageDlg('Error', 'Could not duplicate loadout. A duplicate name may already exist.', TMsgDlgType.mtWarning, [mbOk]);
+    Exit;
+  end;
 
   Self._RefreshSets(parent);
-  if combobox.getItems().getCount() > 1 then
-    combobox.setItemIndex(High(GearHandler.Sets))
-  else
-    combobox.setItemIndex(0);
+  combobox.setItemIndex(High(GearHandler.Sets));
+  Self._OnGearSelectorChange(combobox);
 end;
 
 procedure TScriptForm._OnRemoveGear(sender: TObject);
@@ -412,23 +504,41 @@ var
   button: TButton;
   combobox: TComboBox;
   parent: TPanel;
-  gear: TRSGear;
+  name: String;
+  idx: Int32;
 begin
   button := sender;
   parent := button.getParent();
   combobox := parent.getChild('gear_selector_combobox');
-  gear := GearHandler.Get(combobox.getItemIndex());
-  gear.Name += ' duplicate';
 
-  if not GearHandler.Remove(GearHandler._FormGearIndex) then
+  if Self._IsNewLoadoutSelected(combobox) then
+    Exit;
+
+  idx := GearHandler._FormGearIndex;
+  name := GearHandler.Sets[idx].Name;
+
+  if MessageDlg(
+    'Remove loadout',
+    'Delete loadout "' + name + '"?' + LineEnding + LineEnding +
+    'This cannot be undone.',
+    mtConfirmation,
+    [mbYes, mbCancel]
+  ) <> mrYes then
+    Exit;
+
+  if not GearHandler.Remove(idx) then
   begin
-    MessageDlg('Error', 'The gear you want to delete doesn''t exist.', TMsgDlgType.mtWarning, [mbOk]);
+    MessageDlg('Error', 'The loadout you want to delete doesn''t exist.', TMsgDlgType.mtWarning, [mbOk]);
     Exit;
   end;
 
   Self._RefreshSets(parent);
-  GearHandler._FormGearIndex := Min(GearHandler._FormGearIndex+1, High(GearHandler.Sets));
-  combobox.setItemIndex(GearHandler._FormGearIndex);
+
+  if Length(GearHandler.Sets) = 0 then
+    combobox.setItemIndex(0)
+  else
+    combobox.setItemIndex(Min(idx, High(GearHandler.Sets)));
+
   Self._OnGearSelectorChange(combobox);
 end;
 
@@ -707,11 +817,11 @@ begin
   begin
     Create(Result);
     SetName('gear_selector');
-    SetCaption('Gear');
+    SetCaption('Loadout');
     SetTop(TControl.AdjustToDPI(5));
     SetLeft(TControl.AdjustToDPI(20));
     SetWidth(TControl.AdjustToDPI(284));
-    SetStyle(TComboBoxStyle.csDropDown);
+    SetStyle(TComboBoxStyle.csDropDownList);
     ComboBox.setOnChange(@Self._OnGearSelectorChange);
   end;
 
