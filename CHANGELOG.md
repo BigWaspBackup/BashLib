@@ -1,3 +1,12 @@
+## [8.4.2](https://github.com/BigWaspBackup/BashLib/compare/v8.4.1...v8.4.2) (2026-08-07)
+
+
+### Bug Fixes
+
+* More farming improvements ([482a5cb](https://github.com/BigWaspBackup/BashLib/commit/482a5cb609e7584485f34668873e9c04e58aa0d8))
+
+
+
 ## [8.4.1](https://github.com/BigWaspBackup/BashLib/compare/v8.4.0...v8.4.1) (2026-08-07)
 
 
@@ -36,15 +45,6 @@
 ### Bug Fixes
 
 * BASHFarm Speed improvements for planting and harvesting, more fixes for mory patch, more antiban randomness, speed up composting after planting. ([8c47040](https://github.com/BigWaspBackup/BashLib/commit/8c47040498d2362f984d484decc9e159fdaeb9e5))
-
-
-
-## [8.3.6](https://github.com/BigWaspBackup/BashLib/compare/v8.3.5...v8.3.6) (2026-08-03)
-
-
-### Bug Fixes
-
-* Farm run fixes for allotments patches, improved rake handling for those without auto weed, tweaks to AI Chatbot ([9eb7a89](https://github.com/BigWaspBackup/BashLib/commit/9eb7a89174543a20a3f663da7f7ab662801fcb13))
 
 
 
