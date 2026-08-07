@@ -40,6 +40,8 @@ type
     ArdyCloakEquipped: Boolean;
     FairyStaffEquipped: Boolean;
     FairyStaffName: TRSItem;
+
+    GuildTravelFailed: Boolean;
   end;
 
 var
@@ -103,6 +105,7 @@ begin
   Self.ArdyCloakEquipped := False;
   Self.FairyStaffEquipped := False;
   Self.FairyStaffName := '';
+  Self.GuildTravelFailed := False;
 end;
 
 procedure TBASHFarmRunner.BuildFromConfig(cfg: TBASHFarmConfig);
@@ -896,11 +899,22 @@ begin
   RSObjects.FairyRing.Filter.Walker := savedRSWalker;
 end;
 
+function TBASHFarmRunner.GuildFairyCIRLanded(constref cirLand: TPoint): Boolean;
+var
+  me: TPoint;
+begin
+  me := Map.Position();
+  Result := me.InBox(BASH_GUILD_MAP) or
+            me.InRange(BASH_GUILD_DOOR_FRONT, 400) or
+            me.InRange(cirLand, 150) or
+            Map.Walker.AnyInRange(BASH_GUILD_DOOR_FRONT_TILES, 20);
+end;
+
 function TBASHFarmRunner.TeleportGuildFairyCIR(): Boolean;
 var
-  cirLand, djpTile, me: TPoint;
+  cirLand, djpTile: TPoint;
   savedScreenWalk, savedAdaptiveWalk: Boolean;
-  i: Int32;
+  i, ringAttempt: Int32;
 begin
   Result := False;
   cirLand := RSTeleportsV2.CIR_NORTHEAST_OF_THE_FARMING_GUILD.worldPoint;
@@ -943,28 +957,46 @@ begin
   Map.Walker.ScreenWalk := False;
   Map.Walker.AdaptiveWalk := False;
 
-  if not Self.UseDJPFairyRingCIR() then
+  for ringAttempt := 1 to 3 do
   begin
-    Map.Walker.ScreenWalk := savedScreenWalk;
-    Map.Walker.AdaptiveWalk := savedAdaptiveWalk;
-    WriteLn('[BASHFarm] Guild Fairy CIR: fairy ring use failed');
-    Exit(False);
+    if Self.UseDJPFairyRingCIR() then
+    begin
+      Minimap.WaitMoving();
+      for i := 0 to 200 do
+      begin
+        if Self.GuildFairyCIRLanded(cirLand) then
+          Break;
+        Wait(50);
+      end;
+
+      if Self.GuildFairyCIRLanded(cirLand) then
+      begin
+        Map.Walker.ScreenWalk := savedScreenWalk;
+        Map.Walker.AdaptiveWalk := savedAdaptiveWalk;
+        Map.Walker._DoorHandler.Enabled := True;
+        Exit(True);
+      end;
+
+      WriteLn('[BASHFarm] Guild Fairy CIR: ring used but not at guild (attempt ',
+              ringAttempt, '/3)');
+    end
+    else
+      WriteLn('[BASHFarm] Guild Fairy CIR: fairy ring use failed (attempt ',
+              ringAttempt, '/3)');
+
+    if ringAttempt < 3 then
+    begin
+      if not Map.Walker.AnyInRange(BASH_DJP_FAIRY_RING_TILES, 12) then
+        Map.Walker.WebWalk(djpTile, 5, 0.15);
+      Wait(Random(400, 800));
+    end;
   end;
 
   Map.Walker.ScreenWalk := savedScreenWalk;
   Map.Walker.AdaptiveWalk := savedAdaptiveWalk;
-
-  Minimap.WaitMoving();
-  for i := 0 to 200 do
-  begin
-    me := Map.Position();
-    if me.InBox(BASH_GUILD_MAP) or me.InRange(BASH_GUILD_DOOR_FRONT, 400) or me.InRange(cirLand, 150) then
-      Break;
-    Wait(50);
-  end;
-
   Map.Walker._DoorHandler.Enabled := True;
-  Result := True;
+  WriteLn('[BASHFarm] Guild Fairy CIR: fairy ring failed after 3 attempts');
+  Result := False;
 end;
 
 function TBASHFarmRunner.TeleportTo(travel: TTeleportLocation): Boolean;
@@ -1443,12 +1475,39 @@ begin
     if patch.Skip then
       Continue;
 
-    // Patches already completed (e.g. during the harvest phase) count as
-    // completed rather than being re-recorded as skipped.
     if not patch.Complete then
       patch.SkipPatch(reason);
     Self.RecordPatchResult(patch);
     Self.Patches[k] := patch;
+  end;
+end;
+
+procedure TBASHFarmRunner.SkipAllGuildPatches(reason: String);
+var
+  k: Int32;
+  patch: TBASHFarmPatch;
+begin
+  Self.GuildTravelFailed := True;
+  for k := 0 to High(Self.Patches) do
+  begin
+    if not BASHFarmIsGuildPatch(Self.Patches[k].Id) then
+      Continue;
+
+    patch := Self.Patches[k];
+    if patch.Skip or patch.Complete then
+      Continue;
+
+    patch.SkipPatch(reason);
+    Self.Patches[k] := patch;
+  end;
+end;
+
+procedure TBASHFarmRunner.CheckActivityFailsafe();
+begin
+  if WL.Activity.IsFinished() then
+  begin
+    WriteLn('[BASHFarm] No XP / activity for 5 minutes - terminating');
+    TerminateScript('No activity detected in 5 minutes');
   end;
 end;
 
@@ -1465,13 +1524,26 @@ begin
   WriteLn('[BASHFarm] Phasmatys HP drop - teleporting toward ',
           Self.Patches[nextPatchIdx].Data.Name);
   Result := Self.TeleportTo(Self.Patches[nextPatchIdx].Travel);
-  if not Result then
+  if Result then
+    WL.Activity.Restart()
+  else
     WriteLn('[BASHFarm] Phasmatys escape teleport failed');
 end;
 
 function TBASHFarmRunner.ArriveAtLocation(var patch: TBASHFarmPatch): Boolean;
 begin
   Result := False;
+
+  Self.CheckActivityFailsafe();
+
+  if patch.Skip then
+    Exit(False);
+
+  if BASHFarmIsGuildPatch(patch.Id) and Self.GuildTravelFailed then
+  begin
+    patch.SkipPatch('Farming Guild travel already failed');
+    Exit(False);
+  end;
 
   if not patch.AtFarm() then
   begin
@@ -1480,9 +1552,19 @@ begin
       WriteLn('[BASHFarm] Already in Farming Guild - walking for ', patch.Data.Name)
     else if not Self.TeleportTo(patch.Travel) then
     begin
-      patch.SkipPatch('Teleport failed');
+      if BASHFarmIsGuildPatch(patch.Id) then
+      begin
+        WriteLn('[BASHFarm] Farming Guild teleport failed - skipping all guild patches');
+        Self.SkipAllGuildPatches('Teleport failed');
+        // Keep caller's patch copy in sync with the array update.
+        patch.Skip := True;
+      end
+      else
+        patch.SkipPatch('Teleport failed');
       Exit(False);
-    end;
+    end
+    else
+      WL.Activity.Restart();
   end;
 
   if not patch.HandleStrongholdShortcut() then
@@ -1497,6 +1579,20 @@ begin
     WriteLn('[BASHFarm] Warning: could not walk to farm work area at ', patch.Data.Name);
 
   Result := patch.AtFarm();
+  if not Result then
+  begin
+    WriteLn('[BASHFarm] Not at farm after travel/walk for ', patch.Data.Name, ' - skipping');
+    if BASHFarmIsGuildPatch(patch.Id) then
+    begin
+      Self.SkipAllGuildPatches('Failed to arrive at Farming Guild');
+      patch.Skip := True;
+    end
+    else if not patch.Skip then
+      patch.SkipPatch('Failed to arrive at location');
+    Exit(False);
+  end;
+
+  WL.Activity.Restart();
 end;
 
 procedure TBASHFarmRunner.Run();
@@ -1522,10 +1618,17 @@ begin
   Self.EnsureChunks();
 
   Self.ShufflePatchesByLocation();
+  Self.GuildTravelFailed := False;
+
+  // Standard WL activity failsafe: no XP for 5 minutes terminates the script.
+  WL.Activity.Init(5 * ONE_MINUTE);
+  WL.Activity.Restart();
 
   i := 0;
   while i <= High(Self.Patches) do
   begin
+    Self.CheckActivityFailsafe();
+
     j := i;
     while (j < High(Self.Patches)) and BASHFarmSameLocation(Self.Patches[i], Self.Patches[j + 1]) do
       Inc(j);
@@ -1538,6 +1641,24 @@ begin
     end;
 
     patch := Self.Patches[i];
+    if patch.Skip or (BASHFarmIsGuildPatch(patch.Id) and Self.GuildTravelFailed) then
+    begin
+      if (not patch.Skip) and BASHFarmIsGuildPatch(patch.Id) and Self.GuildTravelFailed then
+        patch.SkipPatch('Farming Guild travel already failed');
+      Self.Patches[i] := patch;
+      Self.RecordPatchResult(patch);
+      for k := i + 1 to j do
+      begin
+        patch := Self.Patches[k];
+        if not patch.Skip then
+          patch.SkipPatch('Location arrive failed');
+        Self.Patches[k] := patch;
+        Self.RecordPatchResult(patch);
+      end;
+      i := j + 1;
+      Continue;
+    end;
+
     if not Self.ArriveAtLocation(patch) then
     begin
       Self.Patches[i] := patch;
@@ -1545,7 +1666,8 @@ begin
       for k := i + 1 to j do
       begin
         patch := Self.Patches[k];
-        patch.SkipPatch('Location arrive failed');
+        if not patch.Skip then
+          patch.SkipPatch('Location arrive failed');
         Self.Patches[k] := patch;
         Self.RecordPatchResult(patch);
       end;
@@ -1579,11 +1701,13 @@ begin
     else
       WriteLn('[BASHFarm] Sequential patch flow at ', Self.Patches[i].Data.Name, ' group (', (j - i + 1), ' patches)');
 
-    // Bucket compost in phased mode is bulk-withdrawn after harvest. Bottomless
-    // / fertile soil can pull once with tools and then skip the lep entirely.
-    if not Self.Patches[i].EnsureLepTools(
-         (not usePhased) or Self.Patches[i].UsesReusableCompost()) then
-      WriteLn('[BASHFarm] Warning: could not withdraw tools/compost from leprechaun at ', Self.Patches[i].Data.Name);
+    if (not Self.Patches[i].Skip) and Self.Patches[i].AtFarm() then
+    begin
+      if not Self.Patches[i].EnsureLepTools(
+           (not usePhased) or Self.Patches[i].UsesReusableCompost()) then
+        WriteLn('[BASHFarm] Warning: could not withdraw tools/compost from leprechaun at ', Self.Patches[i].Data.Name);
+      WL.Activity.Restart();
+    end;
 
     if phasWatch and (Minimap.GetHPLevel() < phasStartHp) then
     begin
@@ -1598,6 +1722,7 @@ begin
     begin
       for k := i to j do
       begin
+        Self.CheckActivityFailsafe();
         patch := Self.Patches[k];
         if patch.Skip then
           Continue;
@@ -1662,7 +1787,7 @@ begin
       if needCompost > 0 then
       begin
         patch := Self.Patches[i];
-        // Bottomless is withdrawn once with tools; skip a second lep trip.
+        // Bottomless is withdrawn once
         if (patch.CompostItem = 'Bottomless compost bucket') and
            Inventory.ContainsItem(patch.CompostItem) then
           needCompost := 0;
@@ -1734,6 +1859,7 @@ begin
     begin
       for k := i to j do
       begin
+        Self.CheckActivityFailsafe();
         patch := Self.Patches[k];
         if patch.Skip then
         begin
@@ -1764,8 +1890,8 @@ begin
               WriteLn('[BASHFarm] Warning: could not walk to farm work area at ', patch.Data.Name);
           end;
 
-          // Bucket compost needs a lep top-up each patch; bottomless already has it.
-          if (not patch.UsesReusableCompost()) or (not patch.HasFarmToolsReady(True)) then
+          if patch.AtFarm() and
+             ((not patch.UsesReusableCompost()) or (not patch.HasFarmToolsReady(True))) then
           begin
             if not patch.EnsureLepTools() then
               WriteLn('[BASHFarm] Warning: could not withdraw tools/compost from leprechaun at ', patch.Data.Name);
@@ -1795,10 +1921,16 @@ begin
     i := j + 1;
   end;
 
-  if Length(Self.Patches) > 0 then
+  for k := High(Self.Patches) downto 0 do
   begin
-    Self.Patches[High(Self.Patches)].NoteItems();
-    Self.Patches[High(Self.Patches)].DepositLepTools();
+    if Self.Patches[k].Skip then
+      Continue;
+    if not Self.Patches[k].AtFarm() then
+      Continue;
+
+    Self.Patches[k].NoteItems();
+    Self.Patches[k].DepositLepTools();
+    Break;
   end;
 
   Inc(Self.RunsComplete);

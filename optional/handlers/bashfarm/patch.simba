@@ -22,6 +22,41 @@ begin
   end;
 end;
 
+// "Use Ranarr seed -> Ranarr weed" — target after the arrow (trimmed).
+function BASHFarmUpTextUseTarget(upText: String): String;
+var
+  arrowAt: Int32;
+begin
+  Result := '';
+  arrowAt := Pos('->', upText);
+  if arrowAt <= 0 then
+    Exit;
+  Result := Trim(Copy(upText, arrowAt + 2, Length(upText)));
+end;
+
+// Seed/item use uptext aimed at farm produce (grown crop still on the patch).
+function BASHFarmUpTextHasFarmProduce(upText: String): Boolean;
+var
+  target, itemName: String;
+  i: Int32;
+begin
+  Result := False;
+  target := BASHFarmUpTextUseTarget(upText);
+  // With an arrow, only match produce in the use-target so
+  // "Dwarf weed seed -> Herb" does not false-hit on the seed name.
+  if target = '' then
+    target := upText;
+
+  for i := 0 to High(BASH_FARM_LEPRECHAUN_ITEMS) do
+  begin
+    itemName := ToStr(BASH_FARM_LEPRECHAUN_ITEMS[i]);
+    if (itemName = '') or (itemName = 'Weeds') then
+      Continue;
+    if itemName in target then
+      Exit(True);
+  end;
+end;
+
 function BASHFarmMenuSelect(needles: TStringArray; caseSensitive: Boolean = False): Boolean; overload;
 var
   hay, n: String;
@@ -889,6 +924,12 @@ var
   soilPct: Double;
   colourEmpty: Boolean;
   waitMs: Int32;
+  upText: String;
+
+  function PatchStillHarvestable(const hoverUp: String): Boolean;
+  begin
+    Result := (Self.HarvestUpText in hoverUp) or BASHFarmUpTextHasFarmProduce(hoverUp);
+  end;
 
   procedure LogHerbSoil({$H-}const stage: String); {$H+}
   begin
@@ -957,6 +998,12 @@ var
     upText := MainScreen.GetUpText();
     if Self.HarvestUpText in upText then
     begin
+      Self.Harvested := False;
+      Exit(True);
+    end;
+    if BASHFarmUpTextHasFarmProduce(upText) then
+    begin
+      WriteLn('[BASHFarm] Harvest: post-note produce still on patch ("', upText, '")');
       Self.Harvested := False;
       Exit(True);
     end;
@@ -1071,18 +1118,24 @@ begin
         Exit(True);
       end;
 
-      if (Self.Data.PatchType = EBASHPatchType.HERB) and (soilPct >= 0.75) then
+      // Soil colour alone is not enough — leftover herbs still show Pick /
+      // produce names. Confirm with uptext before treating the patch as done.
+      if Self.Hover() then
       begin
-        Self.DropEmptyBuckets();
-        if Inventory.IsFull() then
-          Self.NoteItems();
-        LogHerbSoil('finished');
-        Self.Harvested := True;
-        Exit(True);
-      end;
+        upText := MainScreen.GetUpText();
+        if PatchStillHarvestable(upText) then
+        begin
+          if ResumePick() then
+          begin
+            stall.Restart();
+            Continue;
+          end;
+          WriteLn('[BASHFarm] Harvest: crop still present at ', Self.Data.Name,
+                  ' ("', upText, '")');
+          Self.Harvested := False;
+          Exit(True);
+        end;
 
-      if Self.Hover() and (not (Self.HarvestUpText in MainScreen.GetUpText())) then
-      begin
         Self.DropEmptyBuckets();
         if Inventory.IsFull() then
           Self.NoteItems();
@@ -1107,11 +1160,15 @@ begin
           Continue;
         end;
 
-        if Self.Hover() and (Self.HarvestUpText in MainScreen.GetUpText()) then
+        if Self.Hover() then
         begin
-          WriteLn('[BASHFarm] Harvest: resume failed, still grown');
-          Self.Harvested := False;
-          Exit(True);
+          upText := MainScreen.GetUpText();
+          if PatchStillHarvestable(upText) then
+          begin
+            WriteLn('[BASHFarm] Harvest: resume failed, still grown');
+            Self.Harvested := False;
+            Exit(True);
+          end;
         end;
 
         LogHerbSoil('finished');
@@ -1125,11 +1182,15 @@ begin
         Continue;
       end;
 
-      if Self.Hover() and (Self.HarvestUpText in MainScreen.GetUpText()) then
+      if Self.Hover() then
       begin
-        WriteLn('[BASHFarm] Harvest: resume failed, still grown');
-        Self.Harvested := False;
-        Exit(True);
+        upText := MainScreen.GetUpText();
+        if PatchStillHarvestable(upText) then
+        begin
+          WriteLn('[BASHFarm] Harvest: resume failed, still grown');
+          Self.Harvested := False;
+          Exit(True);
+        end;
       end;
 
       Self.DropEmptyBuckets();
@@ -1169,11 +1230,27 @@ begin
   if Inventory.IsFull() then
     FreeInventForPick();
 
-  if Self.Hover() and (Self.HarvestUpText in MainScreen.GetUpText()) then
+  if Self.Hover() then
   begin
-    WriteLn('[BASHFarm] Harvest timeout: still harvestable');
-    Self.Harvested := False;
-    Result := True;
+    upText := MainScreen.GetUpText();
+    if PatchStillHarvestable(upText) then
+    begin
+      WriteLn('[BASHFarm] Harvest timeout: still harvestable');
+      Self.Harvested := False;
+      Result := True;
+    end
+    else if colourEmpty then
+    begin
+      LogHerbSoil('finished');
+      Self.Harvested := True;
+      Result := True;
+    end
+    else
+    begin
+      WriteLn('[BASHFarm] Harvest timeout: soil not empty');
+      Self.Harvested := False;
+      Result := True;
+    end;
   end
   else if colourEmpty then
   begin
@@ -1243,7 +1320,8 @@ var
 
   function TryPlantSeed(): Boolean;
   var
-    seedUp: String;
+    seedUp, useTarget: String;
+    needsHarvest: Boolean;
   begin
     Result := False;
     compostPrepped := False;
@@ -1275,11 +1353,23 @@ var
       WriteLn('[BASHFarm] Plant: seed uptext not empty patch at ', Self.Data.Name,
               ' (got="', seedUp, '", want "', Self.EmptyUpText, '")');
       Inventory.SetSelectedSlot(-1);
-      if (Self.HarvestUpText in seedUp) or
-         ('plant' in LowerCase(seedUp)) or
-         ('ick' in seedUp) or
-         ('arves' in seedUp) then
+      useTarget := BASHFarmUpTextUseTarget(seedUp);
+      // With a seed selected, grown crops show "Use X seed -> Ranarr weed"
+      // (no Pick/Harvest verb). Any non-empty use-target means not bare soil.
+      needsHarvest :=
+        (Self.HarvestUpText in seedUp) or
+        ('plant' in LowerCase(seedUp)) or
+        ('ick' in seedUp) or
+        ('arves' in seedUp) or
+        BASHFarmUpTextHasFarmProduce(seedUp) or
+        (useTarget <> '');
+      if needsHarvest then
+      begin
+        if useTarget <> '' then
+          WriteLn('[BASHFarm] Plant: seed aimed at crop/item at ', Self.Data.Name,
+                  ' ("', useTarget, '") - needs harvest');
         Self.Harvested := False;
+      end;
       Exit(False);
     end;
 
@@ -1409,9 +1499,10 @@ begin
     end;
 
     up := MainScreen.GetUpText();
-    if Self.HarvestUpText in up then
+    if (Self.HarvestUpText in up) or BASHFarmUpTextHasFarmProduce(up) then
     begin
-      WriteLn('[BASHFarm] Plant: harvest uptext after fail at ', Self.Data.Name);
+      WriteLn('[BASHFarm] Plant: harvest uptext after fail at ', Self.Data.Name,
+              ' ("', up, '")');
       Self.Harvested := False;
       Exit(False);
     end;
@@ -1913,7 +2004,7 @@ end;
 function TBASHFarmPatch.WalkNearPatch(untilDist: Int32 = 8): Boolean;
 var
   me, dest: TPoint;
-  attempt: Int32;
+  attempt, maxAttempts: Int32;
   targets: TPointArray;
   stopDist: Int32;
 
@@ -1932,6 +2023,14 @@ begin
   if Map.Walker.InRange(Self.Data.Coords, untilDist + 6) then
     Exit(True);
 
+  // Don't attempt cross-map walks when teleport clearly failed.
+  if me.DistanceTo(Self.Data.Coords) > 250 then
+  begin
+    WriteLn('[BASHFarm] Too far from patch at ', Self.Data.Name,
+            ' (dist=', Round(me.DistanceTo(Self.Data.Coords)), ') - aborting walk');
+    Exit(False);
+  end;
+
   WriteLn('[BASHFarm] Walking to patch at ', Self.Data.Name);
 
   targets := [
@@ -1940,12 +2039,13 @@ begin
     Self.Data.MapCoords.Center()
   ];
   stopDist := Max(untilDist, 6);
+  maxAttempts := Min(3, Length(targets));
 
-  for attempt := 0 to High(targets) do
+  for attempt := 0 to maxAttempts - 1 do
   begin
     dest := targets[attempt];
     if attempt > 0 then
-      WriteLn('[BASHFarm] Patch walk fallback ', attempt + 1, '/', Length(targets), ' -> ', dest);
+      WriteLn('[BASHFarm] Patch walk fallback ', attempt + 1, '/', maxAttempts, ' -> ', dest);
 
     if Self.IsPhasmatys() then
     begin
@@ -1953,6 +2053,9 @@ begin
         Exit(True);
     end
     else if TryWebWalk(dest, stopDist) then
+      Exit(True);
+
+    if Map.Walker.InRange(Self.Data.Coords, untilDist + 6) then
       Exit(True);
   end;
 
@@ -1979,7 +2082,7 @@ function TBASHFarmPatch.WalkNearLeprechaun(keepOut: Int32 = 10): Boolean;
 var
   me, lep, dest: TPoint;
   dist: Double;
-  attempt: Int32;
+  attempt, maxAttempts: Int32;
   targets: TPointArray;
   untilDist: Int32;
 
@@ -2011,6 +2114,14 @@ begin
     Exit(True);
   end;
 
+  // Don't spam WebWalk across the map after a failed teleport.
+  if dist > 250 then
+  begin
+    WriteLn('[BASHFarm] Too far from leprechaun at ', Self.Data.Name,
+            ' (dist=', Round(dist), ') - aborting walk');
+    Exit(False);
+  end;
+
   WriteLn('[BASHFarm] Walking to farm near leprechaun at ', Self.Data.Name);
 
   targets := [
@@ -2027,15 +2138,16 @@ begin
   ];
 
   untilDist := Max(keepOut + 8, 14);
+  maxAttempts := Min(3, Length(targets));
 
-  for attempt := 0 to High(targets) do
+  for attempt := 0 to maxAttempts - 1 do
   begin
     dest := targets[attempt];
     if dest.DistanceTo(lep) <= 1 then
       Continue;
 
     if attempt > 0 then
-      WriteLn('[BASHFarm] Lep walk fallback ', attempt + 1, '/', Length(targets), ' -> ', dest);
+      WriteLn('[BASHFarm] Lep walk fallback ', attempt + 1, '/', maxAttempts, ' -> ', dest);
 
     if Self.IsPhasmatys() then
     begin
@@ -2111,6 +2223,9 @@ var
   function TryUnderPlayer(): Boolean;
   begin
     Result := False;
+    // Only trust minimap-dot-under when we are actually near the lep tile.
+    if dist > 18 then
+      Exit;
     if not Minimap.HasDotUnder() then
       Exit;
 
@@ -2130,9 +2245,19 @@ begin
   begin
     WriteLn('[BASHFarm] Walking to nearby lep for ', Self.Data.Name,
             ' (dist=', Round(dist), ')');
-    Self.WalkNearLeprechaun(10);
+    if not Self.WalkNearLeprechaun(10) then
+    begin
+      WriteLn('[BASHFarm] Could not reach leprechaun at ', Self.Data.Name, ' - giving up');
+      Exit(False);
+    end;
     me := Map.Position();
     dist := me.DistanceTo(lep);
+    if dist > 28 then
+    begin
+      WriteLn('[BASHFarm] Still too far from leprechaun at ', Self.Data.Name,
+              ' (dist=', Round(dist), ')');
+      Exit(False);
+    end;
   end
   else
     Map.Walker.MakePointVisible(Self.Data.LeprechaunCoords);
@@ -2142,7 +2267,7 @@ begin
   if TryUnderPlayer() then
     Exit(True);
 
-  for attempt := 0 to 5 do
+  for attempt := 0 to 2 do
   begin
     if dist > 3 then
       Map.Walker.MakePointVisible(Self.Data.LeprechaunCoords);
@@ -2167,7 +2292,7 @@ var
   tpa: TPointArray;
   i: Int32;
   playerBox: TBox;
-  under: TPoint;
+  under, me: TPoint;
 begin
   if not Self.FindLeprechaun(tpa) then
     Exit(False);
@@ -2181,14 +2306,18 @@ begin
 
   if Minimap.HasDotUnder() then
   begin
-    playerBox := MainScreen.GetPlayerBox();
-    playerBox.Y1 := playerBox.Y1 - Floor(playerBox.Height / 2);
-    under := playerBox.Middle;
-    Mouse.Move(SRL.RandomPoint(under, MainScreen.NormalizeDistance(6)));
-    if MainScreen.IsUpText('Lepr') then
+    me := Map.Position();
+    if me.DistanceTo(Self.Data.LeprechaunCoords) <= 18 then
     begin
-      WriteLn('[BASHFarm] Lep under player at ', Self.Data.Name, ' (minimap dot)');
-      Exit(True);
+      playerBox := MainScreen.GetPlayerBox();
+      playerBox.Y1 := playerBox.Y1 - Floor(playerBox.Height / 2);
+      under := playerBox.Middle;
+      Mouse.Move(SRL.RandomPoint(under, MainScreen.NormalizeDistance(6)));
+      if MainScreen.IsUpText('Lepr') then
+      begin
+        WriteLn('[BASHFarm] Lep under player at ', Self.Data.Name, ' (minimap dot)');
+        Exit(True);
+      end;
     end;
   end;
 
@@ -2200,7 +2329,7 @@ var
   tpa: TPointArray;
   i: Int32;
   playerBox: TBox;
-  under: TPoint;
+  under, me: TPoint;
 begin
   if not Self.FindLeprechaun(tpa) then
     Exit(False);
@@ -2214,12 +2343,16 @@ begin
 
   if (not MainScreen.IsUpText('Lepr')) and Minimap.HasDotUnder() then
   begin
-    playerBox := MainScreen.GetPlayerBox();
-    playerBox.Y1 := playerBox.Y1 - Floor(playerBox.Height / 2);
-    under := playerBox.Middle;
-    Mouse.Move(under);
-    if MainScreen.IsUpText('Lepr') then
-      WriteLn('[BASHFarm] Lep under player at ', Self.Data.Name, ' (minimap dot)');
+    me := Map.Position();
+    if me.DistanceTo(Self.Data.LeprechaunCoords) <= 18 then
+    begin
+      playerBox := MainScreen.GetPlayerBox();
+      playerBox.Y1 := playerBox.Y1 - Floor(playerBox.Height / 2);
+      under := playerBox.Middle;
+      Mouse.Move(under);
+      if MainScreen.IsUpText('Lepr') then
+        WriteLn('[BASHFarm] Lep under player at ', Self.Data.Name, ' (minimap dot)');
+    end;
   end;
 
   if MainScreen.IsUpText('Lepr') then
@@ -2363,16 +2496,23 @@ begin
     Exit(True);
   end;
 
+  if not Self.AtFarm() then
+  begin
+    if not Self.WalkNearLeprechaun(10) then
+    begin
+      WriteLn('[BASHFarm] OpenLepExchange: not at farm / cannot reach lep at ', Self.Data.Name);
+      Exit(False);
+    end;
+  end;
+
+  // Only note produce when we are actually at the farm lep.
   Self.NoteItems();
 
   Inventory.SetSelectedSlot(-1);
   RSInterface.Close();
   _BASHLepClearSlots();
 
-  if not Self.AtFarm() then
-    Self.WalkNearLeprechaun(10);
-
-  for attempt := 1 to 4 do
+  for attempt := 1 to 3 do
   begin
     if RSInterface.IsOpen() then
     begin
@@ -2380,13 +2520,14 @@ begin
       Exit(True);
     end;
 
+    if not Self.AtFarm() then
+    begin
+      WriteLn('[BASHFarm] OpenLepExchange: left farm area - aborting at ', Self.Data.Name);
+      Exit(False);
+    end;
+
     if not Self.HoverLeprechaun() then
     begin
-      if not Self.AtFarm() then
-      begin
-        Self.WalkNearLeprechaun(10);
-        Continue;
-      end;
       Map.Walker.MakePointVisible(Self.Data.LeprechaunCoords);
       Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(40, 80) * (1 - 2 * (attempt mod 2)), 10);
       Continue;
@@ -2675,6 +2816,12 @@ var
 begin
   Result := True;
 
+  if not Self.AtFarm() then
+  begin
+    WriteLn('[BASHFarm] DepositLepTools: not at farm - skipping');
+    Exit(False);
+  end;
+
   Self.NoteItems();
 
   if not Self.HasStorableLepTools() then
@@ -2683,18 +2830,16 @@ begin
   Inventory.SetSelectedSlot(-1);
   RSInterface.Close();
 
-  if not Self.AtFarm() then
-    Self.WalkNearLeprechaun(10);
-
-  for attempt := 1 to 5 do
+  for attempt := 1 to 3 do
   begin
+    if not Self.AtFarm() then
+    begin
+      WriteLn('[BASHFarm] DepositLepTools: left farm area - aborting');
+      Exit(False);
+    end;
+
     if not Self.HoverLeprechaun() then
     begin
-      if not Self.AtFarm() then
-      begin
-        Self.WalkNearLeprechaun(10);
-        Continue;
-      end;
       Map.Walker.MakePointVisible(Self.Data.LeprechaunCoords);
       Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(40, 80) * (1 - 2 * (attempt mod 2)), 10);
       Continue;
@@ -2730,6 +2875,9 @@ var
 begin
   Mouse.OnMovingEx := nil;
 
+  if Self.Skip then
+    Exit(False);
+
   needSecs := Self.MagicSecateurs and
               (not Inventory.ContainsItem('Magic secateurs')) and
               (not Equipment.ContainsItem('Magic secateurs'));
@@ -2740,6 +2888,12 @@ begin
 
   if (not needSecs) and (not needSpade) and (not needDibber) and (not needCompost) then
     Exit(True);
+
+  if not Self.AtFarm() then
+  begin
+    WriteLn('[BASHFarm] EnsureLepTools: not at farm for ', Self.Data.Name, ' - aborting');
+    Exit(False);
+  end;
 
   Self.NoteItems();
 
@@ -2812,6 +2966,12 @@ begin
   if Length(slots) < 1 then
   begin
     WriteLn('[BASHFarm] NoteItems: no noteable produce in invent');
+    Exit;
+  end;
+
+  if not Self.AtFarm() then
+  begin
+    WriteLn('[BASHFarm] NoteItems: not at farm for ', Self.Data.Name, ' - skipping');
     Exit;
   end;
 
