@@ -1,3 +1,17 @@
+# [8.4.0](https://github.com/BigWaspBackup/BashLib/compare/v8.3.8...v8.4.0) (2026-08-05)
+
+
+### Bug Fixes
+
+* more gear handler tweaks ([25d70ec](https://github.com/BigWaspBackup/BashLib/commit/25d70ecb0581e8908553ebaf82c4ac7a21dd2786))
+
+
+### Features
+
+* add new map for CamTorum, inital gear handler rework ([ee63ab2](https://github.com/BigWaspBackup/BashLib/commit/ee63ab2bd2b886dc7dbd07ca7cc94525d1bffe14))
+
+
+
 ## [8.3.8](https://github.com/BigWaspBackup/BashLib/compare/v8.3.7...v8.3.8) (2026-08-05)
 
 
@@ -31,15 +45,6 @@
 ### Bug Fixes
 
 * Phasmatys fixes, Renu improvemens. ([44dba50](https://github.com/BigWaspBackup/BashLib/commit/44dba50f51e8de4dfa13cc45c035fe64b91c9e07))
-
-
-
-## [8.3.4](https://github.com/BigWaspBackup/BashLib/compare/v8.3.3...v8.3.4) (2026-08-02)
-
-
-### Bug Fixes
-
-* Fix for farming guild allotment patches ([47e93b6](https://github.com/BigWaspBackup/BashLib/commit/47e93b675b0517ddef2d9419d708684be7c137cd))
 
 
 
