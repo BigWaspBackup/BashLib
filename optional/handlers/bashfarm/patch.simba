@@ -22,7 +22,6 @@ begin
   end;
 end;
 
-// "Use Ranarr seed -> Ranarr weed" — target after the arrow (trimmed).
 function BASHFarmUpTextUseTarget(upText: String): String;
 var
   arrowAt: Int32;
@@ -34,7 +33,6 @@ begin
   Result := Trim(Copy(upText, arrowAt + 2, Length(upText)));
 end;
 
-// Seed/item use uptext aimed at farm produce (grown crop still on the patch).
 function BASHFarmUpTextHasFarmProduce(upText: String): Boolean;
 var
   target, itemName: String;
@@ -42,8 +40,6 @@ var
 begin
   Result := False;
   target := BASHFarmUpTextUseTarget(upText);
-  // With an arrow, only match produce in the use-target so
-  // "Dwarf weed seed -> Herb" does not false-hit on the seed name.
   if target = '' then
     target := upText;
 
@@ -55,6 +51,17 @@ begin
     if itemName in target then
       Exit(True);
   end;
+end;
+
+function BASHFarmCountSeed(seed: TRSItem): Int32;
+begin
+  Result := Inventory.CountItemStack(seed);
+  if Result >= 0 then
+    Exit;
+  if Inventory.ContainsItem(seed) then
+    Result := Max(1, Inventory.CountItem(seed))
+  else
+    Result := 0;
 end;
 
 function BASHFarmMenuSelect(needles: TStringArray; caseSensitive: Boolean = False): Boolean; overload;
@@ -1118,8 +1125,6 @@ begin
         Exit(True);
       end;
 
-      // Soil colour alone is not enough — leftover herbs still show Pick /
-      // produce names. Confirm with uptext before treating the patch as done.
       if Self.Hover() then
       begin
         upText := MainScreen.GetUpText();
@@ -1269,7 +1274,6 @@ end;
 function TBASHFarmPatch.Plant(): Boolean;
 var
   attempt, seedBefore, seedsNeeded: Int32;
-  hadSelection: Boolean;
   clickAt: TPoint;
   justRaked: Boolean;
   tClick, deadline: UInt64;
@@ -1283,10 +1287,13 @@ var
   end;
 
   function PlantFinished(): Boolean;
+  var
+    nowCount: Int32;
   begin
+    nowCount := BASHFarmCountSeed(Self.Seed);
     Result :=
-      (Inventory.CountItemStack(Self.Seed) <= seedBefore - seedsNeeded) or
-      (Inventory.CountItemStack(Self.Seed) < seedBefore) or
+      ((seedBefore > 0) and (nowCount >= 0) and (nowCount <= seedBefore - seedsNeeded)) or
+      ((seedBefore > 0) and (nowCount >= 0) and (nowCount < seedBefore)) or
       ((seedBefore <= seedsNeeded) and (not Inventory.ContainsItem(Self.Seed))) or
       XPBar.EarnedXP();
   end;
@@ -1322,11 +1329,12 @@ var
   var
     seedUp, useTarget: String;
     needsHarvest: Boolean;
+    upDeadline: UInt64;
   begin
     Result := False;
     compostPrepped := False;
 
-    seedBefore := Inventory.CountItemStack(Self.Seed);
+    seedBefore := BASHFarmCountSeed(Self.Seed);
     if seedBefore < seedsNeeded then
     begin
       WriteLn('[BASHFarm] Not enough seeds to plant (have ', seedBefore, ', need ', seedsNeeded, ')');
@@ -1348,23 +1356,42 @@ var
     Wait(40, 80);
     seedUp := MainScreen.GetUpText();
 
-    if not (Self.EmptyUpText in seedUp) then
+    upDeadline := GetTickCount() + 1000;
+    while GetTickCount() < upDeadline do
     begin
-      WriteLn('[BASHFarm] Plant: seed uptext not empty patch at ', Self.Data.Name,
-              ' (got="', seedUp, '", want "', Self.EmptyUpText, '")');
-      Inventory.SetSelectedSlot(-1);
+      if Self.EmptyUpText in seedUp then
+        Break;
+
       useTarget := BASHFarmUpTextUseTarget(seedUp);
-      // With a seed selected, grown crops show "Use X seed -> Ranarr weed"
-      // (no Pick/Harvest verb). Any non-empty use-target means not bare soil.
       needsHarvest :=
         (Self.HarvestUpText in seedUp) or
         ('plant' in LowerCase(seedUp)) or
         ('ick' in seedUp) or
         ('arves' in seedUp) or
         BASHFarmUpTextHasFarmProduce(seedUp) or
-        (useTarget <> '');
+        (Length(Trim(useTarget)) >= 3);
+      if needsHarvest then
+        Break;
+
+      Wait(50, 80);
+      seedUp := MainScreen.GetUpText();
+    end;
+
+    if not (Self.EmptyUpText in seedUp) then
+    begin
+      WriteLn('[BASHFarm] Plant: seed uptext not empty patch at ', Self.Data.Name,
+              ' (got="', seedUp, '", want "', Self.EmptyUpText, '")');
+      useTarget := BASHFarmUpTextUseTarget(seedUp);
+      needsHarvest :=
+        (Self.HarvestUpText in seedUp) or
+        ('plant' in LowerCase(seedUp)) or
+        ('ick' in seedUp) or
+        ('arves' in seedUp) or
+        BASHFarmUpTextHasFarmProduce(seedUp) or
+        (Length(Trim(useTarget)) >= 3);
       if needsHarvest then
       begin
+        Inventory.SetSelectedSlot(-1);
         if useTarget <> '' then
           WriteLn('[BASHFarm] Plant: seed aimed at crop/item at ', Self.Data.Name,
                   ' ("', useTarget, '") - needs harvest');
@@ -1442,19 +1469,13 @@ begin
   else
     seedsNeeded := 1;
 
-  hadSelection := Inventory.GetSelectedSlot() <> -1;
-  seedBefore := Inventory.CountItemStack(Self.Seed);
+  seedBefore := BASHFarmCountSeed(Self.Seed);
 
-  if not hadSelection then
+  if seedBefore < seedsNeeded then
   begin
-    if seedBefore < seedsNeeded then
-    begin
-      WriteLn('[BASHFarm] Not enough seeds to plant (have ', seedBefore, ', need ', seedsNeeded, ')');
-      Exit(False);
-    end;
-  end
-  else if seedBefore < 0 then
-    seedBefore := seedsNeeded;
+    WriteLn('[BASHFarm] Not enough seeds to plant (have ', seedBefore, ', need ', seedsNeeded, ')');
+    Exit(False);
+  end;
 
   WriteLn('[BASHFarm] Planting ', ToStr(Self.Seed), ' at ', Self.Data.Name);
 
@@ -1488,14 +1509,22 @@ begin
 
     Inventory.SetSelectedSlot(-1);
     WriteLn('[BASHFarm] Plant attempt ', attempt, ' failed at ', Self.Data.Name,
-            ' - hovering for Rake/harvest uptext');
+            ' - checking Rake/harvest then rotating camera');
 
     if not Self.Hover() then
     begin
       if not Self.Find() then
         Self.WalkFind();
       if not Self.Hover() then
+      begin
+        if attempt < 5 then
+        begin
+          Wait(900, 1100);
+          Minimap.SetCompassAngle(
+            Minimap.GetCompassAngle() + Random(35, 70) * (1 - 2 * (attempt mod 2)), 10);
+        end;
         Continue;
+      end;
     end;
 
     up := MainScreen.GetUpText();
@@ -1514,6 +1543,16 @@ begin
         Exit(True);
       end;
       justRaked := True;
+    end;
+
+    if attempt < 5 then
+    begin
+      Wait(900, 1100);
+      WriteLn('[BASHFarm] Plant: rotating camera before retry at ', Self.Data.Name);
+      Minimap.SetCompassAngle(
+        Minimap.GetCompassAngle() + Random(35, 70) * (1 - 2 * (attempt mod 2)), 10);
+      if not Self.Find() then
+        Self.WalkFind();
     end;
   end;
 
@@ -2114,13 +2153,12 @@ begin
     Exit(True);
   end;
 
-  // Don't spam WebWalk across the map after a failed teleport.
-  if dist > 250 then
+ { if dist > 500 then // Remove for now we add back if we web walk fuck still
   begin
     WriteLn('[BASHFarm] Too far from leprechaun at ', Self.Data.Name,
             ' (dist=', Round(dist), ') - aborting walk');
     Exit(False);
-  end;
+  end;}
 
   WriteLn('[BASHFarm] Walking to farm near leprechaun at ', Self.Data.Name);
 
