@@ -1,3 +1,12 @@
+## [8.4.1](https://github.com/BigWaspBackup/BashLib/compare/v8.4.0...v8.4.1) (2026-08-07)
+
+
+### Bug Fixes
+
+* Added fairy ring attempts, fixed skipping of farming guild to now correctly skip, failsafe for getting stuck walking to leps, activity timer built into farm runs to prevent endless loops/getting stuck farming. ([a67f92e](https://github.com/BigWaspBackup/BashLib/commit/a67f92e821d2b0e2a5ca154bcc9a85eb7660cb7f))
+
+
+
 # [8.4.0](https://github.com/BigWaspBackup/BashLib/compare/v8.3.8...v8.4.0) (2026-08-05)
 
 
@@ -36,15 +45,6 @@
 ### Bug Fixes
 
 * Farm run fixes for allotments patches, improved rake handling for those without auto weed, tweaks to AI Chatbot ([9eb7a89](https://github.com/BigWaspBackup/BashLib/commit/9eb7a89174543a20a3f663da7f7ab662801fcb13))
-
-
-
-## [8.3.5](https://github.com/BigWaspBackup/BashLib/compare/v8.3.4...v8.3.5) (2026-08-02)
-
-
-### Bug Fixes
-
-* Phasmatys fixes, Renu improvemens. ([44dba50](https://github.com/BigWaspBackup/BashLib/commit/44dba50f51e8de4dfa13cc45c035fe64b91c9e07))
 
 
 
