@@ -1631,7 +1631,7 @@ begin
     XPBar.EarnedXP();
     clicked := False;
 
-    Wait(Random(1000, 1200));
+    Wait(Random(1200, 1600));
 
     for 1 to 4 do
     begin
@@ -2062,8 +2062,7 @@ begin
   if Map.Walker.InRange(Self.Data.Coords, untilDist + 6) then
     Exit(True);
 
-  // Don't attempt cross-map walks when teleport clearly failed.
-  if me.DistanceTo(Self.Data.Coords) > 250 then
+  if me.DistanceTo(Self.Data.Coords) > 600 then
   begin
     WriteLn('[BASHFarm] Too far from patch at ', Self.Data.Name,
             ' (dist=', Round(me.DistanceTo(Self.Data.Coords)), ') - aborting walk');
