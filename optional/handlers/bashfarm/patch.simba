@@ -1151,7 +1151,7 @@ begin
       if not started then
       begin
         started := True;
-        stall.Init(1500);
+        stall.Init(2000);
       end
       else
         stall.Restart();
