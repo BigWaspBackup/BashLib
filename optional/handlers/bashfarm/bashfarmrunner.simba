@@ -41,6 +41,9 @@ type
     FairyStaffEquipped: Boolean;
     FairyStaffName: TRSItem;
 
+    PreviousWeapon: TRSItem;
+    WeaponRestoreAt: EBASHFairyWeaponRestore;
+
     GuildTravelFailed: Boolean;
   end;
 
@@ -105,6 +108,8 @@ begin
   Self.ArdyCloakEquipped := False;
   Self.FairyStaffEquipped := False;
   Self.FairyStaffName := '';
+  Self.PreviousWeapon := '';
+  Self.WeaponRestoreAt := EBASHFairyWeaponRestore.IMMEDIATE;
   Self.GuildTravelFailed := False;
 end;
 
@@ -874,18 +879,159 @@ begin
   Bank.CachedQuantity := 0;
 end;
 
+procedure TBASHFarmRunner.RememberWeaponBeforeFairyStaff();
+var
+  found: TRSItemArray;
+  name: String;
+begin
+  Self.PreviousWeapon := '';
+
+  if Self.LumbyElite then
+    Exit;
+
+  if Equipment.ContainsItem('Dramen staff') or Equipment.ContainsItem('Lunar staff') then
+    Exit;
+
+  if Equipment.ContainsItem('Magic secateurs') then
+    Self.PreviousWeapon := 'Magic secateurs'
+  else if Equipment.Open() and Equipment.IsSlotUsed(ERSEquipmentSlot.WEAPON) then
+  begin
+    found := Equipment.Discover(ERSEquipmentSlot.WEAPON);
+    if Length(found) > 0 then
+      Self.PreviousWeapon := found[0]
+    else
+    begin
+      name := Combat.GetWeapon();
+      if (name <> '') and (LowerCase(name) <> 'unarmed') then
+        Self.PreviousWeapon := name;
+    end;
+  end;
+
+  if Self.PreviousWeapon = '' then
+    Exit;
+
+  if (LowerCase(ToStr(Self.PreviousWeapon)) = 'dramen staff') or
+     (LowerCase(ToStr(Self.PreviousWeapon)) = 'lunar staff') then
+  begin
+    Self.PreviousWeapon := '';
+    Exit;
+  end;
+
+  Self.WeaponRestoreAt := EBASHFairyWeaponRestore(
+    Random(Ord(High(EBASHFairyWeaponRestore)) + 1)
+  );
+  WriteLn('[BASHFarm] Will restore ', Self.PreviousWeapon,
+          ' after fairy ring (', ToStr(Self.WeaponRestoreAt), ')');
+end;
+
+function TBASHFarmRunner.TryRestorePreviousWeapon(): Boolean;
+begin
+  Result := False;
+
+  if Self.PreviousWeapon = '' then
+    Exit(True);
+
+  if Equipment.ContainsItem(Self.PreviousWeapon) then
+  begin
+    WriteLn('[BASHFarm] Previous weapon already equipped: ', Self.PreviousWeapon);
+    Self.PreviousWeapon := '';
+    Exit(True);
+  end;
+
+  if not Inventory.ContainsItem(Self.PreviousWeapon) then
+  begin
+    WriteLn('[BASHFarm] Previous weapon not in inventory - giving up: ', Self.PreviousWeapon);
+    Self.PreviousWeapon := '';
+    Exit(False);
+  end;
+
+  WriteLn('[BASHFarm] Re-equipping previous weapon: ', Self.PreviousWeapon);
+  if not Inventory.ClickItem(Self.PreviousWeapon) then
+    Exit(False);
+
+  Result := WaitUntil(Equipment.ContainsItem(Self.PreviousWeapon), 100, 2500);
+  if Result then
+  begin
+    WriteLn('[BASHFarm] Restored weapon: ', Self.PreviousWeapon);
+    Self.PreviousWeapon := '';
+  end
+  else
+    WriteLn('[BASHFarm] Failed to re-equip ', Self.PreviousWeapon);
+end;
+
+procedure TBASHFarmRunner.MaybeRestoreFairyWeapon(phase: EBASHFairyWeaponRestore);
+begin
+  if Self.PreviousWeapon = '' then
+    Exit;
+
+  if Ord(phase) < Ord(Self.WeaponRestoreAt) then
+    Exit;
+
+  Self.TryRestorePreviousWeapon();
+end;
+
+function TBASHFarmRunner.EnsureFairyStaffForRing(): Boolean;
+begin
+  if Self.LumbyElite then
+  begin
+    FairyRing.Item := 'null';
+    Exit(True);
+  end;
+
+  if Inventory.ContainsItem('Lunar staff') then
+    FairyRing.Item := 'Lunar staff'
+  else if Inventory.ContainsItem('Dramen staff') then
+    FairyRing.Item := 'Dramen staff'
+  else if Self.FairyStaffEquipped and (Self.FairyStaffName <> '') then
+  begin
+    FairyRing.Item := Self.FairyStaffName;
+    Exit(True);
+  end
+  else if Equipment.ContainsItem('Lunar staff') then
+  begin
+    FairyRing.Item := 'Lunar staff';
+    Self.FairyStaffEquipped := True;
+    Self.FairyStaffName := 'Lunar staff';
+    Exit(True);
+  end
+  else if Equipment.ContainsItem('Dramen staff') then
+  begin
+    FairyRing.Item := 'Dramen staff';
+    Self.FairyStaffEquipped := True;
+    Self.FairyStaffName := 'Dramen staff';
+    Exit(True);
+  end
+  else
+  begin
+    WriteLn('[BASHFarm] Fairy staff not in inventory or equipment');
+    Exit(False);
+  end;
+
+  Self.RememberWeaponBeforeFairyStaff();
+
+  if not Inventory.ClickItem(FairyRing.Item) then
+  begin
+    WriteLn('[BASHFarm] Failed to click fairy staff: ', FairyRing.Item);
+    Exit(False);
+  end;
+
+  Result := WaitUntil(not Inventory.ContainsItem(FairyRing.Item), 100, 3000);
+  if Result then
+  begin
+    Self.FairyStaffEquipped := True;
+    Self.FairyStaffName := FairyRing.Item;
+    WriteLn('[BASHFarm] Equipped fairy staff: ', FairyRing.Item);
+  end
+  else
+    WriteLn('[BASHFarm] Failed to equip fairy staff: ', FairyRing.Item);
+end;
+
 function TBASHFarmRunner.UseDJPFairyRingCIR(): Boolean;
 var
   savedFairyWalker, savedRSWalker: Boolean;
 begin
-  if Self.LumbyElite then
-    FairyRing.Item := 'null'
-  else if Self.FairyStaffEquipped and (Self.FairyStaffName <> '') then
-    FairyRing.Item := Self.FairyStaffName
-  else if Inventory.ContainsItem('Lunar staff') then
-    FairyRing.Item := 'Lunar staff'
-  else
-    FairyRing.Item := 'Dramen staff';
+  if not Self.EnsureFairyStaffForRing() then
+    Exit(False);
 
   FairyRing.SetupFairyRings();
   savedFairyWalker := FairyRing.FairyRings.Filter.Walker;
@@ -912,9 +1058,39 @@ end;
 
 function TBASHFarmRunner.TeleportGuildFairyCIR(): Boolean;
 var
-  cirLand, djpTile: TPoint;
+  cirLand, djpTile, me, mid: TPoint;
   savedScreenWalk, savedAdaptiveWalk: Boolean;
-  i, ringAttempt: Int32;
+  i, ringAttempt, walkAttempt: Int32;
+  walkedToDjp: Boolean;
+  dist, step: Double;
+
+  function BlindNudgeTowardDjp(): Boolean;
+  begin
+    Result := False;
+    me := Map.Position();
+    dist := me.DistanceTo(djpTile);
+    if dist <= 12 then
+      Exit(True);
+    if dist < 1 then
+      dist := 1;
+
+    step := Min(55.0, dist);
+    if step < 18 then
+      step := Min(18.0, dist);
+
+    mid.X := Round(me.X + (djpTile.X - me.X) * (step / dist));
+    mid.Y := Round(me.Y + (djpTile.Y - me.Y) * (step / dist));
+
+    WriteLn('[BASHFarm] Guild Fairy CIR: WalkBlind toward DJP -> ', mid,
+            ' (from ', me, ', dist=', Round(dist), ')');
+    try
+      Result := Map.Walker.WalkBlind(mid, 6);
+    except
+      WriteLn('[BASHFarm] Guild Fairy CIR: WalkBlind failed');
+      Result := False;
+    end;
+    Minimap.WaitMoving();
+  end;
 begin
   Result := False;
   cirLand := RSTeleportsV2.CIR_NORTHEAST_OF_THE_FARMING_GUILD.worldPoint;
@@ -945,9 +1121,71 @@ begin
       end;
     end;
 
-    if not Map.Walker.WebWalk(djpTile, 5, 0.15) then
+    Minimap.WaitMoving();
+    Wait(Random(1500, 2500));
+
+    if (not Self.LumbyElite) and (Random(100) < 45) then
     begin
-      WriteLn('[BASHFarm] Guild Fairy CIR: WebWalk to DJP ring failed');
+      WriteLn('[BASHFarm] Guild Fairy CIR: equipping fairy staff at monastery');
+      Self.EnsureFairyStaffForRing();
+    end;
+
+    walkedToDjp := False;
+    for walkAttempt := 1 to 3 do
+    begin
+      if Map.Walker.AnyInRange(BASH_DJP_FAIRY_RING_TILES, 12) then
+      begin
+        walkedToDjp := True;
+        Break;
+      end;
+
+      WriteLn('[BASHFarm] Guild Fairy CIR: WebWalk to DJP attempt ',
+              walkAttempt, '/3 from ', Map.Position());
+      try
+        if Map.Walker.WebWalk(djpTile, 5, 0.15) then
+        begin
+          walkedToDjp := True;
+          Break;
+        end;
+      except
+        WriteLn('[BASHFarm] Guild Fairy CIR: WebWalk threw on attempt ', walkAttempt);
+      end;
+
+      WriteLn('[BASHFarm] Guild Fairy CIR: WebWalk to DJP failed (attempt ',
+              walkAttempt, '/3, pos=', Map.Position(), ')');
+
+      if Map.Walker.AnyInRange(BASH_DJP_FAIRY_RING_TILES, 12) then
+      begin
+        walkedToDjp := True;
+        Break;
+      end;
+
+      BlindNudgeTowardDjp();
+
+      if Map.Walker.AnyInRange(BASH_DJP_FAIRY_RING_TILES, 12) then
+      begin
+        walkedToDjp := True;
+        Break;
+      end;
+
+      WriteLn('[BASHFarm] Guild Fairy CIR: retry WebWalk after WalkBlind');
+      try
+        if Map.Walker.WebWalk(djpTile, 5, 0.15) then
+        begin
+          walkedToDjp := True;
+          Break;
+        end;
+      except
+        WriteLn('[BASHFarm] Guild Fairy CIR: WebWalk after WalkBlind threw');
+      end;
+
+      if walkAttempt < 3 then
+        Wait(Random(500, 900));
+    end;
+
+    if not walkedToDjp then
+    begin
+      WriteLn('[BASHFarm] Guild Fairy CIR: walk to DJP ring failed after 3 attempts');
       Exit(False);
     end;
   end;
@@ -974,6 +1212,7 @@ begin
         Map.Walker.ScreenWalk := savedScreenWalk;
         Map.Walker.AdaptiveWalk := savedAdaptiveWalk;
         Map.Walker._DoorHandler.Enabled := True;
+        Self.MaybeRestoreFairyWeapon(EBASHFairyWeaponRestore.IMMEDIATE);
         Exit(True);
       end;
 
@@ -1578,6 +1817,8 @@ begin
   if not patch.WalkToFarmWork(10) then
     WriteLn('[BASHFarm] Warning: could not walk to farm work area at ', patch.Data.Name);
 
+  Self.MaybeRestoreFairyWeapon(EBASHFairyWeaponRestore.ON_WALK);
+
   Result := patch.AtFarm();
   if not Result then
   begin
@@ -1606,7 +1847,6 @@ begin
 
   BASHEnsureRunZoom(5, 25);
 
-  { Before host OnStart opens the bank }
   Self.EnsureEquippedTeleportCache();
 
   if not Self.OnStart() then
@@ -1620,7 +1860,6 @@ begin
   Self.ShufflePatchesByLocation();
   Self.GuildTravelFailed := False;
 
-  // Standard WL activity failsafe: no XP for 5 minutes terminates the script.
   WL.Activity.Init(5 * ONE_MINUTE);
   WL.Activity.Restart();
 
@@ -1703,6 +1942,7 @@ begin
 
     if (not Self.Patches[i].Skip) and Self.Patches[i].AtFarm() then
     begin
+      Self.MaybeRestoreFairyWeapon(EBASHFairyWeaponRestore.AT_LEP);
       if not Self.Patches[i].EnsureLepTools(
            (not usePhased) or Self.Patches[i].UsesReusableCompost()) then
         WriteLn('[BASHFarm] Warning: could not withdraw tools/compost from leprechaun at ', Self.Patches[i].Data.Name);

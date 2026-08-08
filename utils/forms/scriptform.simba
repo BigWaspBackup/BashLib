@@ -1532,7 +1532,9 @@ end;
 (*
 ## TScriptForm.SyncAccountManager
 Writes the current Account Manager fields into Login.Players and credentials.simba.
-Called automatically when fields change, after world selection, and when the script starts.
+Called automatically when fields change, after world selection, when the script starts,
+and when the form closes (so Start saves worlds even if a script overrides StartScript
+without calling inherited).
 *)
 procedure TScriptForm.SyncAccountManager();
 var
@@ -3382,6 +3384,12 @@ begin
   except
     Writeln(GetExceptionMessage());
   finally
+    // Flush AM fields (including manually typed worlds) before the form is freed.
+    // Covers scripts that override StartScript without calling inherited/SyncAccountManager.
+    try
+      Self.SyncAccountManager();
+    except
+    end;
     Self.Form.Free();
   end;
 end;

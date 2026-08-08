@@ -147,6 +147,12 @@ type
     GROWN
   );
 
+  EBASHFairyWeaponRestore = (
+    IMMEDIATE,
+    ON_WALK,
+    AT_LEP
+  );
+
   TBASHPatchData = record
     PatchType: EBASHPatchType;
     BorderColor, SoilColor: TCTS2Color;
@@ -160,6 +166,7 @@ type
     Chunks: array of TRSMapChunk;
     Outline: TPointArray;
     CompostBinCoords: TPoint;
+    StandTiles: TPointArray;
   end;
 
   TBASHFarmPatch = record

@@ -29,8 +29,27 @@ begin
   Result := '';
   arrowAt := Pos('->', upText);
   if arrowAt <= 0 then
+    arrowAt := Pos(',>', upText);
+  if arrowAt <= 0 then
+    arrowAt := Pos('>', upText);
+  if arrowAt <= 0 then
     Exit;
-  Result := Trim(Copy(upText, arrowAt + 2, Length(upText)));
+  Result := Trim(Copy(upText, arrowAt + 1, Length(upText)));
+  if (Length(Result) > 0) and (Copy(Result, 1, 1) = '>') then
+    Result := Trim(Copy(Result, 2, Length(Result)));
+end;
+
+function BASHFarmEmptyUpTextNeedle(emptyUpText: String): String;
+begin
+  Result := emptyUpText;
+  if Result = '' then
+    Exit;
+  case LowerCase(Result) of
+    'allotment': Exit('Allot');
+    'flower': Exit('Flow');
+  end;
+  if Length(Result) > 5 then
+    Result := Copy(Result, 1, 5);
 end;
 
 function BASHFarmUpTextHasFarmProduce(upText: String): Boolean;
@@ -434,20 +453,39 @@ function TBASHFarmPatch.GetInteractMS(): TPoint;
 var
   interior: TPoint;
   dx, dy, len: Double;
+  nudge: Int32;
 begin
   if Self.SearchBox.Area > 0 then
   begin
     Result := Self.SearchBox.Center();
-    if (Self.Data.PatchType = EBASHPatchType.ALLOTMENT) and (Length(Self.TPA) > 0) then
+
+    if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
     begin
-      interior := Self.TPA.Mean;
+      if Self.Id in [EBASHFarmPatch.GUILD_ALLOT_N, EBASHFarmPatch.GUILD_ALLOT_S] then
+        nudge := 3
+      else
+        nudge := 5;
+
+      interior := Map.GetTileMS(Self.Data.Coords).Mean;
       dx := interior.X - Result.X;
       dy := interior.Y - Result.Y;
       len := Sqrt(dx * dx + dy * dy);
       if len > 0.1 then
       begin
-        Result.X := Round(Result.X + (dx / len) * 5);
-        Result.Y := Round(Result.Y + (dy / len) * 5);
+        Result.X := Round(Result.X + (dx / len) * nudge);
+        Result.Y := Round(Result.Y + (dy / len) * nudge);
+      end
+      else if Length(Self.TPA) > 0 then
+      begin
+        interior := Self.TPA.Mean;
+        dx := interior.X - Result.X;
+        dy := interior.Y - Result.Y;
+        len := Sqrt(dx * dx + dy * dy);
+        if len > 0.1 then
+        begin
+          Result.X := Round(Result.X + (dx / len) * nudge);
+          Result.Y := Round(Result.Y + (dy / len) * nudge);
+        end;
       end;
     end;
     Exit;
@@ -456,6 +494,18 @@ begin
   if Length(Self.Data.Outline) >= 3 then
   begin
     Result := Map.GetTileMS(Self.GetInteractTile()).Mean;
+    if Self.Id in [EBASHFarmPatch.GUILD_ALLOT_N, EBASHFarmPatch.GUILD_ALLOT_S] then
+    begin
+      interior := Map.GetTileMS(Self.Data.Coords).Mean;
+      dx := interior.X - Result.X;
+      dy := interior.Y - Result.Y;
+      len := Sqrt(dx * dx + dy * dy);
+      if len > 0.1 then
+      begin
+        Result.X := Round(Result.X + (dx / len) * 3);
+        Result.Y := Round(Result.Y + (dy / len) * 3);
+      end;
+    end;
     Exit;
   end;
 
@@ -687,6 +737,8 @@ end;
 function TBASHFarmPatch.ClickUpText(text: String): Boolean;
 var
   up: String;
+  attempt: Int32;
+  deadline: UInt64;
 begin
   Result := False;
 
@@ -697,29 +749,35 @@ begin
     Exit(True);
   end;
 
-  if not Self.Hover() then
-    Exit;
-
-  Wait(35, 60);
-  up := MainScreen.GetUpText();
-  if text in up then
+  for attempt := 1 to 4 do
   begin
-    Mouse.Click(MOUSE_LEFT);
-    Exit(True);
-  end;
+    if not Self.Hover() then
+      Exit;
 
-  if MainScreen.IsUpText(text, 120) then
-  begin
-    Mouse.Click(MOUSE_LEFT);
-    Exit(True);
+    deadline := GetTickCount() + 900;
+    while GetTickCount() < deadline do
+    begin
+      up := MainScreen.GetUpText();
+      if text in up then
+      begin
+        Mouse.Click(MOUSE_LEFT);
+        Exit(True);
+      end;
+      if MainScreen.IsUpText(text, 80) then
+      begin
+        Mouse.Click(MOUSE_LEFT);
+        Exit(True);
+      end;
+      Wait(40, 70);
+    end;
+
+    if attempt < 4 then
+      WriteLn('[BASHFarm] ClickUpText: "', text, '" not ready at ', Self.Data.Name,
+              ' (got="', up, '") - try again');
   end;
 
   WriteLn('[BASHFarm] ClickUpText: "', text, '" missing after hover at ',
-          Self.Data.Name, ' (got="', MainScreen.GetUpText(), '") - ChooseOption');
-  if not BASHFarmMenuSelect(text, False) then
-    Exit;
-
-  Result := True;
+          Self.Data.Name, ' (got="', MainScreen.GetUpText(), '")');
 end;
 
 function TBASHFarmPatch.Inspect(): EBASHPatchState;
@@ -1093,7 +1151,7 @@ begin
       if not started then
       begin
         started := True;
-        stall.Init(1900);
+        stall.Init(1500);
       end
       else
         stall.Restart();
@@ -1327,12 +1385,15 @@ var
 
   function TryPlantSeed(): Boolean;
   var
-    seedUp, useTarget: String;
-    needsHarvest: Boolean;
-    upDeadline: UInt64;
+    seedUp, useTarget, lowUp, emptyNeedle: String;
+    aimAttempt, slashAt: Int32;
+    upDeadline, moveAt: UInt64;
+    jitter: Int32;
+    ready, grown: Boolean;
   begin
     Result := False;
     compostPrepped := False;
+    emptyNeedle := BASHFarmEmptyUpTextNeedle(Self.EmptyUpText);
 
     seedBefore := BASHFarmCountSeed(Self.Seed);
     if seedBefore < seedsNeeded then
@@ -1340,6 +1401,7 @@ var
       WriteLn('[BASHFarm] Not enough seeds to plant (have ', seedBefore, ', need ', seedsNeeded, ')');
       Exit(False);
     end;
+
     if Inventory.GetSelectedSlot() = -1 then
       if not Inventory.SetSelectedItem(Self.Seed) then
         Exit(False);
@@ -1351,81 +1413,130 @@ var
         Exit(False);
     end;
 
-    clickAt := SRL.RandomPoint(Self.GetInteractMS(), MainScreen.NormalizeDistance(10));
-    Mouse.Move(clickAt);
-    Wait(40, 80);
-    seedUp := MainScreen.GetUpText();
-
-    upDeadline := GetTickCount() + 1000;
-    while GetTickCount() < upDeadline do
+    for aimAttempt := 1 to 10 do
     begin
-      if Self.EmptyUpText in seedUp then
-        Break;
+      if Inventory.GetSelectedSlot() = -1 then
+        if not Inventory.SetSelectedItem(Self.Seed) then
+          Exit(False);
 
-      useTarget := BASHFarmUpTextUseTarget(seedUp);
-      needsHarvest :=
-        (Self.HarvestUpText in seedUp) or
-        ('plant' in LowerCase(seedUp)) or
-        ('ick' in seedUp) or
-        ('arves' in seedUp) or
-        BASHFarmUpTextHasFarmProduce(seedUp) or
-        (Length(Trim(useTarget)) >= 3);
-      if needsHarvest then
-        Break;
+      if aimAttempt <= 3 then
+        jitter := MainScreen.NormalizeDistance(4)
+      else if aimAttempt <= 6 then
+        jitter := MainScreen.NormalizeDistance(8)
+      else
+        jitter := MainScreen.NormalizeDistance(12);
 
-      Wait(50, 80);
-      seedUp := MainScreen.GetUpText();
-    end;
+      clickAt := SRL.RandomPoint(Self.GetInteractMS(), jitter);
+      Mouse.Move(clickAt);
+      moveAt := GetTickCount();
 
-    if not (Self.EmptyUpText in seedUp) then
-    begin
-      WriteLn('[BASHFarm] Plant: seed uptext not empty patch at ', Self.Data.Name,
-              ' (got="', seedUp, '", want "', Self.EmptyUpText, '")');
-      useTarget := BASHFarmUpTextUseTarget(seedUp);
-      needsHarvest :=
-        (Self.HarvestUpText in seedUp) or
-        ('plant' in LowerCase(seedUp)) or
-        ('ick' in seedUp) or
-        ('arves' in seedUp) or
-        BASHFarmUpTextHasFarmProduce(seedUp) or
-        (Length(Trim(useTarget)) >= 3);
-      if needsHarvest then
+      seedUp := '';
+      useTarget := '';
+      ready := False;
+      grown := False;
+      upDeadline := moveAt + 1800;
+      while GetTickCount() < upDeadline do
       begin
+        seedUp := MainScreen.GetUpText();
+        useTarget := BASHFarmUpTextUseTarget(seedUp);
+        slashAt := Pos(' / ', useTarget);
+        if slashAt > 0 then
+          useTarget := Trim(Copy(useTarget, 1, slashAt - 1));
+
+        if ('->' in seedUp) or ('>' in seedUp) then
+          if Length(Trim(useTarget)) < 3 then
+          begin
+            Wait(40, 70);
+            Continue;
+          end;
+
+        ready := (emptyNeedle <> '') and (
+          (emptyNeedle in useTarget) or
+          (emptyNeedle in seedUp)
+        );
+        grown := (useTarget <> '') and
+                 (not ready) and
+                 (
+                   BASHFarmUpTextHasFarmProduce(useTarget) or
+                   (Self.HarvestUpText in useTarget) or
+                   ('arves' in useTarget) or
+                   (('ick' in useTarget) and ('pick' in LowerCase(useTarget)))
+                 );
+
+        if ready or grown then
+          Break;
+
+        Wait(40, 70);
+      end;
+
+      if ready then
+      begin
+        Mouse.Click(MOUSE_LEFT);
+
+        if not MainScreen.DidRedClick() then
+          Continue;
+
+        if Chat.HasContinue() then
+          Chat.ClickContinue(True);
+
+        tClick := GetTickCount();
+        deadline := tClick + 8000;
+        while GetTickCount() < deadline do
+        begin
+          if PlantFinished() then
+          begin
+            Result := True;
+            Exit;
+          end;
+
+          if (not compostPrepped) and
+             WillCompostAfterPlant() and
+             (not Self.UseFertileSoil) and
+             (GetTickCount() >= tClick + 350) then
+            compostPrepped := PrepBucketCompost();
+
+          Wait(35);
+        end;
+
+        WriteLn('[BASHFarm] Plant: click on "', Self.EmptyUpText,
+                '" did not plant at ', Self.Data.Name, ' - checking for weeds');
         Inventory.SetSelectedSlot(-1);
-        if useTarget <> '' then
-          WriteLn('[BASHFarm] Plant: seed aimed at crop/item at ', Self.Data.Name,
-                  ' ("', useTarget, '") - needs harvest');
-        Self.Harvested := False;
+        if Self.Hover() then
+        begin
+          lowUp := MainScreen.GetUpText();
+          if 'Rake' in lowUp then
+          begin
+            WriteLn('[BASHFarm] Plant: weeds present at ', Self.Data.Name, ' - raking then retry');
+            if Self.ClearWeeds(False) then
+            begin
+              if not Inventory.SetSelectedItem(Self.Seed) then
+                Exit(False);
+              Continue;
+            end;
+          end;
+        end;
+
+        if not Inventory.SetSelectedItem(Self.Seed) then
+          Exit(False);
+        Continue;
       end;
-      Exit(False);
-    end;
 
-    Mouse.Click(MOUSE_LEFT);
-
-    if not MainScreen.DidRedClick() then
-      Exit(False);
-
-    if Chat.HasContinue() then
-      Chat.ClickContinue(True);
-
-    tClick := GetTickCount();
-    deadline := tClick + 8000;
-    while GetTickCount() < deadline do
-    begin
-      if PlantFinished() then
+      if grown then
       begin
-        Result := True;
-        Break;
+        WriteLn('[BASHFarm] Plant: seed aimed at crop at ', Self.Data.Name,
+                ' (Use -> "', useTarget, '") - needs harvest');
+        Inventory.SetSelectedSlot(-1);
+        Self.Harvested := False;
+        Exit(False);
       end;
 
-      if (not compostPrepped) and
-         WillCompostAfterPlant() and
-         (not Self.UseFertileSoil) and
-         (GetTickCount() >= tClick + 350) then
-        compostPrepped := PrepBucketCompost();
-
-      Wait(35);
+      if aimAttempt = 1 then
+        WriteLn('[BASHFarm] Plant: try again at ', Self.Data.Name,
+                ' (got="', seedUp, '", want Use -> "', Self.EmptyUpText, '")');
     end;
+
+    WriteLn('[BASHFarm] Plant: could not get Use -> "', Self.EmptyUpText, '" at ',
+            Self.Data.Name, ' (last="', seedUp, '")');
   end;
 
   function MarkPlantedAndCompost(): Boolean;
@@ -1507,9 +1618,10 @@ begin
       Exit(False);
     end;
 
-    Inventory.SetSelectedSlot(-1);
     WriteLn('[BASHFarm] Plant attempt ', attempt, ' failed at ', Self.Data.Name,
             ' - checking Rake/harvest then rotating camera');
+
+    Inventory.SetSelectedSlot(-1);
 
     if not Self.Hover() then
     begin
@@ -1631,7 +1743,7 @@ begin
     XPBar.EarnedXP();
     clicked := False;
 
-    Wait(Random(1200, 1600));
+    Wait(Random(1600, 2000));
 
     for 1 to 4 do
     begin
@@ -2008,9 +2120,14 @@ end;
 const
   BASH_ATFARM_LEP_DIST = 40;
   BASH_ATFARM_PATCH_DIST = 48;
+  BASH_SKIP_WALK_PATCH_DIST = 24;
 
 function TBASHFarmPatch.AtFarm(): Boolean;
 begin
+  if (Length(Self.Data.StandTiles) > 0) and
+     Map.Walker.AnyInRange(Self.Data.StandTiles, 6) then
+    Exit(True);
+
   Result := Map.Walker.InRange(Self.Data.LeprechaunCoords, BASH_ATFARM_LEP_DIST) or
             Map.Walker.InRange(Self.Data.Coords, BASH_ATFARM_PATCH_DIST);
 end;
@@ -2043,9 +2160,10 @@ end;
 function TBASHFarmPatch.WalkNearPatch(untilDist: Int32 = 8): Boolean;
 var
   me, dest: TPoint;
-  attempt, maxAttempts: Int32;
+  attempt, maxAttempts, i, bestIdx: Int32;
   targets: TPointArray;
   stopDist: Int32;
+  bestDist, dist: Double;
 
   function TryWebWalk(target: TPoint; stopAt: Int32): Boolean;
   begin
@@ -2059,7 +2177,41 @@ var
   end;
 begin
   me := Map.Position();
-  if Map.Walker.InRange(Self.Data.Coords, untilDist + 6) then
+
+  if Length(Self.Data.StandTiles) > 0 then
+  begin
+    if Map.Walker.AnyInRange(Self.Data.StandTiles, 4) then
+      Exit(True);
+
+    bestIdx := 0;
+    bestDist := me.DistanceTo(Self.Data.StandTiles[0]);
+    for i := 1 to High(Self.Data.StandTiles) do
+    begin
+      dist := me.DistanceTo(Self.Data.StandTiles[i]);
+      if dist < bestDist then
+      begin
+        bestDist := dist;
+        bestIdx := i;
+      end;
+    end;
+    dest := Self.Data.StandTiles[bestIdx];
+
+    WriteLn('[BASHFarm] Walking to stand pad at ', Self.Data.Name, ' -> ', dest);
+    if not TryWebWalk(dest, 3) then
+    begin
+      WriteLn('[BASHFarm] Stand pad WebWalk failed at ', Self.Data.Name,
+              ' (pos=', Map.Position(), ')');
+      Exit(Map.Walker.AnyInRange(Self.Data.StandTiles, 6));
+    end;
+
+    Result := Map.Walker.AnyInRange(Self.Data.StandTiles, 4);
+    if not Result then
+      WriteLn('[BASHFarm] Not on stand pad after walk at ', Self.Data.Name,
+              ' (pos=', Map.Position(), ')');
+    Exit;
+  end;
+
+  if Map.Walker.InRange(Self.Data.Coords, Max(untilDist + 6, BASH_SKIP_WALK_PATCH_DIST)) then
     Exit(True);
 
   if me.DistanceTo(Self.Data.Coords) > 600 then
@@ -3001,10 +3153,7 @@ begin
   end;
 
   if Length(slots) < 1 then
-  begin
-    WriteLn('[BASHFarm] NoteItems: no noteable produce in invent');
     Exit;
-  end;
 
   if not Self.AtFarm() then
   begin

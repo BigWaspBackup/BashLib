@@ -1480,7 +1480,7 @@ procedure TScriptForm.POHBuilderClientOnShow(sender: TObject);
 var
   imgbox: TSimbaImageBox;
 begin
-  imgbox := TTabSheet(sender).GetChild('poh_builder');
+  imgbox := TWinControl(sender).GetChild('poh_builder');
   if imgbox <> nil then
   begin
     imgbox.BackgroundChanged();
@@ -1505,7 +1505,15 @@ begin
     House.Setup();
 end;
 
-function TScriptForm.CreateHouseBuilder(): TTabSheet;
+(*
+## TScriptForm.CreateHouseBuilder
+```pascal
+procedure TScriptForm.CreateHouseBuilder(owner: TWinControl);
+function TScriptForm.CreateHouseBuilder(): TTabSheet; overload;
+```
+Builds the POH layout editor into `owner`, or as a dedicated top-level tab.
+*)
+procedure TScriptForm.CreateHouseBuilder(owner: TWinControl);
 var
   panel: TPanel;
   imgbox: TSimbaImageBox;
@@ -1514,10 +1522,7 @@ var
   caption: TLabel;
   readHouse: TButton;
 begin
-  Self.AddTab('House Builder');
-  Result := Self.Tabs[High(Self.Tabs)];
-
-  panel.Create(Result);
+  panel.Create(owner);
   panel.setAlign(TAlign.alLeft);
   panel.setBevelWidth(0);
   panel.setOnPaint(@Self.POHBuilderLeftOnShow);
@@ -1559,7 +1564,7 @@ begin
   panel.setCaption('');
   panel.setBevelWidth(0);
 
-  panel.Create(Result);
+  panel.Create(owner);
   panel.setAlign(TAlign.alClient);
   panel.setBevelWidth(0);
 
@@ -1583,5 +1588,12 @@ begin
 
   room.SetItemIndex(Ord(House.Loader.ReadRoom(House.Loader.Selected.Matrix).Room));
   Self.RoomUpdate(room.ComboBox);
+end;
+
+function TScriptForm.CreateHouseBuilder(): TTabSheet; overload;
+begin
+  Self.AddTab('House Builder');
+  Result := Self.Tabs[High(Self.Tabs)];
+  Self.CreateHouseBuilder(Result);
 end;
 

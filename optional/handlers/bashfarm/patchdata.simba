@@ -554,10 +554,17 @@ begin
     CTS2(0, 0, 0, 0),
     _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
   ];
-  // Accessible tiles only
+
   BASHFarmPatchData[EBASHFarmPatch.GUILD_ALLOT_N].Outline := [
     [970, 35486], [970, 35490], [970, 35494], [970, 35498],
     [970, 35502], [974, 35502], [978, 35502], [982, 35502]
+  ];
+
+  BASHFarmPatchData[EBASHFarmPatch.GUILD_ALLOT_N].StandTiles := [
+    [948, 35506], [952, 35506], [956, 35506], [960, 35506], [964, 35506], [968, 35506],
+    [948, 35510], [952, 35510], [956, 35510], [960, 35510], [964, 35510], [968, 35510],
+    [948, 35514], [952, 35514], [956, 35514], [960, 35514], [964, 35514], [968, 35514],
+    [948, 35518], [952, 35518], [956, 35518], [960, 35518], [964, 35518], [968, 35518]
   ];
 
   BASHFarmPatchData[EBASHFarmPatch.GUILD_ALLOT_S] := [
@@ -573,7 +580,7 @@ begin
     CTS2(0, 0, 0, 0),
     _BASHChunks([Chunk(Box(18, 59, 21, 57), 0)])
   ];
-  // Accessible tiles only
+
   BASHFarmPatchData[EBASHFarmPatch.GUILD_ALLOT_S].Outline := [
     [970, 35522], [974, 35522], [978, 35522], [982, 35522],
     [970, 35526], [970, 35530]
