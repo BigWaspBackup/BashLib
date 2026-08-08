@@ -1,3 +1,12 @@
+## [8.4.5](https://github.com/BigWaspBackup/BashLib/compare/v8.4.4...v8.4.5) (2026-08-08)
+
+
+### Bug Fixes
+
+* Spam clicking some patches ([85621a2](https://github.com/BigWaspBackup/BashLib/commit/85621a2251b992bf1ce2d67ad9bb281b0a1e0065))
+
+
+
 ## [8.4.4](https://github.com/BigWaspBackup/BashLib/compare/v8.4.3...v8.4.4) (2026-08-08)
 
 
@@ -31,20 +40,6 @@
 ### Bug Fixes
 
 * Added fairy ring attempts, fixed skipping of farming guild to now correctly skip, failsafe for getting stuck walking to leps, activity timer built into farm runs to prevent endless loops/getting stuck farming. ([a67f92e](https://github.com/BigWaspBackup/BashLib/commit/a67f92e821d2b0e2a5ca154bcc9a85eb7660cb7f))
-
-
-
-# [8.4.0](https://github.com/BigWaspBackup/BashLib/compare/v8.3.8...v8.4.0) (2026-08-05)
-
-
-### Bug Fixes
-
-* more gear handler tweaks ([25d70ec](https://github.com/BigWaspBackup/BashLib/commit/25d70ecb0581e8908553ebaf82c4ac7a21dd2786))
-
-
-### Features
-
-* add new map for CamTorum, inital gear handler rework ([ee63ab2](https://github.com/BigWaspBackup/BashLib/commit/ee63ab2bd2b886dc7dbd07ca7cc94525d1bffe14))
 
 
 
