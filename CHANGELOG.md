@@ -1,3 +1,12 @@
+## [8.4.4](https://github.com/BigWaspBackup/BashLib/compare/v8.4.3...v8.4.4) (2026-08-08)
+
+
+### Bug Fixes
+
+* Fixed Staff not equipping when using farming guild and fairy rings, Improved Farming Guild allotments, Composting should improvements for all patches, Worlds list should now save automatically when not using world generator, fixed some minor walker crashes ([9f75416](https://github.com/BigWaspBackup/BashLib/commit/9f754161799c845e38d7515cbe6e69895065af90))
+
+
+
 ## [8.4.3](https://github.com/BigWaspBackup/BashLib/compare/v8.4.2...v8.4.3) (2026-08-07)
 
 
@@ -36,15 +45,6 @@
 ### Features
 
 * add new map for CamTorum, inital gear handler rework ([ee63ab2](https://github.com/BigWaspBackup/BashLib/commit/ee63ab2bd2b886dc7dbd07ca7cc94525d1bffe14))
-
-
-
-## [8.3.8](https://github.com/BigWaspBackup/BashLib/compare/v8.3.7...v8.3.8) (2026-08-05)
-
-
-### Bug Fixes
-
-* AIChatbot improvements; fixed allotments not noting all items in farm runs ([d036677](https://github.com/BigWaspBackup/BashLib/commit/d03667714a1e67db45051b80889299030e98efed))
 
 
 
