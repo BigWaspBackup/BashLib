@@ -1,3 +1,12 @@
+## [8.4.3](https://github.com/BigWaspBackup/BashLib/compare/v8.4.2...v8.4.3) (2026-08-07)
+
+
+### Bug Fixes
+
+* You guessed it, more farm run fixes ([2d6b32b](https://github.com/BigWaspBackup/BashLib/commit/2d6b32b626465af22eb3d4ec09541849a04d7877))
+
+
+
 ## [8.4.2](https://github.com/BigWaspBackup/BashLib/compare/v8.4.1...v8.4.2) (2026-08-07)
 
 
@@ -36,15 +45,6 @@
 ### Bug Fixes
 
 * AIChatbot improvements; fixed allotments not noting all items in farm runs ([d036677](https://github.com/BigWaspBackup/BashLib/commit/d03667714a1e67db45051b80889299030e98efed))
-
-
-
-## [8.3.7](https://github.com/BigWaspBackup/BashLib/compare/v8.3.6...v8.3.7) (2026-08-04)
-
-
-### Bug Fixes
-
-* BASHFarm Speed improvements for planting and harvesting, more fixes for mory patch, more antiban randomness, speed up composting after planting. ([8c47040](https://github.com/BigWaspBackup/BashLib/commit/8c47040498d2362f984d484decc9e159fdaeb9e5))
 
 
 
