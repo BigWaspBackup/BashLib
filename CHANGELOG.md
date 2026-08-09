@@ -1,3 +1,12 @@
+## [8.4.7](https://github.com/BigWaspBackup/BashLib/compare/v8.4.6...v8.4.7) (2026-08-09)
+
+
+### Bug Fixes
+
+* Farming guild random improvements. ([9db6d04](https://github.com/BigWaspBackup/BashLib/commit/9db6d0466578e22e5169f5751e8ef4bb3c89d42e))
+
+
+
 ## [8.4.6](https://github.com/BigWaspBackup/BashLib/compare/v8.4.5...v8.4.6) (2026-08-09)
 
 
@@ -33,15 +42,6 @@
 ### Bug Fixes
 
 * You guessed it, more farm run fixes ([2d6b32b](https://github.com/BigWaspBackup/BashLib/commit/2d6b32b626465af22eb3d4ec09541849a04d7877))
-
-
-
-## [8.4.2](https://github.com/BigWaspBackup/BashLib/compare/v8.4.1...v8.4.2) (2026-08-07)
-
-
-### Bug Fixes
-
-* More farming improvements ([482a5cb](https://github.com/BigWaspBackup/BashLib/commit/482a5cb609e7584485f34668873e9c04e58aa0d8))
 
 
 
