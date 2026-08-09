@@ -1,7 +1,18 @@
+## [8.4.6](https://github.com/BigWaspBackup/BashLib/compare/v8.4.5...v8.4.6) (2026-08-09)
+
+
+### Bug Fixes
+
+* Bump ([2157151](https://github.com/BigWaspBackup/BashLib/commit/2157151a9b2a52c5e8e16fa5f28cb70665968319))
+* transport now uses submenus for teleport instead of GUI, Fixes for farming guild allotments ([170f940](https://github.com/BigWaspBackup/BashLib/commit/170f94032d951dfec7623ca26e32fa4bf247a358))
+* Use Simba Win64 in CI to avoid optional.simba OOM ([ba8f81a](https://github.com/BigWaspBackup/BashLib/commit/ba8f81a0685cdb2ffcee7b49ca65831b1ef5d8a0))
+
+
+
 ## [8.4.5](https://github.com/BigWaspBackup/BashLib/compare/v8.4.4...v8.4.5) (2026-08-08)
 
 
-### Bug Fixess
+### Bug Fixes
 
 * Spam clicking some patches ([85621a2](https://github.com/BigWaspBackup/BashLib/commit/85621a2251b992bf1ce2d67ad9bb281b0a1e0065))
 
@@ -31,15 +42,6 @@
 ### Bug Fixes
 
 * More farming improvements ([482a5cb](https://github.com/BigWaspBackup/BashLib/commit/482a5cb609e7584485f34668873e9c04e58aa0d8))
-
-
-
-## [8.4.1](https://github.com/BigWaspBackup/BashLib/compare/v8.4.0...v8.4.1) (2026-08-07)
-
-
-### Bug Fixes
-
-* Added fairy ring attempts, fixed skipping of farming guild to now correctly skip, failsafe for getting stuck walking to leps, activity timer built into farm runs to prevent endless loops/getting stuck farming. ([a67f92e](https://github.com/BigWaspBackup/BashLib/commit/a67f92e821d2b0e2a5ca154bcc9a85eb7660cb7f))
 
 
 
