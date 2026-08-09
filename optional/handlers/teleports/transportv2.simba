@@ -56,42 +56,31 @@ begin
     Exit(True);
 end;
 
-// when location selection is in middle of screen
-function TUniversalTransportV2.handleMiddleScreenJewellery(constref teleportLocation: TTeleportLocation): Boolean;
+// when location selection is Rub choose-option submenu (e.g. skills necklace)
+function TUniversalTransportV2.handleSubMenuJewellery(constref teleportLocation: TTeleportLocation): Boolean;
 var
-  textColor: TColor := 337970;
-  textColorTPA: TPointArray;
-  clusteredText: T2DPointArray;
-  foundTextBox: TBox;
-  textBox: TBox;
-  findInterfaceAttempts: Int32;
+  opt: TRSChooseOption_Option;
 begin
   if not (teleportLocation.teleportType = ETeleportType.JEWELLERY) then
     raise 'Requires teleport type jewellery. Got ' + ToStr(teleportLocation.teleportType);
 
-  repeat
-    SRL.FindColors(textColorTPA, textColor, MainScreen.Bounds);
-    clusteredText := textColorTPA.Cluster(6, 1);
-    if not (clusteredText.Len() > 8) then
-      Wait(SRL.TruncatedGauss(400, 600));
+  if not WaitUntil(ChooseOption.IsOpen(), 50, 2000) then
+    Exit(False);
 
-    findInterfaceAttempts += 1;
-    // there are like 12 clusters, so just check if there are more than 8 for false positives
-  until (clusteredText.Len() > 8) or (findInterfaceAttempts > 4);
-  for textBox in clusteredText.ToTBA() do
+  Self.DebugLn('Opening Rub submenu, selecting ', teleportLocation.destination);
+  if not ChooseOption.Hover('Rub') then
+    Exit(False);
+
+  if not WaitUntil(ChooseOption.IsSubOpen(), 50, 2000) then
+    Exit(False);
+
+  if ChooseOption.HasSubOption([teleportLocation.destination], opt, False, False) then
   begin
-    textBox := textBox.Expand(5);
-    OCR.LocateText(textBox, teleportLocation.destination, RS_FONT_PLAIN_12, TOCRColorFilter.Create([textColor]), foundTextBox);
-    if foundTextBox.Area > 1 then
-      begin
-        Mouse.Move(foundTextBox.Center());
-        Self.DebugLn(MainScreen.GetUpText());
-        Mouse.Click(MOUSE_LEFT);
-        Exit(True);
-        //end;
-      end;
+    ChooseOption.SelectSubOption(opt);
+    Exit(True);
   end;
-  raise 'Unable to find ' + teleportLocation.destination + ' in menu for ' + ToStr(teleportLocation.item);
+
+  raise 'Unable to find ' + teleportLocation.destination + ' in submenu for ' + ToStr(teleportLocation.item);
 end;
 
 function TUniversalTransportV2.handleJewelleryTeleport(constref teleportLocation: TTeleportLocation; TransportMap : TRSMap = Map): Boolean;
@@ -100,20 +89,28 @@ var
   chargedJewellery: TRSItem;
   chargedVariants: TRSItemArray := getChargedJewelleryNames(teleportLocation.item);
   didTeleport: Boolean;
-  middleScreenJewellery: TStringArray := ['skills necklace'];
+  subMenuJewellery: TStringArray := ['skills necklace'];
 begin
   for chargedJewellery in chargedVariants do
   begin
     Self.DebugLn("Searching for " + chargedJewellery + " in inventory");
     if Inventory.ContainsItem(chargedJewellery) then
     begin
-      Self.DebugLn("Searching for " + chargedJewellery + " Rub");
-      WaitUntil(Inventory.ClickItem(chargedJewellery, "Rub"), 200, 10000);
-
-      if middleScreenJewellery.Contains(ToStr(teleportLocation.item).Lower()) then
-        didTeleport := self.handleMiddleScreenJewellery(teleportLocation)
+      if subMenuJewellery.Contains(ToStr(teleportLocation.item).Lower()) then
+      begin
+        Self.DebugLn("Right-click Rub submenu on " + chargedJewellery);
+        if Inventory.MouseItem(chargedJewellery) then
+        begin
+          Mouse.Click(MOUSE_RIGHT);
+          didTeleport := Self.handleSubMenuJewellery(teleportLocation);
+        end;
+      end
       else
-        didTeleport := self.handleChatJewellery(teleportLocation);
+      begin
+        Self.DebugLn("Searching for " + chargedJewellery + " Rub");
+        WaitUntil(Inventory.ClickItem(chargedJewellery, "Rub"), 200, 10000);
+        didTeleport := Self.handleChatJewellery(teleportLocation);
+      end;
 
       if didTeleport then
         Exit(WaitUntil(not TransportMap.position.inrange(startPosition, 10), 200, 10000));

@@ -384,11 +384,12 @@ begin
         Result += [x, y];
 end;
 
-function TBASHFarmPatch.GetInteractTile(me: TPoint): TPoint; overload;
+function TBASHFarmPatch.GetInteractTile(me: TPoint; preferRank: Int32 = 0): TPoint; overload;
 var
   tiles: TPointArray;
   nearest, target, interior, toward, p: TPoint;
   d, lateral, score, bestScore, tx, ty, tlen, dx, dy, len, lipDist, pastLip: Double;
+  rank: Int32;
 begin
   if Length(Self.Data.Outline) < 3 then
     Exit(Self.Data.Coords);
@@ -396,6 +397,17 @@ begin
   tiles := Self.GetOutlineMapTiles();
   if Length(tiles) = 0 then
     Exit(Self.Data.Coords);
+
+  if Self.UsesTileList() then
+  begin
+    tiles := tiles.SortFrom(me);
+    rank := preferRank;
+    if rank < 0 then
+      rank := 0;
+    if rank > High(tiles) then
+      rank := High(tiles);
+    Exit(tiles[rank]);
+  end;
 
   toward := Self.Data.Coords;
   tx := toward.X - me.X;
@@ -420,9 +432,6 @@ begin
       nearest := p;
     end;
   end;
-
-  if Self.UsesTileList() then
-    Exit(nearest);
 
   interior := tiles.Mean;
   dx := interior.X - nearest.X;
@@ -449,63 +458,55 @@ begin
   Result := Self.GetInteractTile(Map.Position());
 end;
 
-function TBASHFarmPatch.GetInteractMS(): TPoint;
+function TBASHFarmPatch.GetInteractMS(pullTowardPlayer: Int32 = 0; tileRank: Int32 = 0): TPoint;
 var
-  interior: TPoint;
+  me, playerMS, tile: TPoint;
   dx, dy, len: Double;
-  nudge: Int32;
+  pull: Int32;
 begin
-  if Self.SearchBox.Area > 0 then
+  me := Map.Position();
+
+  if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
   begin
-    Result := Self.SearchBox.Center();
+    if Length(Self.Data.Outline) >= 3 then
+      tile := Self.GetInteractTile(me, tileRank)
+    else
+      tile := Self.Data.Coords;
 
-    if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
+    Result := Map.GetTileMS(tile).Mean;
+    if not (Result in MainScreen.Bounds) then
     begin
-      if Self.Id in [EBASHFarmPatch.GUILD_ALLOT_N, EBASHFarmPatch.GUILD_ALLOT_S] then
-        nudge := 3
-      else
-        nudge := 5;
+      if Self.SearchBox.Area > 0 then
+        Result := Self.SearchBox.Center()
+      else if Length(Self.TPA) > 0 then
+        Result := Self.TPA.Mean;
+    end;
 
-      interior := Map.GetTileMS(Self.Data.Coords).Mean;
-      dx := interior.X - Result.X;
-      dy := interior.Y - Result.Y;
+    pull := pullTowardPlayer;
+    if pull > 0 then
+    begin
+      playerMS := MainScreen.GetPlayerBox().Center();
+      dx := playerMS.X - Result.X;
+      dy := playerMS.Y - Result.Y;
       len := Sqrt(dx * dx + dy * dy);
       if len > 0.1 then
       begin
-        Result.X := Round(Result.X + (dx / len) * nudge);
-        Result.Y := Round(Result.Y + (dy / len) * nudge);
-      end
-      else if Length(Self.TPA) > 0 then
-      begin
-        interior := Self.TPA.Mean;
-        dx := interior.X - Result.X;
-        dy := interior.Y - Result.Y;
-        len := Sqrt(dx * dx + dy * dy);
-        if len > 0.1 then
-        begin
-          Result.X := Round(Result.X + (dx / len) * nudge);
-          Result.Y := Round(Result.Y + (dy / len) * nudge);
-        end;
+        Result.X := Round(Result.X + (dx / len) * pull);
+        Result.Y := Round(Result.Y + (dy / len) * pull);
       end;
     end;
     Exit;
   end;
 
+  if Self.SearchBox.Area > 0 then
+  begin
+    Result := Self.SearchBox.Center();
+    Exit;
+  end;
+
   if Length(Self.Data.Outline) >= 3 then
   begin
-    Result := Map.GetTileMS(Self.GetInteractTile()).Mean;
-    if Self.Id in [EBASHFarmPatch.GUILD_ALLOT_N, EBASHFarmPatch.GUILD_ALLOT_S] then
-    begin
-      interior := Map.GetTileMS(Self.Data.Coords).Mean;
-      dx := interior.X - Result.X;
-      dy := interior.Y - Result.Y;
-      len := Sqrt(dx * dx + dy * dy);
-      if len > 0.1 then
-      begin
-        Result.X := Round(Result.X + (dx / len) * 3);
-        Result.Y := Round(Result.Y + (dy / len) * 3);
-      end;
-    end;
+    Result := Map.GetTileMS(Self.GetInteractTile(me, tileRank)).Mean;
     Exit;
   end;
 
@@ -1386,10 +1387,11 @@ var
   function TryPlantSeed(): Boolean;
   var
     seedUp, useTarget, lowUp, emptyNeedle: String;
-    aimAttempt, slashAt: Int32;
+    aimAttempt, slashAt, tileRank, pullPx: Int32;
     upDeadline, moveAt: UInt64;
     jitter: Int32;
     ready, grown: Boolean;
+    aimTile: TPoint;
   begin
     Result := False;
     compostPrepped := False;
@@ -1419,14 +1421,58 @@ var
         if not Inventory.SetSelectedItem(Self.Seed) then
           Exit(False);
 
-      if aimAttempt <= 3 then
-        jitter := MainScreen.NormalizeDistance(4)
-      else if aimAttempt <= 6 then
-        jitter := MainScreen.NormalizeDistance(8)
-      else
-        jitter := MainScreen.NormalizeDistance(12);
+      // Allotments: harvest-like front edge first, then pull closer to the
+      // player, then step to the next near-edge outline tile. Never widen
+      // jitter into the unreachable back row.
+      tileRank := 0;
+      pullPx := 0;
+      if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
+      begin
+        if aimAttempt <= 2 then
+        begin
+          tileRank := 0;
+          pullPx := 0;
+          jitter := MainScreen.NormalizeDistance(3);
+        end
+        else if aimAttempt <= 5 then
+        begin
+          tileRank := 0;
+          pullPx := MainScreen.NormalizeDistance(3 + (aimAttempt - 2) * 2);
+          jitter := MainScreen.NormalizeDistance(2);
+        end
+        else
+        begin
+          tileRank := aimAttempt - 5;
+          pullPx := MainScreen.NormalizeDistance(2);
+          jitter := MainScreen.NormalizeDistance(3);
+        end;
 
-      clickAt := SRL.RandomPoint(Self.GetInteractMS(), jitter);
+        aimTile := Self.GetInteractTile(Map.Position(), tileRank);
+        Self.TPA := [Map.GetTileMS(Map.Position(), aimTile).Mean];
+        if Length(Self.TPA) > 0 then
+        begin
+          clickAt := Self.TPA[0];
+          Self.SearchBox.X1 := clickAt.X - MainScreen.NormalizeDistance(12);
+          Self.SearchBox.Y1 := clickAt.Y - MainScreen.NormalizeDistance(12);
+          Self.SearchBox.X2 := clickAt.X + MainScreen.NormalizeDistance(12);
+          Self.SearchBox.Y2 := clickAt.Y + MainScreen.NormalizeDistance(12);
+          Self.SearchBox.LimitTo(MainScreen.Bounds);
+        end;
+
+        clickAt := SRL.RandomPoint(Self.GetInteractMS(pullPx, tileRank), jitter);
+      end
+      else
+      begin
+        if aimAttempt <= 3 then
+          jitter := MainScreen.NormalizeDistance(4)
+        else if aimAttempt <= 6 then
+          jitter := MainScreen.NormalizeDistance(8)
+        else
+          jitter := MainScreen.NormalizeDistance(12);
+
+        clickAt := SRL.RandomPoint(Self.GetInteractMS(), jitter);
+      end;
+
       Mouse.Move(clickAt);
       moveAt := GetTickCount();
 
@@ -1530,7 +1576,19 @@ var
         Exit(False);
       end;
 
-      if aimAttempt = 1 then
+      if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
+      begin
+        if aimAttempt = 3 then
+          WriteLn('[BASHFarm] Plant: retry closer to player at ', Self.Data.Name,
+                  ' (got="', seedUp, '", want Use -> "', Self.EmptyUpText, '")')
+        else if aimAttempt = 6 then
+          WriteLn('[BASHFarm] Plant: retry new front-edge spot at ', Self.Data.Name,
+                  ' (got="', seedUp, '", want Use -> "', Self.EmptyUpText, '")')
+        else if aimAttempt = 1 then
+          WriteLn('[BASHFarm] Plant: try again at ', Self.Data.Name,
+                  ' (got="', seedUp, '", want Use -> "', Self.EmptyUpText, '")');
+      end
+      else if aimAttempt = 1 then
         WriteLn('[BASHFarm] Plant: try again at ', Self.Data.Name,
                 ' (got="', seedUp, '", want Use -> "', Self.EmptyUpText, '")');
     end;
