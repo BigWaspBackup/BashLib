@@ -1,7 +1,7 @@
 ## [8.4.5](https://github.com/BigWaspBackup/BashLib/compare/v8.4.4...v8.4.5) (2026-08-08)
 
 
-### Bug Fixes
+### Bug Fixess
 
 * Spam clicking some patches ([85621a2](https://github.com/BigWaspBackup/BashLib/commit/85621a2251b992bf1ce2d67ad9bb281b0a1e0065))
 
