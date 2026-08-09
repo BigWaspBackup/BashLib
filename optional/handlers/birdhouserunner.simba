@@ -66,7 +66,7 @@ var
   BHIncludeGUISeed : TRSItem := 'Potato seed';
   BHIncludeGUIRunIntervalMinutes : Int32 := 51;
   BHIncludeGUIUseBestLog : Boolean := false;
-  BHIncludeGUICraftWhileNav : Boolean := false; // unused; kept for script INI compatibility
+  BHIncludeGUICraftWhileNav : Boolean := false; // script INI / GUI default for NeedClockworks
 
 function TMushroom.GetMushButton() : ERSMushTreeButton;
 begin
@@ -1384,6 +1384,8 @@ begin
     SetChecked(BirdHouseRunner.AlwaysUseBestLog);
     CheckBox.setOnChange(@Self._OnCheckBoxChanged);
   end;
+
+  BirdHouseRunner.NeedClockworks := BHIncludeGUICraftWhileNav;
 
   with intervalLabel do
   begin

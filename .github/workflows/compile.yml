@@ -5,7 +5,7 @@ on:
       - master
 
 env:
-  simba-download: https://github.com/Villavu/Simba/releases/download/simba1400-release/Simba-Win32.exe
+  simba-download: https://github.com/Villavu/Simba/releases/download/simba1400-release/Simba-Win64.exe
   srl-download: https://github.com/BigWaspBackup/SRL-B.git
 
 jobs:
