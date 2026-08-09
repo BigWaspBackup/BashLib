@@ -1,3 +1,12 @@
+## [8.4.8](https://github.com/BigWaspBackup/BashLib/compare/v8.4.7...v8.4.8) (2026-08-09)
+
+
+### Bug Fixes
+
+* Noting failsafes ([2c61638](https://github.com/BigWaspBackup/BashLib/commit/2c616386fb888631df3f922d70425b1797946dba))
+
+
+
 ## [8.4.7](https://github.com/BigWaspBackup/BashLib/compare/v8.4.6...v8.4.7) (2026-08-09)
 
 
@@ -33,15 +42,6 @@
 ### Bug Fixes
 
 * Fixed Staff not equipping when using farming guild and fairy rings, Improved Farming Guild allotments, Composting should improvements for all patches, Worlds list should now save automatically when not using world generator, fixed some minor walker crashes ([9f75416](https://github.com/BigWaspBackup/BashLib/commit/9f754161799c845e38d7515cbe6e69895065af90))
-
-
-
-## [8.4.3](https://github.com/BigWaspBackup/BashLib/compare/v8.4.2...v8.4.3) (2026-08-07)
-
-
-### Bug Fixes
-
-* You guessed it, more farm run fixes ([2d6b32b](https://github.com/BigWaspBackup/BashLib/commit/2d6b32b626465af22eb3d4ec09541849a04d7877))
 
 
 
