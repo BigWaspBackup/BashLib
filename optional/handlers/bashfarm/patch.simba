@@ -3194,23 +3194,20 @@ end;
 
 procedure TBASHFarmPatch.NoteItems();
 var
-  slot, i: Int32;
+  slot, i, attempt: Int32;
   item: TRSItem;
   items: TRSItemArray;
-  slots: TIntegerArray;
   tpa: TPointArray;
+  noted: Boolean;
 begin
   for i := 0 to High(BASH_FARM_LEPRECHAUN_ITEMS) do
   begin
     item := BASH_FARM_LEPRECHAUN_ITEMS[i];
     if Inventory.FindItem(item, slot) then
-    begin
-      slots += slot;
       items += item;
-    end;
   end;
 
-  if Length(slots) < 1 then
+  if Length(items) < 1 then
     Exit;
 
   if not Self.AtFarm() then
@@ -3225,19 +3222,54 @@ begin
     Exit;
   end;
 
-  for i := 0 to High(slots) do
+  for i := 0 to High(items) do
   begin
-    RSInterface.Close();
-    Inventory.SetSelectedSlot(slots[i]);
-    Self.ClickLeprechaun();
+    noted := False;
 
-    if not MainScreen.DidRedClick() then
+    for attempt := 1 to 3 do
     begin
+      if not Inventory.FindItem(items[i], slot) then
+      begin
+        noted := True;
+        Break;
+      end;
+
+      RSInterface.Close();
+      Inventory.SetSelectedSlot(slot);
+
+      if not Self.ClickLeprechaun() then
+      begin
+        Inventory.SetSelectedSlot(-1);
+        WriteLn('[BASHFarm] NoteItems: lep click failed for ', items[i],
+                ' attempt ', attempt, '/3 at ', Self.Data.Name);
+        Wait(Random(120, 280));
+        Continue;
+      end;
+
+      if not MainScreen.DidRedClick() then
+      begin
+        Inventory.SetSelectedSlot(-1);
+        WriteLn('[BASHFarm] NoteItems: missed note click for ', items[i],
+                ' attempt ', attempt, '/3 at ', Self.Data.Name);
+        Wait(Random(120, 280));
+        Continue;
+      end;
+
+      if WaitUntil(Inventory.CountItem(items[i]) = 0, 35, 10000) then
+      begin
+        noted := True;
+        Break;
+      end;
+
       Inventory.SetSelectedSlot(-1);
-      Exit;
+      WriteLn('[BASHFarm] NoteItems: still holding ', items[i],
+              ' after note attempt ', attempt, '/3 at ', Self.Data.Name);
+      Wait(Random(150, 350));
     end;
 
-    WaitUntil(Inventory.CountItem(items[i]) = 0, 35, 10000);
+    if not noted then
+      WriteLn('[BASHFarm] NoteItems: failed to note ', items[i],
+              ' after 3 attempts at ', Self.Data.Name);
   end;
 
   Inventory.SetSelectedSlot(-1);
