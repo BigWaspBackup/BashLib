@@ -242,7 +242,6 @@ begin
 
   Self.Journal.Load();
   Self.Contract.Clear();
-  // ReadyTimer is armed by BuildFromConfig (RunNow vs delayed interval).
   Self.Initialized := True;
 end;
 
@@ -1584,14 +1583,6 @@ begin
   ];
 end;
 
-function BASHFarmSameLocation(constref a, b: TBASHFarmPatch): Boolean;
-begin
-  // Farming Guild has multiple leps (east / west / north) — group by lep tile,
-  // not the whole guild, so we use the nearby lep for that wing.
-  Result := (a.Data.LeprechaunCoords.X = b.Data.LeprechaunCoords.X) and
-            (a.Data.LeprechaunCoords.Y = b.Data.LeprechaunCoords.Y);
-end;
-
 function BASHFarmIsPhasmatys(id: EBASHFarmPatch): Boolean;
 begin
   Result := id in [
@@ -1605,6 +1596,19 @@ end;
 function BASHFarmIsAllotStyle(patchType: EBASHPatchType): Boolean;
 begin
   Result := patchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT];
+end;
+
+function BASHFarmLocationKey(constref patch: TBASHFarmPatch): String;
+begin
+  if BASHFarmIsGuildPatch(patch.Id) and BASHFarmIsAllotStyle(patch.Data.PatchType) then
+    Exit('guild-allot');
+
+  Result := ToStr(patch.Data.LeprechaunCoords.X) + ',' + ToStr(patch.Data.LeprechaunCoords.Y);
+end;
+
+function BASHFarmSameLocation(constref a, b: TBASHFarmPatch): Boolean;
+begin
+  Result := BASHFarmLocationKey(a) = BASHFarmLocationKey(b);
 end;
 
 procedure TBASHFarmRunner.ShufflePatchesByLocation();
@@ -1786,7 +1790,6 @@ begin
 
   if not patch.AtFarm() then
   begin
-    // Already inside the guild — walk to this wing's work area (don't re-teleport).
     if BASHFarmIsGuildPatch(patch.Id) and Map.Position().InBox(BASH_GUILD_MAP) then
       WriteLn('[BASHFarm] Already in Farming Guild - walking for ', patch.Data.Name)
     else if not Self.TeleportTo(patch.Travel) then
@@ -1795,7 +1798,6 @@ begin
       begin
         WriteLn('[BASHFarm] Farming Guild teleport failed - skipping all guild patches');
         Self.SkipAllGuildPatches('Teleport failed');
-        // Keep caller's patch copy in sync with the array update.
         patch.Skip := True;
       end
       else
@@ -2027,7 +2029,6 @@ begin
       if needCompost > 0 then
       begin
         patch := Self.Patches[i];
-        // Bottomless is withdrawn once
         if (patch.CompostItem = 'Bottomless compost bucket') and
            Inventory.ContainsItem(patch.CompostItem) then
           needCompost := 0;
