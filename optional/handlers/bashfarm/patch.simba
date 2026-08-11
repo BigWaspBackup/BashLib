@@ -664,48 +664,30 @@ begin
   Result := False;
 end;
 
-function TBASHFarmPatch.SoilPercent(): Double;
-begin
-  Result := -1;
-  if Self.SearchBox.Area = 0 then
-  begin
-    if not Self.Find() then
-      Exit;
-    if Self.SearchBox.Area = 0 then
-      Exit;
-  end;
-  Result := SRL.CountColor(Self.Data.SoilColor, Self.SearchBox) / Self.SearchBox.Area;
-end;
-
 function TBASHFarmPatch.IsEmpty(): Boolean;
 var
-  pct: Double;
   upText: String;
 begin
+  if not Self.Hover() then
+    Exit(False);
+
+  upText := MainScreen.GetUpText();
+
   if Self.Data.PatchType = EBASHPatchType.TREE then
   begin
-    if not Self.Hover() then
-      Exit(False);
-    upText := MainScreen.GetUpText();
     Result := Self.EmptyUpText in upText;
     if not ('Rake' in upText) then
-      Exit(Result);
+      Exit;
   end;
 
   if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
   begin
-    if not Self.Hover() then
-      Exit(False);
-    upText := MainScreen.GetUpText();
     Result := ('spect' in upText) and (Self.EmptyUpText in upText) and
               (not ('lear' in upText)) and (not ('Rake' in upText));
     Exit;
   end;
 
-  if not Self.Find() then
-    Exit(False);
-  pct := Self.SoilPercent();
-  Result := (pct >= 0) and (pct > 0.99);
+  Result := Self.EmptyUpText in upText;
 end;
 
 function TBASHFarmPatch.IsDiseased(): Boolean;
@@ -739,40 +721,103 @@ begin
   y := p.Y;
 end;
 
+function TBASHFarmPatch.HasPatchUpText(const upText: String): Boolean;
+begin
+  Result := False;
+  if upText = '' then
+    Exit;
+
+  if 'Rake' in upText then
+    Exit(True);
+  if 'ead' in upText then
+    Exit(True);
+  if 'seas' in upText then
+    Exit(True);
+  if 'eck-hea' in upText then
+    Exit(True);
+  if 'spect' in upText then
+    Exit(True);
+  if ('Chop' in upText) or ('lear' in upText) then
+    Exit(True);
+  if (Self.HarvestUpText <> '') and (Self.HarvestUpText in upText) then
+    Exit(True);
+  if (Self.EmptyUpText <> '') and (Self.EmptyUpText in upText) then
+    Exit(True);
+  if (Self.PlantedUpText <> '') and (Self.PlantedUpText in upText) then
+    Exit(True);
+  if BASHFarmUpTextHasFarmProduce(upText) then
+    Exit(True);
+end;
+
 function TBASHFarmPatch.Hover(aimAttempt: Int32 = 1): Boolean;
 var
-  attempt: Int32;
+  rotateTry, spotTry, spotIdx, jitter: Int32;
   p, interact: TPoint;
+  up: String;
+  deadline: UInt64;
 begin
   Mouse.OnMovingEx := nil;
+  Result := False;
 
-  for attempt := 1 to 4 do
+  if aimAttempt < 1 then
+    aimAttempt := 1;
+
+  for rotateTry := 1 to 3 do
   begin
-    if Self.Find() then
+    if not Self.Find() then
     begin
+      interact := Self.GetInteractTile(Map.Position(), Max(0, aimAttempt - 1));
+      Map.Walker.MakePointVisible(interact);
+      if rotateTry < 3 then
+        Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(35, 70) * (1 - 2 * (rotateTry mod 2)), 10);
+      Continue;
+    end;
+
+    for spotTry := 1 to 3 do
+    begin
+      spotIdx := aimAttempt + spotTry - 1;
+
       if Length(Self.Data.Outline) < 3 then
         Mouse.OnMovingEx := @Self._UpdateTarget;
 
       if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
-        Mouse.Move(Self.GetAllotmentAimClick(aimAttempt))
+        Mouse.Move(Self.GetAllotmentAimClick(Max(1, spotIdx)))
       else
       begin
-        p := Self.GetInteractMS();
-        if Length(Self.Data.Outline) >= 3 then
-          Mouse.Move(SRL.RandomPoint(p, MainScreen.NormalizeDistance(6)))
+        jitter := MainScreen.NormalizeDistance(6 + spotTry * 3);
+        if Self.SearchBox.Area > 0 then
+          p := SRL.RandomPoint(Self.SearchBox.Center(), jitter)
         else
-          Mouse.Move(SRL.RandomPoint(p, MainScreen.NormalizeDistance(25)));
+          p := SRL.RandomPoint(Self.GetInteractMS(0, spotTry - 1), jitter);
+        Mouse.Move(p);
       end;
 
       Mouse.OnMovingEx := nil;
-      Exit(True);
+
+      deadline := GetTickCount() + 750;
+      while GetTickCount() < deadline do
+      begin
+        up := MainScreen.GetUpText();
+        if Self.HasPatchUpText(up) then
+          Exit(True);
+        Wait(40, 70);
+      end;
+
+      if spotTry < 3 then
+        WriteLn('[BASHFarm] Hover miss at ', Self.Data.Name, ' ("', MainScreen.GetUpText(),
+                '") - trying another patch spot (', spotTry, '/3)');
     end;
 
-    interact := Self.GetInteractTile(Map.Position(), Max(0, aimAttempt - 1));
-    Map.Walker.MakePointVisible(interact);
-    Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(35, 70) * (1 - 2 * (attempt mod 2)), 10);
+    if rotateTry < 3 then
+    begin
+      WriteLn('[BASHFarm] Hover still missing ', Self.Data.Name, ' - rotating camera (', rotateTry, '/3)');
+      Minimap.SetCompassAngle(Minimap.GetCompassAngle() + Random(40, 85) * (1 - 2 * (rotateTry mod 2)), 10);
+      Wait(180, 320);
+    end;
   end;
 
+  WriteLn('[BASHFarm] Hover failed at ', Self.Data.Name, ' after re-aims/rotates ("',
+          MainScreen.GetUpText(), '")');
   Result := False;
 end;
 
@@ -847,7 +892,6 @@ label
   doInspect;
 var
   upText: String;
-  soilPct: Double;
 begin
   if Self.Complete then
     Exit(EBASHPatchState.COMPLETE);
@@ -890,13 +934,6 @@ begin
     Exit(EBASHPatchState.NOT_FOUND);
 
   upText := MainScreen.GetUpText();
-  for 1 to 6 do
-  begin
-    if (upText <> '') and (not ('Walk here' in upText)) then
-      Break;
-    Wait(45, 80);
-    upText := MainScreen.GetUpText();
-  end;
 
   if 'Rake' in upText then
     Exit(EBASHPatchState.OVERGROWN);
@@ -922,25 +959,19 @@ begin
     if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
     begin
       if Self.EmptyUpText in upText then
-      begin
         Exit(EBASHPatchState.EMPTY);
-      end;
       Exit(EBASHPatchState.GROWING);
     end;
 
-    soilPct := Self.SoilPercent();
-    if (soilPct >= 0) and (soilPct > 0.99) then
+    if Self.EmptyUpText in upText then
       Exit(EBASHPatchState.EMPTY);
-    if soilPct >= 0 then
-      Exit(EBASHPatchState.GROWING);
+    Exit(EBASHPatchState.GROWING);
   end
   else if (Self.EmptyUpText in upText) or (Self.PlantedUpText in upText) then
   begin
-    soilPct := Self.SoilPercent();
-    if (soilPct >= 0) and (soilPct > 0.99) then
+    if Self.EmptyUpText in upText then
       Exit(EBASHPatchState.EMPTY);
-    if soilPct >= 0 then
-      Exit(EBASHPatchState.GROWING);
+    Exit(EBASHPatchState.GROWING);
   end;
 
   WriteLn('[BASHFarm] Inspect ambiguous uptext at ', Self.Data.Name, ' ("', upText, '") - menu probe');
@@ -1048,8 +1079,6 @@ var
   timeout, stall, reaim: TCountdown;
   lastCount, curCount, lastEmpty, curEmpty: Int32;
   gotActivity, started, herbFirstXpLogged: Boolean;
-  soilPct: Double;
-  colourEmpty: Boolean;
   waitMs: Int32;
   upText: String;
   aimAttempt: Int32;
@@ -1059,12 +1088,16 @@ var
     Result := (Self.HarvestUpText in hoverUp) or BASHFarmUpTextHasFarmProduce(hoverUp);
   end;
 
+  function PatchLooksEmpty(const hoverUp: String): Boolean;
+  begin
+    Result := ('spect' in hoverUp) and (Self.EmptyUpText in hoverUp) and
+              (not ('lear' in hoverUp)) and (not ('Rake' in hoverUp));
+  end;
+
   procedure LogHerbSoil({$H-}const stage: String); {$H+}
   begin
     if Self.Data.PatchType <> EBASHPatchType.HERB then
       Exit;
-    Self.Find();
-    soilPct := Self.SoilPercent();
   end;
 
   function CheckHarvestXp(): Boolean;
@@ -1140,15 +1173,6 @@ var
   begin
     Minimap.WaitPlayerMoving(250, 1200);
 
-    Self.Find();
-    soilPct := Self.SoilPercent();
-    colourEmpty := (soilPct >= 0) and (soilPct > 0.99);
-    if colourEmpty then
-    begin
-      Self.Harvested := True;
-      Exit(True);
-    end;
-
     if not Self.Hover() then
     begin
       WriteLn('[BASHFarm] Harvest: post-note hover missed - will recheck');
@@ -1168,7 +1192,7 @@ var
       Self.Harvested := False;
       Exit(True);
     end;
-    if ('spect' in upText) and (Self.EmptyUpText in upText) and (not ('Rake' in upText)) then
+    if PatchLooksEmpty(upText) then
     begin
       Self.Harvested := True;
       Exit(True);
@@ -1195,8 +1219,28 @@ begin
     gotActivity := False;
     lastCount := Inventory.Count();
     lastEmpty := Inventory.CountEmptySlots();
+
+    if Inventory.IsFull() or (Inventory.CountEmptySlots() < 3) then
+      FreeInventForPick();
+    if Inventory.IsFull() then
+    begin
+      WriteLn('[BASHFarm] Harvest: invent full before allotment pick at ', Self.Data.Name);
+      Exit(PostNotePatchCheck());
+    end;
+
     for aimAttempt := 1 to 8 do
     begin
+      if Inventory.IsFull() then
+      begin
+        WriteLn('[BASHFarm] Harvest: invent full before aim - noting at ', Self.Data.Name);
+        FreeInventForPick();
+        if Inventory.IsFull() then
+        begin
+          WriteLn('[BASHFarm] Harvest: invent still full - cannot pick ', Self.Data.Name);
+          Exit(PostNotePatchCheck());
+        end;
+      end;
+
       if not ClickHarvestAim(aimAttempt) then
       begin
         if aimAttempt < 8 then
@@ -1230,6 +1274,19 @@ begin
         Break;
       end;
 
+      // Full invent looks like a missed click — note and only re-aim if we have space.
+      if Inventory.IsFull() then
+      begin
+        WriteLn('[BASHFarm] Harvest: no start - invent full after click, noting at ', Self.Data.Name);
+        FreeInventForPick();
+        if Inventory.IsFull() then
+        begin
+          WriteLn('[BASHFarm] Harvest: invent still full - cannot pick ', Self.Data.Name);
+          Exit(PostNotePatchCheck());
+        end;
+        Continue;
+      end;
+
       Minimap.WaitPlayerMoving(200, 900);
       if aimAttempt < 8 then
       begin
@@ -1251,6 +1308,16 @@ begin
   end
   else
   begin
+    if Inventory.IsFull() then
+    begin
+      FreeInventForPick();
+      if Inventory.IsFull() then
+      begin
+        WriteLn('[BASHFarm] Harvest: invent full before pick at ', Self.Data.Name);
+        Exit(PostNotePatchCheck());
+      end;
+    end;
+
     if not Self.ClickUpText(Self.HarvestUpText) then
       Exit(False);
 
@@ -1340,12 +1407,22 @@ begin
        (Self.Data.PatchType = EBASHPatchType.ALLOTMENT) and
        reaim.IsFinished() then
     begin
-      Inc(aimAttempt);
-      WriteLn('[BASHFarm] Harvest: still no XP - re-aim attempt ', aimAttempt, ' at ', Self.Data.Name);
-      if ClickHarvestAim(aimAttempt) then
+      if Inventory.IsFull() then
       begin
-        lastCount := Inventory.Count();
-        lastEmpty := Inventory.CountEmptySlots();
+        WriteLn('[BASHFarm] Harvest: invent full before re-aim - noting at ', Self.Data.Name);
+        FreeInventForPick();
+        if Inventory.IsFull() then
+          Exit(PostNotePatchCheck());
+      end
+      else
+      begin
+        Inc(aimAttempt);
+        WriteLn('[BASHFarm] Harvest: still no XP - re-aim attempt ', aimAttempt, ' at ', Self.Data.Name);
+        if ClickHarvestAim(aimAttempt) then
+        begin
+          lastCount := Inventory.Count();
+          lastEmpty := Inventory.CountEmptySlots();
+        end;
       end;
       reaim.Restart();
     end;
@@ -1362,20 +1439,6 @@ begin
 
     if started and (not gotActivity) and stall.IsFinished() then
     begin
-      Self.Find();
-      soilPct := Self.SoilPercent();
-      colourEmpty := (soilPct >= 0) and (soilPct > 0.99);
-
-      if colourEmpty then
-      begin
-        Self.DropEmptyBuckets();
-        if Inventory.IsFull() then
-          Self.NoteItems();
-        LogHerbSoil('finished');
-        Self.Harvested := True;
-        Exit(True);
-      end;
-
       if Self.Hover(Max(1, aimAttempt)) then
       begin
         upText := MainScreen.GetUpText();
@@ -1392,6 +1455,16 @@ begin
           Exit(True);
         end;
 
+        if PatchLooksEmpty(upText) then
+        begin
+          Self.DropEmptyBuckets();
+          if Inventory.IsFull() then
+            Self.NoteItems();
+          LogHerbSoil('finished');
+          Self.Harvested := True;
+          Exit(True);
+        end;
+
         Self.DropEmptyBuckets();
         if Inventory.IsFull() then
           Self.NoteItems();
@@ -1403,12 +1476,6 @@ begin
       if Inventory.IsFull() or (Inventory.CountEmptySlots() < 2) then
       begin
         FreeInventForPick();
-        if colourEmpty then
-        begin
-          LogHerbSoil('finished');
-          Self.Harvested := True;
-          Exit(True);
-        end;
         if ResumePick() then
         begin
           stall.Restart();
@@ -1423,6 +1490,12 @@ begin
           begin
             WriteLn('[BASHFarm] Harvest: resume failed, still grown');
             Self.Harvested := False;
+            Exit(True);
+          end;
+          if PatchLooksEmpty(upText) then
+          begin
+            LogHerbSoil('finished');
+            Self.Harvested := True;
             Exit(True);
           end;
         end;
@@ -1465,22 +1538,12 @@ begin
     );
   end;
 
-  Self.Find();
-  soilPct := Self.SoilPercent();
-  colourEmpty := (soilPct >= 0) and (soilPct > 0.99);
   WriteLn('[BASHFarm] Harvest timed out at ', Self.Data.Name);
 
   if not started then
   begin
     WriteLn('[BASHFarm] Harvest: timed out before first XP/invent');
     Exit(False);
-  end;
-
-  if colourEmpty then
-  begin
-    LogHerbSoil('finished');
-    Self.Harvested := True;
-    Exit(True);
   end;
 
   if Inventory.IsFull() then
@@ -1495,7 +1558,7 @@ begin
       Self.Harvested := False;
       Result := True;
     end
-    else if colourEmpty then
+    else if PatchLooksEmpty(upText) then
     begin
       LogHerbSoil('finished');
       Self.Harvested := True;
@@ -1503,20 +1566,14 @@ begin
     end
     else
     begin
-      WriteLn('[BASHFarm] Harvest timeout: soil not empty');
+      WriteLn('[BASHFarm] Harvest timeout: patch state unclear ("', upText, '")');
       Self.Harvested := False;
       Result := True;
     end;
   end
-  else if colourEmpty then
-  begin
-    LogHerbSoil('finished');
-    Self.Harvested := True;
-    Result := True;
-  end
   else
   begin
-    WriteLn('[BASHFarm] Harvest timeout: soil not empty');
+    WriteLn('[BASHFarm] Harvest timeout: could not hover patch');
     Self.Harvested := False;
     Result := True;
   end;
@@ -3380,9 +3437,13 @@ var
   tpa: TPointArray;
   noted: Boolean;
 begin
+  Self.DropWeeds();
+
   for i := 0 to High(BASH_FARM_LEPRECHAUN_ITEMS) do
   begin
     item := BASH_FARM_LEPRECHAUN_ITEMS[i];
+    if ToStr(item) = 'Weeds' then
+      Continue;
     if Inventory.FindItem(item, slot) then
       items += item;
   end;
