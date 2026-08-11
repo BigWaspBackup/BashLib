@@ -1,3 +1,12 @@
+## [8.4.10](https://github.com/BigWaspBackup/BashLib/compare/v8.4.9...v8.4.10) (2026-08-11)
+
+
+### Bug Fixes
+
+* game assets updated to latest version, farm run improvements ([c7debc5](https://github.com/BigWaspBackup/BashLib/commit/c7debc5870e2597d01c576c9c6d79ef5e17115f9))
+
+
+
 ## [8.4.9](https://github.com/BigWaspBackup/BashLib/compare/v8.4.8...v8.4.9) (2026-08-11)
 
 
@@ -34,15 +43,6 @@
 * Bump ([2157151](https://github.com/BigWaspBackup/BashLib/commit/2157151a9b2a52c5e8e16fa5f28cb70665968319))
 * transport now uses submenus for teleport instead of GUI, Fixes for farming guild allotments ([170f940](https://github.com/BigWaspBackup/BashLib/commit/170f94032d951dfec7623ca26e32fa4bf247a358))
 * Use Simba Win64 in CI to avoid optional.simba OOM ([ba8f81a](https://github.com/BigWaspBackup/BashLib/commit/ba8f81a0685cdb2ffcee7b49ca65831b1ef5d8a0))
-
-
-
-## [8.4.5](https://github.com/BigWaspBackup/BashLib/compare/v8.4.4...v8.4.5) (2026-08-08)
-
-
-### Bug Fixes
-
-* Spam clicking some patches ([85621a2](https://github.com/BigWaspBackup/BashLib/commit/85621a2251b992bf1ce2d67ad9bb281b0a1e0065))
 
 
 
