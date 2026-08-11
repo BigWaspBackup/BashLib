@@ -1,4 +1,4 @@
-## [8.4.8](https://github.com/BigWaspBackup/BashLib/compare/v8.4.7...v8.4.8) (2026-08-09)
+## [8.4.8](https://github.com/BigWaspBackup/BashLib/compare/v8.4.7...v8.4.8) (2026-08-09)0
 
 
 ### Bug Fixes
