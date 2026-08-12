@@ -23,6 +23,7 @@ type
     Patches: array of TBASHFarmPatch;
     Transport: TUniversalTransportV2;
     ReadyTimer: TCountDown;
+    NextRunLogTimer: TCountDown;
     Journal: TBASHFarmJournal;
     Contract: TBASHFarmContract;
     CompostMethod: EBASHCompostMethod;
@@ -30,6 +31,7 @@ type
     MagicSecateurs: Boolean;
     LumbyElite: Boolean;
     Initialized: Boolean;
+    IsDisabled: Boolean;
     PatchesCompleted, PatchesSkipped, RunsComplete: Int32;
 
     ExtraRuneNames: TRSItemArray;
@@ -103,6 +105,7 @@ procedure TBASHFarmRunner.ClearPatches();
 begin
   SetLength(Self.Patches, 0);
   Self.Initialized := False;
+  Self.IsDisabled := False;
   Self.EquippedScanDone := False;
   SetLength(Self.EquippedTravelKeys, 0);
   Self.ArdyCloakEquipped := False;
@@ -145,11 +148,13 @@ begin
   if cfg.RunNow then
   begin
     Self.ReadyTimer.Init(0);
+    Self.NextRunLogTimer.Init(0);
     WriteLn('[BASHFarm] Run farm now enabled - first run ready immediately');
   end
   else
   begin
     Self.ReadyTimer.Init(Random(86 * ONE_MINUTE, 97 * ONE_MINUTE));
+    Self.NextRunLogTimer.Init(0);
     WriteLn('[BASHFarm] Next farm run in ',
             SRL.MsToTime(Self.ReadyTimer.TimeRemaining(), TTimeFormat.Time_Short));
   end;
@@ -1848,6 +1853,7 @@ begin
     Self.Init();
 
   BASHEnsureRunZoom(5, 25);
+  BASHFarmEnsureFarmChat();
 
   Self.EnsureEquippedTeleportCache();
 
@@ -2170,7 +2176,13 @@ begin
       Continue;
 
     Self.Patches[k].NoteItems();
-    Self.Patches[k].DepositLepTools();
+    if not Self.Patches[k].DepositLepTools() then
+    begin
+      if Self.Patches[k].HasStorableLepTools() then
+        Self.DisableFarmRuns(
+          'Could not deposit tools to leprechaun at ' + Self.Patches[k].Data.Name
+        );
+    end;
     Break;
   end;
 
@@ -2180,19 +2192,46 @@ begin
   Self.OnComplete();
 end;
 
+procedure TBASHFarmRunner.DisableFarmRuns(reason: String);
+begin
+  if Self.IsDisabled then
+    Exit;
+
+  Self.IsDisabled := True;
+  WriteLn('[BASHFarm] Farm runs disabled: ', reason);
+end;
+
 procedure TBASHFarmRunner.DoFarmRun();
 begin
-  if not Self.ReadyTimer.IsFinished() then
+  if not Self.CanDoFarmRun() then
     Exit;
 
   Self.Run();
+  if Self.IsDisabled then
+    Exit;
+
   Self.ReadyTimer.Init(Random(86 * ONE_MINUTE, 97 * ONE_MINUTE));
-  WriteLn('[BASHFarm] Next run in ', SRL.MsToTime(Self.ReadyTimer.TimeRemaining(), TTimeFormat.Time_Short));
+  Self.NextRunLogTimer.Init(0);
+  WriteLn('[BASHFarm] Next farm run in ', SRL.MsToTime(Self.ReadyTimer.TimeRemaining(), TTimeFormat.Time_Short));
 end;
 
 function TBASHFarmRunner.CanDoFarmRun(): Boolean;
 begin
-  Result := Self.ReadyTimer.IsFinished();
+  if Self.IsDisabled then
+    Exit(False);
+
+  if not Self.ReadyTimer.IsFinished() then
+  begin
+    if (Self.NextRunLogTimer.TimeRemaining = 0)
+    or Self.NextRunLogTimer.IsFinished() then
+    begin
+      Self.NextRunLogTimer.Init(5 * ONE_MINUTE);
+      WriteLn('[BASHFarm] Next farm run in ' + SRL.MsToTime(Self.ReadyTimer.TimeRemaining(), TTimeFormat.Time_Short));
+    end;
+    Exit(False);
+  end;
+
+  Result := True;
 end;
 
 {$I BashLib/optional/handlers/bashfarm/gui.simba}

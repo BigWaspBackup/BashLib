@@ -259,11 +259,13 @@ end;
 function TQuetzal.TravelFromRenu(
   Destination: EQuetzalLanding;
   preferLast: Boolean = True;
-  attempts: Int32 = 4
+  attempts: Int32 = 4;
+  arrivedBox: TBox = [0, 0, 0, 0]
 ): Boolean;
 var
   i: Int32;
   renuTile: TPoint;
+  hasArrivedBox: Boolean;
 
   function TryWalkSelect(opts: TStringArray; att: Int32): Boolean;
   begin
@@ -292,20 +294,46 @@ begin
   Result := False;
   Self.EnsureRenu();
   renuTile := [2692, 37862];
+  hasArrivedBox := arrivedBox.X2 > arrivedBox.X1;
+
+  if hasArrivedBox and Map.Position.InBox(arrivedBox) then
+  begin
+    WriteLn('[Quetzal] Already at destination box (', Map.Position(), ') - skipping Renu');
+    Exit(True);
+  end;
 
   for i := 1 to attempts do
   begin
+    if hasArrivedBox and Map.Position.InBox(arrivedBox) then
+    begin
+      WriteLn('[Quetzal] Already at destination box (', Map.Position(), ') - skipping Renu');
+      Exit(True);
+    end;
+
     WriteLn('[Quetzal] Renu ', ToStr(Destination), ' (attempt ', i, '/', attempts, ')');
 
-    // After a teleport the walker position can still be at the old tile —
-    // wait to settle near Renu before pathing, else WalkHover raises.
     if Map.Position().DistanceTo(renuTile) > 90 then
     begin
       WriteLn('[Quetzal] Waiting to settle near Renu (pos ', Map.Position(), ')');
-      if not WaitUntil(Map.Position().DistanceTo(renuTile) <= 90, 50, 8000) then
+      if not WaitUntil(
+           (Map.Position().DistanceTo(renuTile) <= 90) or
+           (hasArrivedBox and Map.Position.InBox(arrivedBox)),
+           50,
+           8000
+         ) then
       begin
+        if hasArrivedBox and Map.Position.InBox(arrivedBox) then
+        begin
+          WriteLn('[Quetzal] Already at destination box (', Map.Position(), ') - skipping Renu');
+          Exit(True);
+        end;
         WriteLn('[Quetzal] Still far from Renu at ', Map.Position(), ' - retrying path anyway');
         Wait(Random(400, 900));
+      end;
+      if hasArrivedBox and Map.Position.InBox(arrivedBox) then
+      begin
+        WriteLn('[Quetzal] Already at destination box (', Map.Position(), ') - skipping Renu');
+        Exit(True);
       end;
     end;
 
@@ -339,7 +367,6 @@ begin
     end
     else if TryWalkClick() then
     begin
-      // Left-click fallback (uptext Travel Renu)
       if Self.IsOpen(10000) then
       begin
         Result := Self.Travel(Destination);

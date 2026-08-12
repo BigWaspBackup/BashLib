@@ -135,6 +135,42 @@ begin
   end;
 end;
 
+procedure BASHFarmEnsureFarmChat();
+var
+  onAllOrGame: Boolean;
+begin
+  if ChatButtons.GetState(ERSChatButton.GAME_CHAT) <> ERSChatButtonState.ENABLED then
+  begin
+    WriteLn('[BASHFarm] Game chat off - enabling');
+    ChatButtons.ChangeState(ERSChatButton.GAME_CHAT, ERSChatButtonState.ENABLED);
+    Wait(Random(200, 400));
+  end;
+
+  onAllOrGame := ChatButtons.IsActive(ERSChatButton.ALL_CHAT) or
+                 ChatButtons.IsActive(ERSChatButton.GAME_CHAT);
+  if onAllOrGame then
+    Exit;
+
+  WriteLn('[BASHFarm] Chat tab not All/Game - switching to All');
+  ChatButtons.Open(ERSChatButton.ALL_CHAT);
+  Wait(Random(200, 450));
+end;
+
+procedure BASHFarmWaitForPlantChat(const beforeMsg: String = '');
+var
+  deadline: UInt64;
+  msg: String;
+begin
+  deadline := GetTickCount() + UInt64(Random(3000, 4000));
+  while GetTickCount() < deadline do
+  begin
+    msg := Chat.GetMessage(7);
+    if ('plant' in LowerCase(msg)) and ((beforeMsg = '') or (msg <> beforeMsg)) then
+      Exit;
+    Wait(35);
+  end;
+end;
+
 procedure TBASHFarmPatch.Reset();
 begin
   Self.Harvested := False;
@@ -406,7 +442,36 @@ begin
       rank := 0;
     if rank > High(tiles) then
       rank := High(tiles);
-    Exit(tiles[rank]);
+    nearest := tiles[rank];
+
+    if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
+    begin
+      interior := Self.Data.Coords;
+      dx := interior.X - nearest.X;
+      dy := interior.Y - nearest.Y;
+      len := Sqrt(dx * dx + dy * dy);
+      if len > 0.1 then
+      begin
+        lipDist := me.DistanceTo(nearest);
+        if (Length(Self.Data.StandTiles) > 0) and
+           Map.Walker.AnyInRange(Self.Data.StandTiles, 8) then
+          pastLip := 4.0
+        else if lipDist <= 7 then
+          pastLip := 3.0
+        else if lipDist <= 14 then
+          pastLip := 2.5
+        else
+          pastLip := 2.0;
+
+        pastLip := pastLip + rank * 0.75;
+
+        Result.X := Round(nearest.X + (dx / len) * pastLip);
+        Result.Y := Round(nearest.Y + (dy / len) * pastLip);
+        Exit;
+      end;
+    end;
+
+    Exit(nearest);
   end;
 
   toward := Self.Data.Coords;
@@ -520,9 +585,13 @@ function TBASHFarmPatch.GetAllotmentAimClick(aimAttempt: Int32): TPoint;
 var
   tileRank, pullPx, jitter: Int32;
   aimTile, base: TPoint;
+  onStandPad: Boolean;
 begin
   if aimAttempt < 1 then
     aimAttempt := 1;
+
+  onStandPad := (Length(Self.Data.StandTiles) > 0) and
+                Map.Walker.AnyInRange(Self.Data.StandTiles, 8);
 
   if aimAttempt <= 2 then
   begin
@@ -533,13 +602,19 @@ begin
   else if aimAttempt <= 5 then
   begin
     tileRank := 0;
-    pullPx := MainScreen.NormalizeDistance(3 + (aimAttempt - 2) * 2);
+    if onStandPad then
+      pullPx := 0
+    else
+      pullPx := MainScreen.NormalizeDistance(3 + (aimAttempt - 2) * 2);
     jitter := MainScreen.NormalizeDistance(2);
   end
   else
   begin
     tileRank := aimAttempt - 5;
-    pullPx := MainScreen.NormalizeDistance(2);
+    if onStandPad then
+      pullPx := 0
+    else
+      pullPx := MainScreen.NormalizeDistance(2);
     jitter := MainScreen.NormalizeDistance(3);
   end;
 
@@ -1198,7 +1273,7 @@ var
       Exit(True);
     end;
 
-    WriteLn('[BASHFarm] Harvest: post-note uptext ambiguous ("', upText, '") - will recheck');
+    WriteLn('[BASHFarm] Harvest: post-note uptext ("', upText, '")');
     Self.Harvested := False;
     Result := True;
   end;
@@ -1587,6 +1662,7 @@ var
   tClick, deadline: UInt64;
   up: String;
   compostPrepped: Boolean;
+  plantChatBefore: String;
 
   function WillCompostAfterPlant(): Boolean;
   begin
@@ -1623,6 +1699,8 @@ var
     Result := False;
     if not WillCompostAfterPlant() then
       Exit(True);
+
+    BASHFarmWaitForPlantChat(plantChatBefore);
 
     if Self.UseFertileSoil then
     begin
@@ -1727,6 +1805,7 @@ var
 
       if ready then
       begin
+        plantChatBefore := Chat.GetMessage(7);
         Mouse.Click(MOUSE_LEFT);
 
         if not MainScreen.DidRedClick() then
@@ -1831,6 +1910,7 @@ begin
   Result := False;
   justRaked := False;
   compostPrepped := False;
+  plantChatBefore := '';
 
   if Inventory.IsFull() then
   begin
@@ -2010,8 +2090,6 @@ begin
     XPBar.Read();
     XPBar.EarnedXP();
     clicked := False;
-
-    Wait(Random(1600, 2000));
 
     for i := 1 to 4 do
     begin
@@ -3297,8 +3375,10 @@ end;
 function TBASHFarmPatch.DepositLepTools(): Boolean;
 var
   attempt: Int32;
+  foundLep: Boolean;
 begin
   Result := True;
+  foundLep := False;
 
   if not Self.AtFarm() then
   begin
@@ -3329,6 +3409,7 @@ begin
       Continue;
     end;
 
+    foundLep := True;
     Mouse.Click(MOUSE_RIGHT);
     if not BASHFarmMenuSelect(['Deposit-all', 'Deposit-All', 'Deposit all'], False) then
     begin
@@ -3346,6 +3427,12 @@ begin
     end;
 
     WriteLn('[BASHFarm] Tools still in inventory after deposit-all');
+  end;
+
+  if not foundLep then
+  begin
+    WriteLn('[BASHFarm] DepositLepTools: could not find leprechaun at ', Self.Data.Name);
+    Exit(False);
   end;
 
   WriteLn('[BASHFarm] DepositLepTools failed, falling back to Store-All');
