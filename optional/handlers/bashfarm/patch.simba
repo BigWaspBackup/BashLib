@@ -156,21 +156,6 @@ begin
   Wait(Random(200, 450));
 end;
 
-procedure BASHFarmWaitForPlantChat(const beforeMsg: String = '');
-var
-  deadline: UInt64;
-  msg: String;
-begin
-  deadline := GetTickCount() + UInt64(Random(3000, 4000));
-  while GetTickCount() < deadline do
-  begin
-    msg := Chat.GetMessage(7);
-    if ('plant' in LowerCase(msg)) and ((beforeMsg = '') or (msg <> beforeMsg)) then
-      Exit;
-    Wait(35);
-  end;
-end;
-
 procedure TBASHFarmPatch.Reset();
 begin
   Self.Harvested := False;
@@ -1273,7 +1258,7 @@ var
       Exit(True);
     end;
 
-    WriteLn('[BASHFarm] Harvest: post-note uptext ("', upText, '")');
+    WriteLn('[BASHFarm] Harvest: post-note uptext ambiguous ("', upText, '") - will recheck');
     Self.Harvested := False;
     Result := True;
   end;
@@ -1662,7 +1647,6 @@ var
   tClick, deadline: UInt64;
   up: String;
   compostPrepped: Boolean;
-  plantChatBefore: String;
 
   function WillCompostAfterPlant(): Boolean;
   begin
@@ -1699,8 +1683,6 @@ var
     Result := False;
     if not WillCompostAfterPlant() then
       Exit(True);
-
-    BASHFarmWaitForPlantChat(plantChatBefore);
 
     if Self.UseFertileSoil then
     begin
@@ -1805,7 +1787,6 @@ var
 
       if ready then
       begin
-        plantChatBefore := Chat.GetMessage(7);
         Mouse.Click(MOUSE_LEFT);
 
         if not MainScreen.DidRedClick() then
@@ -1910,7 +1891,6 @@ begin
   Result := False;
   justRaked := False;
   compostPrepped := False;
-  plantChatBefore := '';
 
   if Inventory.IsFull() then
   begin
@@ -2124,22 +2104,7 @@ begin
       Continue;
 
     waitMs := Self.WalkWaitMs(5000);
-    Result := WaitUntil(
-      XPBar.EarnedXP() or
-      Chat.FindMessage('already been') or
-      Chat.FindMessage('treat the') or
-      Chat.FindMessage('This patch has already'),
-      35,
-      waitMs
-    );
-
-    if (not Result) and (not isBottomless) and (beforeStack > 0) and
-       (Inventory.CountItemStack(Self.CompostItem) < beforeStack) then
-    begin
-      Result := WaitUntil(XPBar.EarnedXP(), 35, 2500);
-      if not Result then
-        Result := True;
-    end;
+    Result := WaitUntil(XPBar.EarnedXP(), 35, waitMs);
 
     if Result then
       Break;
