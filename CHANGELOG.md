@@ -1,3 +1,12 @@
+## [8.4.11](https://github.com/BigWaspBackup/BashLib/compare/v8.4.10...v8.4.11) (2026-08-12)
+
+
+### Bug Fixes
+
+* Quetzel improvements and compost improvements ([269e602](https://github.com/BigWaspBackup/BashLib/commit/269e60243a805c9c6f2affbf589039a82d9fa933))
+
+
+
 ## [8.4.10](https://github.com/BigWaspBackup/BashLib/compare/v8.4.9...v8.4.10) (2026-08-11)
 
 
@@ -32,17 +41,6 @@
 ### Bug Fixes
 
 * Farming guild random improvements. ([9db6d04](https://github.com/BigWaspBackup/BashLib/commit/9db6d0466578e22e5169f5751e8ef4bb3c89d42e))
-
-
-
-## [8.4.6](https://github.com/BigWaspBackup/BashLib/compare/v8.4.5...v8.4.6) (2026-08-09)
-
-
-### Bug Fixes
-
-* Bump ([2157151](https://github.com/BigWaspBackup/BashLib/commit/2157151a9b2a52c5e8e16fa5f28cb70665968319))
-* transport now uses submenus for teleport instead of GUI, Fixes for farming guild allotments ([170f940](https://github.com/BigWaspBackup/BashLib/commit/170f94032d951dfec7623ca26e32fa4bf247a358))
-* Use Simba Win64 in CI to avoid optional.simba OOM ([ba8f81a](https://github.com/BigWaspBackup/BashLib/commit/ba8f81a0685cdb2ffcee7b49ca65831b1ef5d8a0))
 
 
 
