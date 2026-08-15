@@ -1,3 +1,12 @@
+## [8.4.13](https://github.com/BigWaspBackup/BashLib/compare/v8.4.12...v8.4.13) (2026-08-15)
+
+
+### Bug Fixes
+
+* Moved setting handler fully into libs, reworked compost and planting, reworked patch finding at some locations. ([79ef6a4](https://github.com/BigWaspBackup/BashLib/commit/79ef6a409f2bfed4cec4cee4aa55656693df8fee))
+
+
+
 ## [8.4.12](https://github.com/BigWaspBackup/BashLib/compare/v8.4.11...v8.4.12) (2026-08-13)
 
 
@@ -32,15 +41,6 @@
 
 * bump ([09d4536](https://github.com/BigWaspBackup/BashLib/commit/09d453637609ed4bf7ffbaf3e457495175c91067))
 * Farm run fixes for noting items ([831285c](https://github.com/BigWaspBackup/BashLib/commit/831285ceb01dedeb90b8ddf2f01a3f26a43cb2ee))
-
-
-
-## [8.4.8](https://github.com/BigWaspBackup/BashLib/compare/v8.4.7...v8.4.8) (2026-08-09)
-
-
-### Bug Fixes
-
-* Noting failsafes ([2c61638](https://github.com/BigWaspBackup/BashLib/commit/2c616386fb888631df3f922d70425b1797946dba))
 
 
 
