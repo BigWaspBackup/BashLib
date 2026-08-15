@@ -1,8 +1,6 @@
 {$IFNDEF BASH_ENSURE_RUN_ZOOM}
 {$DEFINE BASH_ENSURE_RUN_ZOOM}
 
-// Shared helpers for the BASH handlers (farm, birdhouse).
-
 procedure BASHEnsureRunZoom(minZ: Int32 = 5; maxZ: Int32 = 25);
 var
   zoom, target: Int32;
@@ -15,11 +13,179 @@ begin
 
   zoom := EnsureRange(MM2MS.GetZoomLevel(), 0, 100);
   if InRange(zoom, minZ, maxZ) then
-  begin
     Exit;
-  end;
 
   target := Random(minZ, maxZ);
   RSMouseZoom.SetZoomLevel(target);
+end;
+{$ENDIF}
+
+{$IFNDEF BASH_MAP_HELPERS}
+{$DEFINE BASH_MAP_HELPERS}
+
+procedure BASHAppendChunks(var dest: array of TRSMapChunk; src: array of TRSMapChunk);
+var
+  i, k: Int32;
+  exists: Boolean;
+begin
+  for i := 0 to High(src) do
+  begin
+    exists := False;
+    for k := 0 to High(dest) do
+      if dest[k].Chunk = src[i].Chunk then
+      begin
+        exists := True;
+        Break;
+      end;
+    if not exists then
+      dest += src[i];
+  end;
+end;
+
+procedure BASHRebindMap(adaptiveWalk: Boolean = False);
+begin
+  Objects.Data := nil;
+  NPCs.Data := nil;
+  Banks.MapObjects := [];
+  Banks.ObjectsCache := [];
+  Banks.NPCsCache := [];
+  Objects.Setup(Map.Objects(), @Map.Walker);
+  NPCs.Setup(Map.NPCs(), @Map.Walker);
+  Map.Loader.Graph.UseCollisionData := True;
+  Map.Sample.Amount := 10;
+  Map.Walker.ScreenWalk := False;
+  Map.Walker.AdaptiveWalk := adaptiveWalk;
+end;
+
+procedure BASHKeepNearestBankCoords(mapObj: PRSMapObject; me: TPoint; keep: Int32);
+var
+  i, j, best: Int32;
+  dist, bestDist: Double;
+  used: array of Boolean;
+  keptCoords: TPointArray;
+  keptRots: TSingleArray;
+  rots: TSingleArray;
+  isObj: Boolean;
+begin
+  if (mapObj = nil) or (Length(mapObj^.Coordinates) <= keep) then
+    Exit;
+
+  isObj := mapObj^.MapObjectType = ERSMapObjectType.OBJ;
+  if isObj then
+    rots := PRSObjectV2(mapObj)^.Rotations;
+
+  SetLength(used, Length(mapObj^.Coordinates));
+  SetLength(keptCoords, 0);
+  SetLength(keptRots, 0);
+
+  for i := 1 to keep do
+  begin
+    best := -1;
+    bestDist := 1000000;
+    for j := 0 to High(mapObj^.Coordinates) do
+    begin
+      if used[j] then
+        Continue;
+      dist := mapObj^.Coordinates[j].DistanceTo(me);
+      if dist < bestDist then
+      begin
+        bestDist := dist;
+        best := j;
+      end;
+    end;
+    if best < 0 then
+      Break;
+    used[best] := True;
+    keptCoords += mapObj^.Coordinates[best];
+    if isObj and (best <= High(rots)) then
+      keptRots += rots[best];
+  end;
+
+  mapObj^.Coordinates := keptCoords;
+  if isObj then
+    PRSObjectV2(mapObj)^.Rotations := keptRots;
+end;
+
+procedure BASHBindLocalBanks(radius: Int32 = 220; keep: Int32 = 2);
+var
+  me, p: TPoint;
+  mapObj: PRSMapObject;
+  i, j: Int32;
+begin
+  Banks.MapObjects := [];
+  Banks.ObjectsCache := [];
+  Banks.NPCsCache := [];
+  Banks._SetupMapObjects();
+
+  me := Map.Position();
+  if (me = [0, 0]) or (Map.Similarity < 0.70) then
+    Exit;
+
+  for i := High(Banks.MapObjects) downto 0 do
+  begin
+    mapObj := Banks.MapObjects[i];
+    for j := High(mapObj^.Coordinates) downto 0 do
+    begin
+      p := mapObj^.Coordinates[j];
+      if p.DistanceTo(me) > radius then
+      begin
+        Delete(mapObj^.Coordinates, j, 1);
+        if mapObj^.MapObjectType = ERSMapObjectType.OBJ then
+          if j <= High(PRSObjectV2(mapObj)^.Rotations) then
+            Delete(PRSObjectV2(mapObj)^.Rotations, j, 1);
+      end;
+    end;
+    if Length(mapObj^.Coordinates) = 0 then
+      Delete(Banks.MapObjects, i, 1)
+    else
+      BASHKeepNearestBankCoords(mapObj, me, keep);
+  end;
+end;
+
+function BASHOpenLocalBank(clickDist: Int32 = 48): Boolean;
+var
+  mapObj: PRSMapObject;
+  me, nearest: TPoint;
+  oldWalker: Boolean;
+begin
+  Result := False;
+  if Bank.IsOpen() or BankPin.IsOpen() then
+    Exit(True);
+
+  if Length(Banks.MapObjects) = 0 then
+    BASHBindLocalBanks();
+
+  mapObj := Banks.GetClosest();
+  if (mapObj = nil) or (Length(mapObj^.Coordinates) = 0) then
+    Exit(False);
+
+  me := Map.Position();
+  nearest := mapObj^.Coordinates.NearestPoint(me);
+  mapObj^.Filter.Walker := True;
+
+  if nearest.DistanceTo(me) <= clickDist then
+  begin
+    oldWalker := mapObj^.Filter.Walker;
+    mapObj^.Filter.Walker := False;
+    Result := Banks.Open(mapObj);
+    mapObj^.Filter.Walker := oldWalker;
+    if Result then
+      Exit(True);
+  end;
+
+  mapObj^.Filter.Walker := True;
+  Result := Banks.WalkOpen(mapObj);
+end;
+
+procedure BASHSetupMap(hostChunks: array of TRSMapChunk; extraChunks: array of TRSMapChunk; downscale: Int32 = 8);
+var
+  chunks: array of TRSMapChunk;
+begin
+  SetLength(chunks, 0);
+  BASHAppendChunks(chunks, hostChunks);
+  BASHAppendChunks(chunks, extraChunks);
+  WriteLn('[MAP] Setup: ', Length(chunks), ' region(s)');
+  Map.SetupChunks(chunks, downscale);
+  BASHRebindMap(False);
 end;
 {$ENDIF}

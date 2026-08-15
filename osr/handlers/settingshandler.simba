@@ -77,6 +77,23 @@ begin
 end;
 
 (*
+## SettingsHandler.IsBashProfileName()
+```pascal
+function TSettingsHandler.IsBashProfileName(name: String): Boolean;
+```
+Returns True when `name` matches a B.A.S.H Launcher RuneLite profile name.
+
+The launcher currently writes a 10-character hex name from the install id.
+Older installs used an 8-character name (Wasp/BASH convention). `'default'`
+is never treated as a BASH profile.
+*)
+function TSettingsHandler.IsBashProfileName(name: String): Boolean;
+begin
+  Result := ((Length(name) = 10) or (Length(name) = 8)) and
+            (LowerCase(name) <> 'default');
+end;
+
+(*
 ## SettingsHandler.FindActiveProfile()
 ```pascal
 function TSettingsHandler.FindActiveProfile(path: String): Boolean;
@@ -141,9 +158,9 @@ begin
     Exit;
   end;
 
-  if (Length(activeName) <> 8) or (LowerCase(activeName) = 'default') then
+  if not Self.IsBashProfileName(activeName) then
   begin
-    Self.DebugLn('FindActiveProfile -> Active profile does not appear to be a Wasp Profile, skipping: ' + activeName);
+    Self.DebugLn('FindActiveProfile -> Active profile does not appear to be a BASH Profile, skipping: ' + activeName);
     Exit;
   end;
 
@@ -203,7 +220,12 @@ begin
   end;
 
   configContent := ReadFileContents(filePath);
-  newContent := Replace(configContent, 'runelite.gpuplugin=true', 'runelite.gpuplugin=false', [rfReplaceAll]);
+  if Pos('runelite.gpuplugin=true', configContent) > 0 then
+    newContent := Replace(configContent, 'runelite.gpuplugin=true', 'runelite.gpuplugin=false', [rfReplaceAll])
+  else if Pos('runelite.gpuplugin=false', configContent) = 0 then
+    newContent := configContent + LineEnding + 'runelite.gpuplugin=false' + LineEnding
+  else
+    newContent := configContent;
 
   if WriteFileContents(filePath, newContent) then
   begin
@@ -520,6 +542,10 @@ Should be called on script termination.
 procedure TSettingsHandler.ClearBitmaps();
 begin
   Self.DebugLn('ClearBitmaps -> Clearing and freeing bitmaps');
+  {$IFNDEF SRL_DISABLE_REMOTEINPUT}
+  if RSClient.RemoteInput.IsSetup() then
+    RSClient.RemoteInput.EnableRealInput();
+  {$ENDIF}
   if Self.BackBuffer <> nil then
     Self.BackBuffer.Clear();
   if RSClient.RemoteInput.Image <> nil then
@@ -533,42 +559,50 @@ end;
 procedure TSettingsHandler.CheckRegularSettings();
 ```
 Verifies and applies common in-game toggle settings such as shift drop,
-escape to close, roof removal, and others. Opens the settings interface
-and closes it when done.
+escape to close, roof removal, auto-equip from gravestone, and others.
+Food/potion death piles and world switcher are turned off. Toggle order is
+shuffled each run. Opens the settings interface and closes it when done.
 *)
 procedure TSettingsHandler.CheckRegularSettings();
+type
+  TSettingToggle = record
+    Search: String;
+    Enable: Boolean;
+  end;
 var
-  iterStr: String;
-  offArray, onArray: TStringArray;
+  iter, tmp: TSettingToggle;
+  toggles: array of TSettingToggle;
+  i, j: Int32;
 begin
   if Self.Name = '' then
     Self.Setup();
   Self.DebugLn('CheckRegularSettings -> Verifying settings options');
 
-  onArray := [
-    Copy('shift', 0, Random(4, 6)),
-    'esc',
-    Copy('middle', 0, Random(3, 6)),
-    'tint',
-    Copy('roofs', 0, Random(3, 4)),
-    Copy('worn items from gravestone', 0, Random(7, 9))
+  toggles := [
+    [Copy('shift', 0, Random(4, 6)), True],
+    ['esc', True],
+    [Copy('middle', 0, Random(3, 6)), True],
+    ['tint', True],
+    [Copy('roofs', 0, Random(3, 4)), True],
+    [Copy('auto-equip', 0, Random(5, 10)), True],
+    [Copy('switcher', 0, Random(3, 5)), False],
+    [Copy('modern menu interface', 0, Random(8, 10)), False],
+    [Copy('supply piles', 0, Random(6, 12)), False]
   ];
-  Self.ShuffleStrings(onArray);
 
-  offArray := [Copy('switcher', 0, Random(3, 5)),
-               Copy('modern menu interface', 0, Random(8, 10))
-  ];
+  for i := High(toggles) downto 1 do
+  begin
+    j := Random(i + 1);
+    tmp := toggles[i];
+    toggles[i] := toggles[j];
+    toggles[j] := tmp;
+  end;
 
   if Self.OpenSettings() then
   begin
-    for iterStr in onArray do
+    for iter in toggles do
     begin
-      Self.ToggleSetting(iterStr, True);
-      Wait(250, 450);
-    end;
-    for iterStr in offArray do
-    begin
-      Self.ToggleSetting(iterStr, False);
+      Self.ToggleSetting(iter.Search, iter.Enable);
       Wait(200, 450);
     end;
     RSInterface.Close(True);
@@ -712,14 +746,34 @@ begin
       Self.DebugLn('CheckDisplaySettings -> Client mode set to fixed');
       WaitUntil(RSClient.DetectClientMode(True) = ERSClientMode.FIXED, 500, 5000);
       RSClient.ClientModeChanged();
+      Self.FixScreenPostResolutionChange();
       Self.DebugLn('CheckDisplaySettings -> Client mode confirmed: ' + ToStr(RSClient.Mode));
     end;
   end;
 end;
 
+(*
+## SettingsHandler.IsGPUPluginEnabled()
+```pascal
+function TSettingsHandler.IsGPUPluginEnabled(configContent: String): Boolean;
+```
+Returns True when the RuneLite profile properties have GPU enabled. A missing
+`runelite.gpuplugin` key is treated as enabled (RuneLite default).
+*)
+function TSettingsHandler.IsGPUPluginEnabled(configContent: String): Boolean;
+begin
+  if Pos('runelite.gpuplugin=true', configContent) > 0 then
+    Exit(True);
+  if Pos('runelite.gpuplugin=false', configContent) > 0 then
+    Exit(False);
+
+  // Missing key: RuneLite enables GPU by default.
+  Result := True;
+end;
+
 procedure TSettingsHandler._CheckGPUPlugin();
 var
-  path, configContent: String;
+  path, configContent, activeName, profileFile: String;
   warningForm: TForm;
   detProbMsg: TLabel;
   gpuWarnMsg, warningMsg: TMemo;
@@ -739,18 +793,24 @@ begin
     Exit;
   end;
 
-  if not Self.FindActiveProfile(path) then
+  if not Self.GetActiveRuneLiteProfile(activeName, profileFile) then
+  begin
+    Self.DebugLn('CheckGPUPlugin -> Could not identify the active RuneLite profile');
     Exit;
+  end;
 
   configContent := ReadFileContents(path + DirectorySeparator + Self.ActiveProfileFile);
 
-  if Pos('runelite.gpuplugin=true', configContent) = 0 then
+  if not Self.IsGPUPluginEnabled(configContent) then
   begin
     Self.DebugLn('CheckGPUPlugin -> runelite.gpuplugin = false, no action required');
     Exit;
   end;
 
-  Self.DebugLn('CheckGPUPlugin -> runelite.gpuplugin = true');
+  if Pos('runelite.gpuplugin=true', configContent) > 0 then
+    Self.DebugLn('CheckGPUPlugin -> runelite.gpuplugin = true')
+  else
+    Self.DebugLn('CheckGPUPlugin -> runelite.gpuplugin key missing (RuneLite default is ON)');
   Self.DebugLn('CheckGPUPlugin -> GPU issue found in: ' + Self.ActiveProfileFile);
   Self.GPUPluginActive := True;
 
@@ -914,24 +974,95 @@ end;
 ```pascal
 function TSettingsHandler.IsBashProfileActive(out activeName: String): Boolean;
 ```
-Returns True when the active RuneLite profile looks like a BASH-installed
-profile (8-character non-default name).
+Returns True when the currently active RuneLite profile is a BASH-installed
+profile. Accepts the current 10-character launcher name and the older
+8-character name, and confirms the profile file includes the BASH launcher
+fingerprint (`runelite.totemfletchingplugin=true`).
 *)
 function TSettingsHandler.IsBashProfileActive(out activeName: String): Boolean;
 var
-  profileFile: String;
+  profileFile, fullPath, content: String;
 begin
   Result := False;
   activeName := '';
 
+  if Self.Name = '' then
+    Self.Setup();
+
   if not Self.GetActiveRuneLiteProfile(activeName, profileFile) then
     Exit;
 
-  // BASH launcher profiles use an 8-character name (same convention as Wasp).
-  if (Length(activeName) <> 8) or (LowerCase(activeName) = 'default') then
+  if not Self.IsBashProfileName(activeName) then
+    Exit;
+
+  fullPath := Self.GetProfilesPath() + DirectorySeparator + profileFile;
+  content := ReadFileContents(fullPath);
+  if (content = '') or (Pos('runelite.totemfletchingplugin=true', content) = 0) then
     Exit;
 
   Result := True;
+end;
+
+(*
+## SettingsHandler._CheckBashProfileRequired()
+```pascal
+procedure TSettingsHandler._CheckBashProfileRequired();
+```
+Main-thread implementation of `CheckBashProfileRequired`. Do not call this
+directly; use `SettingsHandler.CheckBashProfileRequired()`.
+*)
+procedure TSettingsHandler._CheckBashProfileRequired();
+var
+  activeName: String;
+  choice: Int32;
+begin
+  if Self.IsBashProfileActive(activeName) then
+  begin
+    Self.DebugLn('_CheckBashProfileRequired -> BASH RuneLite profile OK: ' + activeName);
+    WriteLn('[BASH] BASH RuneLite profile OK: ', activeName);
+    Exit;
+  end;
+
+  if activeName = '' then
+    activeName := '(unknown)';
+
+  Self.DebugLn('_CheckBashProfileRequired -> Non-BASH RuneLite profile active: ' + activeName);
+  WriteLn('[BASH] Non-BASH RuneLite profile active: ', activeName);
+
+  choice := MessageDlg(
+    'B.A.S.H',
+    'Non-BASH RuneLite profile detected.' + LineEnding + LineEnding +
+    'Active profile: "' + activeName + '"' + LineEnding + LineEnding +
+    'Please install/select the BASH RuneLite profile from the B.A.S.H Launcher' + LineEnding +
+    '(Install RuneLite Profile), then restart this script.' + LineEnding + LineEnding +
+    'Continue anyway?',
+    TMsgDlgType.mtWarning,
+    [mbYes, mbNo]
+  );
+
+  if choice <> mrYes then
+    TerminateScript('Non-BASH RuneLite profile detected: ' + activeName);
+end;
+
+(*
+## SettingsHandler.CheckBashProfileRequired()
+```pascal
+procedure TSettingsHandler.CheckBashProfileRequired();
+```
+Confirms the active RuneLite profile is the BASH profile installed by the
+B.A.S.H Launcher. If it is not, shows a warning and lets the user continue
+or stop the script. Automatically synchronizes to the main thread.
+
+Example:
+```pascal
+SettingsHandler.CheckBashProfileRequired();
+```
+*)
+procedure TSettingsHandler.CheckBashProfileRequired();
+begin
+  if Self.Name = '' then
+    Self.Setup();
+  Sync(@Self._CheckBashProfileRequired);
 end;
 
 (*
@@ -977,6 +1108,76 @@ begin
   Self.CheckRegularSettings();
   Self.CheckXPBarSettings();
   Self.CheckMagicSettings();
+end;
+
+(*
+## SettingsHandler.RunDiagnostic()
+```pascal
+procedure TSettingsHandler.RunDiagnostic();
+```
+Standalone "settings searcher" entry point for users having client/setup problems.
+Requires the player to be logged in. Blocks real mouse/keyboard input, then
+checks display, in-game toggles, XP bar, magic filters, GPU plugin (any active
+RuneLite profile), and the BASH profile.
+
+If the client is switched to fixed mode, the diagnostic stops so the user can
+re-run it after RuneLite has resized.
+
+Example:
+```pascal
+SettingsHandler.RunDiagnostic();
+```
+*)
+procedure TSettingsHandler.RunDiagnostic();
+var
+  wasFixed: Boolean;
+  client: ERSClient;
+begin
+  if Self.Name = '' then
+    Self.Setup();
+
+  if not RSClient.IsLoggedIn() then
+    TerminateScript('Please run this while logged in');
+
+  AddOnTerminate(@Self.ClearBitmaps);
+
+  {$IFNDEF SRL_DISABLE_REMOTEINPUT}
+  if not RSClient.RemoteInput.IsSetup() then
+    RSClient.RemoteInput.Setup();
+  if RSClient.RemoteInput.IsSetup() then
+  begin
+    RSClient.RemoteInput.DisableRealInput();
+    WriteLn('[BASH] Client input blocked - do not touch the mouse or keyboard');
+  end;
+  {$ENDIF}
+
+  WriteLn('[BASH] Running settings diagnostic...');
+
+  client := RSClient.GetCurrentClient();
+  WriteLn('[BASH] Client: ', client);
+  if client <> ERSClient.RUNELITE then
+    WriteLn('[BASH] Warning: BASH scripts expect RuneLite');
+
+  wasFixed := RSClient.Mode = ERSClientMode.FIXED;
+  WriteLn('[BASH] Checking display settings...');
+  Self.CheckDisplaySettings();
+  if (not wasFixed) and (RSClient.Mode = ERSClientMode.FIXED) then
+  begin
+    WriteLn('[BASH] Client was switched to fixed mode. Re-run this diagnostic after RuneLite has resized.');
+    TerminateScript('Client mode changed to fixed - please re-run the diagnostic');
+  end;
+
+  WriteLn('[BASH] Checking game settings...');
+  Self.CheckRegularSettings();
+  WriteLn('[BASH] Checking XP bar...');
+  Self.CheckXPBarSettings();
+  WriteLn('[BASH] Checking magic filters...');
+  Self.CheckMagicSettings();
+  WriteLn('[BASH] Checking GPU plugin...');
+  Self.CheckGPUPlugin();
+  WriteLn('[BASH] Checking BASH RuneLite profile...');
+  Self.CheckBashProfileRequired();
+  WriteLn('[BASH] Settings diagnostic complete.');
 end;
 
 var

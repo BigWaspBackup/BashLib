@@ -317,16 +317,8 @@ end;
 
 procedure TBASHBirdHouseRunner.BindMapObjects();
 begin
-  Map.Walker.AdaptiveWalk := True;
+  BASHRebindMap(True);
   MushTree.Mushrooms.Walker := @Map.Walker;
-
-  Objects.Data := nil;
-  NPCs.Data := nil;
-  Banks.MapObjects := [];
-  Banks.ObjectsCache := [];
-  Banks.NPCsCache := [];
-  Objects.Setup(Map.Objects(), @Map.Walker);
-  NPCs.Setup(Map.NPCs(), @Map.Walker);
 end;
 
 procedure TBASHBirdHouseRunner.EnsureChunks();

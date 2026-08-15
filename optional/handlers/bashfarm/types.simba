@@ -178,7 +178,10 @@ type
     EmptyUpText, PlantedUpText, HarvestUpText: String;
     TPA: TPointArray;
     SearchBox: TBox;
-    Harvested, Planted, Composted, Skip, Complete, DontClear: Boolean;
+    AimTile: TPoint;
+    LastPickedTile: TPoint;
+    HasAimTile: Boolean;
+    Harvested, Planted, Composted, Skip, Complete, DontClear, OutOfSeeds: Boolean;
     UseFertileSoil: Boolean;
     MagicSecateurs: Boolean;
     BarbDibber: Boolean;
@@ -252,4 +255,17 @@ const
     'Grimy dwarf weed', 'Grimy torstol'
   ];
 
+var
+  BASHFarmAbortRun: Boolean;
+  BASHFarmAbortReason: String;
+
 {$I BashLib/optional/handlers/bashcommon.simba}
+
+procedure BASHFarmFailTools(reason: String);
+begin
+  if BASHFarmAbortRun then
+    Exit;
+  BASHFarmAbortRun := True;
+  BASHFarmAbortReason := reason;
+  WriteLn('[BASHFarm] ', reason, ' - finishing farm run and disabling farm runs');
+end;

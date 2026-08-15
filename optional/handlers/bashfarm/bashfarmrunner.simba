@@ -47,6 +47,7 @@ type
     WeaponRestoreAt: EBASHFairyWeaponRestore;
 
     GuildTravelFailed: Boolean;
+    DisabledSeeds: TRSItemArray;
   end;
 
 var
@@ -114,6 +115,7 @@ begin
   Self.PreviousWeapon := '';
   Self.WeaponRestoreAt := EBASHFairyWeaponRestore.IMMEDIATE;
   Self.GuildTravelFailed := False;
+  SetLength(Self.DisabledSeeds, 0);
 end;
 
 procedure TBASHFarmRunner.BuildFromConfig(cfg: TBASHFarmConfig);
@@ -212,16 +214,8 @@ end;
 
 procedure TBASHFarmRunner.BindMapObjects();
 begin
-  Map.Walker.AdaptiveWalk := True;
-  Map.Walker._DoorHandler.Enabled := True;
-
-  Objects.Data := nil;
-  NPCs.Data := nil;
-  Banks.MapObjects := [];
-  Banks.ObjectsCache := [];
-  Banks.NPCsCache := [];
-  Objects.Setup(Map.Objects(), @Map.Walker);
-  NPCs.Setup(Map.NPCs(), @Map.Walker);
+  BASHRebindMap(True);
+  Map.Walker._DoorHandler.Enabled := False;
 end;
 
 procedure TBASHFarmRunner.EnsureChunks();
@@ -328,7 +322,7 @@ begin
       ((quant = Bank.QUANTITY_ALL) or
        (Inventory.CountItem(item) >= quant) or
        (Inventory.CountItemStack(item) >= quant)),
-      35, 4000);
+      35, 6000);
 
     if Result then
     begin
@@ -339,6 +333,42 @@ begin
 
   WriteLn('[BASHFarm] Failed to withdraw ', ToStr(item));
   Result := False;
+end;
+
+function TBASHFarmRunner.IsSeedDisabled(seed: TRSItem): Boolean;
+var
+  i: Int32;
+begin
+  Result := False;
+  if seed = '' then
+    Exit;
+  for i := 0 to High(Self.DisabledSeeds) do
+    if Self.DisabledSeeds[i] = seed then
+      Exit(True);
+end;
+
+procedure TBASHFarmRunner.DisableSeed(seed: TRSItem; reason: String);
+var
+  i: Int32;
+  patch: TBASHFarmPatch;
+begin
+  if seed = '' then
+    Exit;
+
+  if not Self.IsSeedDisabled(seed) then
+  begin
+    Self.DisabledSeeds += seed;
+    WriteLn('[BASHFarm] Out of ', ToStr(seed), ' - skipping those patches for remaining runs (', reason, ')');
+  end;
+
+  for i := 0 to High(Self.Patches) do
+  begin
+    patch := Self.Patches[i];
+    if (patch.Seed <> seed) or patch.Skip or patch.Complete then
+      Continue;
+    patch.SkipPatch('Out of ' + ToStr(seed));
+    Self.Patches[i] := patch;
+  end;
 end;
 
 function BASHFarmIsMagicTeleport(tp: ETeleportType): Boolean;
@@ -573,7 +603,7 @@ begin
   if Bank.IsOpen() then
   begin
     Bank.Close();
-    WaitUntil(not Bank.IsOpen(), 50, 2500);
+    WaitUntil(not Bank.IsOpen(), 50, 5000);
   end;
 
   SetLength(Self.EquippedTravelKeys, 0);
@@ -702,6 +732,12 @@ begin
     if counted then
       Continue;
 
+    if Self.IsSeedDisabled(seed) then
+    begin
+      WriteLn('[BASHFarm] Skipping withdraw for ', ToStr(seed), ' (out of seeds)');
+      Continue;
+    end;
+
     seedsNeeded := 0;
     for j := 0 to High(Self.Patches) do
       if Self.Patches[j].Seed = seed then
@@ -713,6 +749,8 @@ begin
       end;
 
     Self.FarmWithdrawHelper(seed, seedsNeeded);
+    if BASHFarmCountSeed(seed) <= 0 then
+      Self.DisableSeed(seed, 'none withdrawn');
   end;
 
   SetLength(runeNames, 0);
@@ -953,7 +991,7 @@ begin
   if not Inventory.ClickItem(Self.PreviousWeapon) then
     Exit(False);
 
-  Result := WaitUntil(Equipment.ContainsItem(Self.PreviousWeapon), 100, 2500);
+  Result := WaitUntil(Equipment.ContainsItem(Self.PreviousWeapon), 65, 5000);
   if Result then
   begin
     WriteLn('[BASHFarm] Restored weapon: ', Self.PreviousWeapon);
@@ -1019,7 +1057,7 @@ begin
     Exit(False);
   end;
 
-  Result := WaitUntil(not Inventory.ContainsItem(FairyRing.Item), 100, 3000);
+  Result := WaitUntil(not Inventory.ContainsItem(FairyRing.Item), 100, 5000);
   if Result then
   begin
     Self.FairyStaffEquipped := True;
@@ -1237,7 +1275,7 @@ begin
 
   Map.Walker.ScreenWalk := savedScreenWalk;
   Map.Walker.AdaptiveWalk := savedAdaptiveWalk;
-  Map.Walker._DoorHandler.Enabled := True;
+  Map.Walker._DoorHandler.Enabled := False;
   WriteLn('[BASHFarm] Guild Fairy CIR: fairy ring failed after 3 attempts');
   Result := False;
 end;
@@ -1265,7 +1303,7 @@ begin
     Result := Magic.CastSpell(ERSSpell.TELEPORT_TO_HOUSE, 'Outside');
     if Result then
     begin
-      Result := WaitUntil(not Map.Position().InRange(startPos, 10), 35, 10000);
+      Result := WaitUntil(not Map.Position().InRange(startPos, 10), 35, 6000);
     end;
     if not Result then
       WriteLn('[BASHFarm] House spell (Outside) failed');
@@ -1295,7 +1333,7 @@ begin
       end;
     if Result then
     begin
-      Result := WaitUntil(not Map.Position().InRange(startPos, 10), 35, 10000);
+      Result := WaitUntil(not Map.Position().InRange(startPos, 10), 35, 6000);
     end;
     if not Result then
       WriteLn('[BASHFarm] House tablet (Outside) failed');
@@ -1348,7 +1386,7 @@ begin
 
     if Result then
     begin
-      Result := WaitUntil(not Map.Position().InRange(startPos, 10), 35, 12000);
+      Result := WaitUntil(not Map.Position().InRange(startPos, 10), 35, 8000);
     end;
     if not Result then
       WriteLn('[BASHFarm] Book of the dead Reminisce -> 1 (Lunch) failed');
@@ -1519,7 +1557,7 @@ const
 begin
   WaitUntil((Minimap.PercentBlack() < 25), 35, 3000);
 
-  if not WaitUntil(Map.Position().DistanceTo(RENU_TILE) <= 90, 50, 10000) then
+  if not WaitUntil(Map.Position().DistanceTo(RENU_TILE) <= 90, 50, 8000) then
     WriteLn('[BASHFarm] Ortus: walker not near Renu yet (pos ', Map.Position(), ')');
 
   if not Self.OrtusUseRenuToHunterGuild() then
@@ -1545,7 +1583,7 @@ begin
   if not Inventory.ClickItem('Civitas illa fortis teleport', 'Break') then
     Exit(False);
 
-  if not WaitUntil(not Map.Position().InRange(startPos, 10), 35, 12000) then
+  if not WaitUntil(not Map.Position().InRange(startPos, 10), 35, 8000) then
     Exit(False);
 
   Result := Self.TeleportOrtusCivitasAfterArrive();
@@ -1565,28 +1603,12 @@ begin
     Exit(False);
   end;
 
-  if not WaitUntil(not Map.Position().InRange(startPos, 10), 35, 12000) then
+  if not WaitUntil(not Map.Position().InRange(startPos, 10), 35, 8000) then
     Exit(False);
 
   Result := Self.TeleportOrtusCivitasAfterArrive();
 end;
 
-function BASHFarmIsGuildPatch(id: EBASHFarmPatch): Boolean;
-begin
-  Result := id in [
-    EBASHFarmPatch.GUILD_HERB,
-    EBASHFarmPatch.GUILD_FLOWER,
-    EBASHFarmPatch.GUILD_ALLOT_N,
-    EBASHFarmPatch.GUILD_ALLOT_S,
-    EBASHFarmPatch.GUILD_BUSH,
-    EBASHFarmPatch.GUILD_CACTUS,
-    EBASHFarmPatch.GUILD_ANIMA,
-    EBASHFarmPatch.GUILD_TREE,
-    EBASHFarmPatch.GUILD_REDWOOD,
-    EBASHFarmPatch.GUILD_FRUIT,
-    EBASHFarmPatch.GUILD_CELASTRUS
-  ];
-end;
 
 function BASHFarmIsPhasmatys(id: EBASHFarmPatch): Boolean;
 begin
@@ -1700,6 +1722,9 @@ begin
   patch.UseFertileSoil := Self.CompostMethod = EBASHCompostMethod.FERTILE_SOIL;
   patch.MagicSecateurs := Self.MagicSecateurs;
 
+  if Self.IsSeedDisabled(patch.Seed) then
+    patch.Skip := True;
+
   if Self.Journal.IsLikelyGrowing(patch.Id) and (patch.Data.PatchType in [EBASHPatchType.TREE, EBASHPatchType.FRUIT]) then
     WriteLn('[BASHFarm] Journal: ', patch.Data.Name, ' likely still growing (', Self.Journal.GetPlantedItem(patch.Id), ')');
 end;
@@ -1783,6 +1808,7 @@ begin
   Result := False;
 
   Self.CheckActivityFailsafe();
+  patch.ApplyWalkDoorSolver();
 
   if patch.Skip then
     Exit(False);
@@ -1847,7 +1873,7 @@ procedure TBASHFarmRunner.Run();
 var
   i, j, k, m, allotCount, needCompost, compostQty, phasStartHp: Int32;
   patch: TBASHFarmPatch;
-  usePhased, phasWatch, phasBailed: Boolean;
+  usePhased, phasWatch, phasBailed, allSkip: Boolean;
 begin
   if not Self.Initialized then
     Self.Init();
@@ -1867,6 +1893,8 @@ begin
 
   Self.ShufflePatchesByLocation();
   Self.GuildTravelFailed := False;
+  BASHFarmAbortRun := False;
+  BASHFarmAbortReason := '';
 
   WL.Activity.Init(5 * ONE_MINUTE);
   WL.Activity.Restart();
@@ -1874,6 +1902,8 @@ begin
   i := 0;
   while i <= High(Self.Patches) do
   begin
+    if BASHFarmAbortRun then
+      Break;
     Self.CheckActivityFailsafe();
 
     j := i;
@@ -1887,18 +1917,21 @@ begin
       Self.Patches[k] := patch;
     end;
 
-    patch := Self.Patches[i];
-    if patch.Skip or (BASHFarmIsGuildPatch(patch.Id) and Self.GuildTravelFailed) then
+    allSkip := True;
+    for k := i to j do
+      if not Self.Patches[k].Skip then
+      begin
+        allSkip := False;
+        Break;
+      end;
+
+    if BASHFarmIsGuildPatch(Self.Patches[i].Id) and Self.GuildTravelFailed then
     begin
-      if (not patch.Skip) and BASHFarmIsGuildPatch(patch.Id) and Self.GuildTravelFailed then
-        patch.SkipPatch('Farming Guild travel already failed');
-      Self.Patches[i] := patch;
-      Self.RecordPatchResult(patch);
-      for k := i + 1 to j do
+      for k := i to j do
       begin
         patch := Self.Patches[k];
         if not patch.Skip then
-          patch.SkipPatch('Location arrive failed');
+          patch.SkipPatch('Farming Guild travel already failed');
         Self.Patches[k] := patch;
         Self.RecordPatchResult(patch);
       end;
@@ -1906,6 +1939,15 @@ begin
       Continue;
     end;
 
+    if allSkip then
+    begin
+      for k := i to j do
+        Self.RecordPatchResult(Self.Patches[k]);
+      i := j + 1;
+      Continue;
+    end;
+
+    patch := Self.Patches[i];
     if not Self.ArriveAtLocation(patch) then
     begin
       Self.Patches[i] := patch;
@@ -1953,7 +1995,11 @@ begin
       Self.MaybeRestoreFairyWeapon(EBASHFairyWeaponRestore.AT_LEP);
       if not Self.Patches[i].EnsureLepTools(
            (not usePhased) or Self.Patches[i].UsesReusableCompost()) then
+      begin
         WriteLn('[BASHFarm] Warning: could not withdraw tools/compost from leprechaun at ', Self.Patches[i].Data.Name);
+        if BASHFarmAbortRun then
+          Break;
+      end;
       WL.Activity.Restart();
     end;
 
@@ -2051,7 +2097,11 @@ begin
 
         WriteLn('[BASHFarm] Bulk withdrawing ', compostQty, 'x ', patch.CompostItem, ' for ', needCompost, ' patches');
         if not patch.WithdrawLepCompost(compostQty) then
+        begin
           WriteLn('[BASHFarm] Warning: bulk compost withdraw failed at ', patch.Data.Name);
+          if BASHFarmAbortRun then
+            Break;
+        end;
         Self.Patches[i] := patch;
       end;
 
@@ -2084,8 +2134,13 @@ begin
           patch.WalkToFarmWork(10);
 
         patch.RunPlantCompostPhase(Self.Journal);
-        Self.RecordPatchResult(patch);
         Self.Patches[k] := patch;
+        if patch.OutOfSeeds then
+          Self.DisableSeed(patch.Seed, 'not enough seeds to plant');
+        Self.RecordPatchResult(Self.Patches[k]);
+
+        if BASHFarmAbortRun then
+          Break;
 
         if phasWatch and ((Minimap.GetHPLevel() < phasStartHp) or patch.CombatHpDropped()) then
         begin
@@ -2141,13 +2196,22 @@ begin
              ((not patch.UsesReusableCompost()) or (not patch.HasFarmToolsReady(True))) then
           begin
             if not patch.EnsureLepTools() then
+            begin
               WriteLn('[BASHFarm] Warning: could not withdraw tools/compost from leprechaun at ', patch.Data.Name);
+              if BASHFarmAbortRun then
+                Break;
+            end;
           end;
         end;
 
         patch.Run(Self.Journal);
-        Self.RecordPatchResult(patch);
         Self.Patches[k] := patch;
+        if patch.OutOfSeeds then
+          Self.DisableSeed(patch.Seed, 'not enough seeds to plant');
+        Self.RecordPatchResult(Self.Patches[k]);
+
+        if BASHFarmAbortRun then
+          Break;
 
         if phasWatch and ((Minimap.GetHPLevel() < phasStartHp) or patch.CombatHpDropped()) then
         begin
@@ -2165,8 +2229,14 @@ begin
       end;
     end;
 
+    if BASHFarmAbortRun then
+      Break;
+
     i := j + 1;
   end;
+
+  if BASHFarmAbortRun then
+    Self.DisableFarmRuns(BASHFarmAbortReason);
 
   for k := High(Self.Patches) downto 0 do
   begin
