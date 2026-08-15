@@ -1,3 +1,12 @@
+## [8.4.14](https://github.com/BigWaspBackup/BashLib/compare/v8.4.13...v8.4.14) (2026-08-15)
+
+
+### Bug Fixes
+
+* bump ([d256686](https://github.com/BigWaspBackup/BashLib/commit/d256686ca18c0dbae3330edd3b46ea34d0f0a290))
+
+
+
 ## [8.4.13](https://github.com/BigWaspBackup/BashLib/compare/v8.4.12...v8.4.13) (2026-08-15)
 
 
@@ -31,16 +40,6 @@
 ### Bug Fixes
 
 * game assets updated to latest version, farm run improvements ([c7debc5](https://github.com/BigWaspBackup/BashLib/commit/c7debc5870e2597d01c576c9c6d79ef5e17115f9))
-
-
-
-## [8.4.9](https://github.com/BigWaspBackup/BashLib/compare/v8.4.8...v8.4.9) (2026-08-11)
-
-
-### Bug Fixes
-
-* bump ([09d4536](https://github.com/BigWaspBackup/BashLib/commit/09d453637609ed4bf7ffbaf3e457495175c91067))
-* Farm run fixes for noting items ([831285c](https://github.com/BigWaspBackup/BashLib/commit/831285ceb01dedeb90b8ddf2f01a3f26a43cb2ee))
 
 
 
