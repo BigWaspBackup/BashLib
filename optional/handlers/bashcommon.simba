@@ -155,6 +155,9 @@ begin
   if Length(Banks.MapObjects) = 0 then
     BASHBindLocalBanks();
 
+  if Length(Banks.MapObjects) = 0 then
+    Exit(False);
+
   mapObj := Banks.GetClosest();
   if (mapObj = nil) or (Length(mapObj^.Coordinates) = 0) then
     Exit(False);

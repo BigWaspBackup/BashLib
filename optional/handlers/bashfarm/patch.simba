@@ -1740,9 +1740,12 @@ var
     compostHovered := False;
     if Self.UseFertileSoil or (Self.CompostItem = '') then
       Exit;
-    if not Inventory.ContainsItem(Self.CompostItem) then
-      Exit;
-    Result := Inventory.SetSelectedItem(Self.CompostItem);
+    if Self.SelectedSlotIsCompost() then
+      Result := True
+    else if not Inventory.ContainsItem(Self.CompostItem) then
+      Exit
+    else
+      Result := Inventory.SetSelectedItem(Self.CompostItem);
     if Result and (Random(100) < 78) then
     begin
       compostHovered := True;
@@ -2165,10 +2168,53 @@ begin
     Exit(True);
 end;
 
-function TBASHFarmPatch.EnsureCompostSelected(): Boolean;
+function TBASHFarmPatch.SelectedSlotIsCompost(): Boolean;
+var
+  selected: Int32;
+  up: String;
 begin
   Result := False;
-  if not Inventory.ContainsItem(Self.CompostItem) then
+  selected := Inventory.GetSelectedSlot();
+  if selected < 0 then
+    Exit;
+
+  up := MainScreen.GetUpText();
+  if Self.CompostItemInUseUpText(up) then
+    Exit(True);
+
+  if not Inventory.MouseSlot(selected) then
+    Exit;
+  up := MainScreen.GetUpText();
+  Result := Self.CompostItemInUseUpText(up);
+end;
+
+function TBASHFarmPatch.HasCompostInInventory(): Boolean;
+begin
+  Result := False;
+  if Self.UseFertileSoil or (Self.CompostItem = '') then
+    Exit(True);
+
+  if Inventory.ContainsItem(Self.CompostItem) then
+    Exit(True);
+
+  Result := Self.SelectedSlotIsCompost();
+end;
+
+function TBASHFarmPatch.EnsureCompostSelected(): Boolean;
+var
+  selected: Int32;
+begin
+  Result := False;
+
+  selected := Inventory.GetSelectedSlot();
+  if selected >= 0 then
+  begin
+    if Self.SelectedSlotIsCompost() then
+      Exit(True);
+    Inventory.SetSelectedSlot(-1);
+  end;
+
+  if not Self.HasCompostInInventory() then
     if not Self.WithdrawLepCompost() then
       Exit(False);
 
@@ -2245,8 +2291,9 @@ begin
 
   for aimAttempt := 1 to maxAims do
   begin
-    if not Self.EnsureCompostSelected() then
-      Break;
+    if Inventory.GetSelectedSlot() = -1 then
+      if not Self.EnsureCompostSelected() then
+        Break;
 
     compostUp := MainScreen.GetUpText();
     ready := Self.CompostTargetReady(compostUp);
@@ -2657,7 +2704,7 @@ begin
     Exit(False);
 
   needCompost := includeCompost and (not Self.UseFertileSoil) and (Self.CompostItem <> '');
-  if needCompost and (not Inventory.ContainsItem(Self.CompostItem)) then
+  if needCompost and (not Self.HasCompostInInventory()) then
     Exit(False);
 
   Result := True;
@@ -3301,6 +3348,9 @@ begin
 
     if not RSInterface.IsOpen() then
     begin
+      if Inventory.GetSelectedSlot() >= 0 then
+        Inventory.SetSelectedSlot(-1);
+
       if isBottomless then
       begin
         if Inventory.ContainsItem(Self.CompostItem) then
@@ -3673,7 +3723,7 @@ begin
     needSpade := not Inventory.ContainsItem('Spade');
     needDibber := (not Self.BarbDibber) and (not Inventory.ContainsItem('Seed dibber'));
     needCompost := includeCompost and (not Self.UseFertileSoil) and (Self.CompostItem <> '') and
-                   (not Inventory.ContainsItem(Self.CompostItem));
+                   (not Self.HasCompostInInventory());
 
     if (not needSecs) and (not needSpade) and (not needDibber) and (not needCompost) then
       Exit(True);
@@ -3715,7 +3765,7 @@ begin
         or Equipment.ContainsItem('Magic secateurs')) and
       ((not needSpade) or Inventory.ContainsItem('Spade')) and
       ((not needDibber) or Inventory.ContainsItem('Seed dibber')) and
-      ((not needCompost) or Inventory.ContainsItem(Self.CompostItem)),
+      ((not needCompost) or Self.HasCompostInInventory()),
       35,
       1500
     );
@@ -3724,7 +3774,7 @@ begin
       or Equipment.ContainsItem('Magic secateurs');
     okSpade := (not needSpade) or Inventory.ContainsItem('Spade');
     okDibber := (not needDibber) or Inventory.ContainsItem('Seed dibber');
-    okCompost := (not needCompost) or Inventory.ContainsItem(Self.CompostItem);
+    okCompost := (not needCompost) or Self.HasCompostInInventory();
 
     if okSecs and okSpade and okDibber and okCompost then
       Exit(True);

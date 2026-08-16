@@ -2082,7 +2082,7 @@ begin
       begin
         patch := Self.Patches[i];
         if (patch.CompostItem = 'Bottomless compost bucket') and
-           Inventory.ContainsItem(patch.CompostItem) then
+           patch.HasCompostInInventory() then
           needCompost := 0;
       end;
 
