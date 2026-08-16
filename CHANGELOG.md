@@ -1,3 +1,12 @@
+## [8.4.15](https://github.com/BigWaspBackup/BashLib/compare/v8.4.14...v8.4.15) (2026-08-16)
+
+
+### Bug Fixes
+
+* improved composting ([5fbf1f2](https://github.com/BigWaspBackup/BashLib/commit/5fbf1f27d3d0ea1b78c73e325224102e37092c47))
+
+
+
 ## [8.4.14](https://github.com/BigWaspBackup/BashLib/compare/v8.4.13...v8.4.14) (2026-08-15)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Quetzel improvements and compost improvements ([269e602](https://github.com/BigWaspBackup/BashLib/commit/269e60243a805c9c6f2affbf589039a82d9fa933))
-
-
-
-## [8.4.10](https://github.com/BigWaspBackup/BashLib/compare/v8.4.9...v8.4.10) (2026-08-11)
-
-
-### Bug Fixes
-
-* game assets updated to latest version, farm run improvements ([c7debc5](https://github.com/BigWaspBackup/BashLib/commit/c7debc5870e2597d01c576c9c6d79ef5e17115f9))
 
 
 
