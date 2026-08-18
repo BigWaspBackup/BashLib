@@ -22,29 +22,26 @@ begin
 end;
 
 type
-  TStatsPayload = type TSRLBaseRecord;
+  TStatsPayload = record(TSRLBaseRecord)
+    ScriptID: String;
+  end;
 
-procedure TStatsPayload.Setup({$H-}id: String; user: String = '');{$H+} deprecated 'This is not needed anymore';
+procedure TStatsPayload.Setup({$H-}id: String; {$H-}user: String = '');{$H+} deprecated 'WaspStats API has been removed.';
 begin
-
 end;
 
-procedure TStatsPayload.Update(xp, gp, time: Int32); deprecated 'Use APICLient.UpdatePayload() instead.';
+procedure TStatsPayload.Update({$H-}xp, {$H-}gp, {$H-}time: Int32); deprecated 'WaspStats API has been removed.';
 begin
-  APIClient.UpdatePayload(xp, gp, time);
 end;
 
-procedure TStatsPayload.SetUsername(user: String = ''); deprecated 'Use APICLient.SetUsername() instead.';
+procedure TStatsPayload.SetUsername({$H-}user: String = ''); deprecated 'WaspStats API has been removed.';
 begin
-  APIClient.SetUsername(user);
 end;
-
 
 {$H-}
 var
   StatsPayload: TStatsPayload;
 {$H+}
-
 
 function TRSWalker.GetMMPoly(tpa: TPointArray): TPointArray; deprecated 'Use TRSWalker.WorldToMM() instead.';
 begin

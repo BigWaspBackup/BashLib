@@ -123,7 +123,7 @@ begin
     Exit(true);
   end;
 
-  if not Inventory.ClickItem(item) then
+  if not Inventory.ClickItem(item, 'Rub') then
     Exit(false);
 
   if WaitUntil(FindDTM(lampInterface, x, y, Mainscreen.Bounds), 100, 2000) then

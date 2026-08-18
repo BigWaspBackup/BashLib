@@ -212,6 +212,8 @@ type
     PlayerData: array of TAIChatPlayerData;
     LogFilePath: String;
     LastDrawTime: Int64;
+    LastDrawnStatus: String;
+    LastDrawBox: TBox;
     SessionStartTime: Int64;
     TotalMessagesProcessed: Integer;
     TotalAIResponses: Integer;
@@ -973,34 +975,113 @@ begin
   Self.NotifyDiscord('AI Chatbot - Message Ignored', '**Message Ignored** :no_entry_sign:', detailedDescription, $FF0000);
 end;
 
-procedure TAIChatbot.DrawAIText();
-var
-  msBox: TBox;
-  textPoint: TPoint;
-  text: String;
+function TAIChatbot.RemoteInputReady(): Boolean;
 begin
-  msBox := Chat.Bounds;
-  text := 'AI Chatbot: ';
-  textPoint := Point(msBox.X2 - 170, msBox.Y2 - 20);
+  Result := False;
+  {$IFNDEF SRL_DISABLE_REMOTEINPUT}
+  if not WLSettings.GetObject('remote_input').getBoolean('enabled') then
+    Exit;
+  if not RSClient.RemoteInput.IsSetup() then
+    Exit;
+  Result := True;
+  {$ENDIF}
+end;
 
-  RSClient.Image().setFontName('Arial');
-  RSClient.Image().setFontSize(19);
-  RSClient.Image().setFontAntialiasing(False);
-  RSClient.Image().DrawText(text, textPoint, $FFFF00);
+procedure TAIChatbot.HideOverlay();
+begin
+  if Self.LastDrawnStatus = '' then
+    Exit;
 
-  textPoint.X := textPoint.X + 95;
-  if ChatButtons.IsActive(ERSChatButton.ALL_CHAT) or ChatButtons.IsActive(ERSChatButton.PUBLIC_CHAT) then
+  {$IFNDEF SRL_DISABLE_REMOTEINPUT}
+  if Self.RemoteInputReady() then
+    RSClient.Image().Clear(Self.LastDrawBox.Expand(3));
+  {$ENDIF}
+
+  Self.LastDrawnStatus := '';
+  Self.LastDrawTime := 0;
+end;
+
+procedure TAIChatbot.DrawAIText(force: Boolean = False);
+const
+  OVERLAY_REFRESH_MS = 45000;
+  PREFIX = 'AI Chat: ';
+  FONT_SIZE = 20;
+  STABLE_PX = 4;
+var
+  img: TMufasaBitmap;
+  chatBox, drawBox: TBox;
+  origin: TPoint;
+  statusText: String;
+  statusColor, prefixW, textW, textH: Int32;
+  now: Int64;
+  statusChanged: Boolean;
+begin
+  if not Self.Enabled then
   begin
-    Self.ChatboxEnable := True;
-    RSClient.Image().DrawText('Enabled', Point(textPoint.X + 1, textPoint.Y + 1), $000000);
-    RSClient.Image().DrawText('Enabled', textPoint, $00FF00);
+    Self.HideOverlay();
+    Exit;
+  end;
+
+  if not Self.RemoteInputReady() then
+    Exit;
+
+  Self.ChatboxEnable := ChatButtons.IsActive(ERSChatButton.ALL_CHAT) or
+                        ChatButtons.IsActive(ERSChatButton.PUBLIC_CHAT);
+  if Self.ChatboxEnable then
+  begin
+    statusText := 'Enabled';
+    statusColor := $00FF00;
   end
   else
   begin
-    Self.ChatboxEnable := False;
-    RSClient.Image().DrawText('Disabled', Point(textPoint.X + 1, textPoint.Y + 1), $000000);
-    RSClient.Image().DrawText('Disabled', textPoint, $FF4444);
+    statusText := 'Disabled';
+    statusColor := $FF4444;
   end;
+
+  now := GetSystemTime();
+  statusChanged := (PREFIX + statusText) <> Self.LastDrawnStatus;
+  if (not force) and (not statusChanged) and (Self.LastDrawTime > 0) and
+     ((now - Self.LastDrawTime) < OVERLAY_REFRESH_MS) then
+    Exit;
+
+  chatBox := Chat.Bounds;
+  if (chatBox.X2 <= chatBox.X1) or (chatBox.Y2 <= chatBox.Y1) then
+    Exit;
+
+  img := RSClient.Image();
+  img.setFontName('Arial');
+  img.setFontSize(FONT_SIZE);
+  img.setFontAntialiasing(False);
+
+  prefixW := img.TextWidth(PREFIX);
+  textW := prefixW + img.TextWidth(statusText);
+  textH := FONT_SIZE + 8;
+
+  drawBox := [
+    chatBox.X2 - textW - 6,
+    chatBox.Y2 - textH + 6,
+    chatBox.X2 - 2,
+    chatBox.Y2 + 7
+  ];
+
+  if (Self.LastDrawnStatus <> '') and
+     (Abs(drawBox.X1 - Self.LastDrawBox.X1) <= STABLE_PX) and
+     (Abs(drawBox.Y1 - Self.LastDrawBox.Y1) <= STABLE_PX) then
+    drawBox := Self.LastDrawBox;
+
+  if Self.LastDrawnStatus <> '' then
+    img.Clear(Self.LastDrawBox.Expand(3));
+  img.Clear(drawBox.Expand(3));
+
+  origin := Point(drawBox.X1 + 2, drawBox.Y1 + 2);
+  img.DrawText(PREFIX, Point(origin.X + 1, origin.Y + 1), 1);
+  img.DrawText(PREFIX, origin, $FFFF00);
+  img.DrawText(statusText, Point(origin.X + prefixW + 1, origin.Y + 1), 1);
+  img.DrawText(statusText, Point(origin.X + prefixW, origin.Y), statusColor);
+
+  Self.LastDrawBox := drawBox;
+  Self.LastDrawnStatus := PREFIX + statusText;
+  Self.LastDrawTime := now;
 end;
 
 procedure TAIChatbot.CheckAndFixChatTabs();
@@ -2078,7 +2159,8 @@ begin
   Self.TotalAIResponses := 0;
   Self.TotalBlockedMessages := 0;
   SetLength(Self.SessionConversationLog, 0);
-  Self.LastDrawTime := GetSystemTime();
+  Self.LastDrawTime := 0;
+  Self.LastDrawnStatus := '';
   Self.MaxInteractionHistoryAge := 86400000;
   Self.EnsurePlayerHistoryDir();
 
@@ -2116,6 +2198,8 @@ begin
   if AIChatDiscord.Webhook.URL <> '' then
     AddOnTerminate(@AIChatbot.SendSessionSummaryNotification);
 {$ENDIF}
+
+  Self.DrawAIText(True);
 end;
 
 procedure TAIChatbot.ProcessMessages();
@@ -2132,22 +2216,16 @@ var
 begin
   if not Self.Enabled then Exit;
 
+  Self.CheckAndFixChatTabs();
+  Self.ChatboxEnable := ChatButtons.IsActive(ERSChatButton.ALL_CHAT) or
+                        ChatButtons.IsActive(ERSChatButton.PUBLIC_CHAT);
+  Self.DrawAIText();
+
   currentTime := GetSystemTime();
   if (Self.MessageCooldown > 0) and (Self.LastProcessTime > 0) and
      ((currentTime - Self.LastProcessTime) < Self.MessageCooldown) then
     Exit;
   Self.LastProcessTime := currentTime;
-
-  Self.CheckAndFixChatTabs();
-
-  Self.ChatboxEnable := ChatButtons.IsActive(ERSChatButton.ALL_CHAT) or
-                        ChatButtons.IsActive(ERSChatButton.PUBLIC_CHAT);
-
-  if ((GetSystemTime() - Self.LastDrawTime) > 10000) and (RSClient.RemoteInput.IsSetup) then
-  begin
-    Self.DrawAIText();
-    Self.LastDrawTime := GetSystemTime();
-  end;
 
   if not Self.ChatboxEnable then
     Exit;
@@ -2247,6 +2325,8 @@ begin
   end
   else
     WriteLn('[AI Chatbot] AI service took longer than target time, no additional delay needed');
+
+  Self.DrawAIText(True);
 
   aiResponse := SanitizeForGameChat(aiResponse);
   WriteLn('[AI Chatbot] AI Response: ' + aiResponse);
@@ -2897,7 +2977,10 @@ begin
   Result := inherited;
 
   if not AIChatbot.Enabled then
+  begin
+    AIChatbot.HideOverlay();
     Exit;
+  end;
 
   if not (checkBreaks or checkSleeps) then
     Exit;

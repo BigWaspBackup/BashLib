@@ -110,7 +110,6 @@ begin
   Self.CreateAntibanManager();
   Self.CreateBankSettings();
   Self.CreateWaspLibSettings();
-  Self.CreateAPISettings();
 
   inherited;
 end;

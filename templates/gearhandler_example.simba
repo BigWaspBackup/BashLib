@@ -71,7 +71,6 @@ begin
   Self.CreateEquipmentManager();
   Self.CreateAntibanManager();
   Self.CreateWaspLibSettings();
-  Self.CreateAPISettings();
 
   inherited;
 end;

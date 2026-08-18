@@ -161,9 +161,6 @@ var
   i: Int32;
   str: String;
 begin
-  if APIClient.Timer.IsFinished() then
-    APIClient.SubmitStats(APIClient.GetUUID());
-
   ProgressReport.ProgressArray := Self.BuildTextReport();
 
   if Self.OnAntiban then
@@ -207,57 +204,6 @@ begin
 
   Self.PreviousAction := Self.Action;
   Self.PrintTimer.Restart();
-end;
-
-(*
-## CheckUpdates
-```pascal
-procedure CheckUpdates(caption: String = 'Updates Available');
-```
-Checks for updates for SRL-B, BashLib and the current script.
-*)
-procedure CheckUpdates(caption: String = 'Updates Available');
-var
-  latestSRLT, latestWL, latestRev, currentSRLT, currentWL, currentRev: String;
-  isLatestSRLT, isLatestWL, isLatestRev: Boolean;
-  msg: String;
-begin
-  APIClient.GetAllVersions({$macro SCRIPT_ID}, latestRev, latestSRLT, latestWL);
-
-  if latestSRLT = '' then
-    latestSRLT := 'Failed to check...';
-
-  if latestWL = '' then
-    latestWL := 'Failed to check...';
-
-  if latestRev = '' then
-    latestRev := 'Failed to check...';
-
-  currentSRLT := GetPackageVersion('srl-b');
-  currentWL := GetPackageVersion('bashlib');
-  currentRev := {$macro SCRIPT_REVISION};
-
-  isLatestSRLT := currentSRLT = latestSRLT;
-  isLatestWL   := currentWL   = latestWL;
-  isLatestRev  := currentRev  = latestRev;
-
-  if isLatestSRLT and isLatestWL and isLatestRev then
-    Exit;
-
-  msg := LINEENDING + 'The following seems to be outdated:' + LINEENDING + LINEENDING;
-
-  if not isLatestSRLT then
-    msg += '- SRL-B (Current version: ' + currentSRLT + ' Latest version: ' + latestSRLT + ').' + LINEENDING;
-
-  if not isLatestWL then
-    msg += '- BashLib (Current version: ' + currentWL + ' Latest version: ' + latestWL + ').' + LINEENDING;
-
-  if not isLatestRev then
-    msg += '- Script (Current revision: ' + currentRev + ' Latest revision: ' + latestRev + ').' + LINEENDING;
-
-  msg += LINEENDING;
-
-  MessageDlg(caption, msg, mtWarning,[mbClose]);
 end;
 
 (*
@@ -358,11 +304,6 @@ begin
     Stats.CacheAll();
     StopAtLevel.ScheduleNextStatsCache();
   end;
-
-  //wasp-stats
-  if not APIClient.Disabled then
-    APIClient.Disabled := not WLSettings.GetBoolean('stats');
-  APIClient.TimeStamp := GetTickCount();
   //override me to add more stuff.
 end;
 

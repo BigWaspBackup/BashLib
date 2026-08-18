@@ -66,10 +66,12 @@ This library along with [SRL-B](https://github.com/Torwent/SRL-B) is the core of
 {$IFNDEF WL_LOGOUT_INCLUDED}            {$I osr/interfaces/gametabs/logout.simba}
 {$IFNDEF YOLANDI_WORLDHOPPER_INCLUDED}  {$I osr/interfaces/gametabs/worldhopper.simba}
 {$IFNDEF WL_LAMP_HANDLER_INCLUDED}      {$I osr/interfaces/mainscreen/lampHandler.simba}
+{$IFNDEF WL_RANDOM_EVENTS_INCLUDED}     {$I osr/handlers/randomevents.simba}
 {$IFNDEF WL_OVERHEADS_INCLUDED}         {$I osr/interfaces/mainscreen/overheads/overheads.simba}
 
 {$IFNDEF WL_DEPRECATED_INCLUDED} {$I osr/deprecated.simba} {$ELSE}{$ENDIF}
 
+{$ELSE}{$ENDIF}
 {$ELSE}{$ENDIF}
 {$ELSE}{$ENDIF}
 {$ELSE}{$ENDIF}

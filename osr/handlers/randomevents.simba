@@ -1,0 +1,212 @@
+{$DEFINE WL_RANDOM_EVENTS_INCLUDED}
+{$IFNDEF WL_OSR}
+  {$I BashLib/osr.simba}
+{$ENDIF}
+
+{$SCOPEDENUMS ON}
+
+type
+  ERandomEventMode = (OFF, DISMISS, INTERACT);
+
+  TRSRandomEvents = record(TSRLBaseRecord)
+    Mode: ERandomEventMode;
+    Skill: ERSLampSkill;
+    Genie: TRSNPC;
+  end;
+
+function ERSLampSkill.ToKey(): String; constref;
+var
+  key: String;
+begin
+  key := ToString(Self).Lower();
+  if '.' in key then
+    key := key.After('.');
+  Result := key;
+end;
+
+function ERSLampSkill.FromKey(value: String): ERSLampSkill; static;
+var
+  i: Int32;
+  key: String;
+begin
+  value := value.Lower().Replace('thieving', 'theiving');
+  for i := 0 to Ord(High(ERSLampSkill)) do
+  begin
+    key := ERSLampSkill(i).ToKey();
+    if value = key then
+      Exit(ERSLampSkill(i));
+  end;
+
+  Result := ERSLampSkill.WOODCUTTING;
+end;
+
+procedure TRSRandomEvents.SetupGenie();
+begin
+  with Self.Genie do
+  begin
+    Filter.Skip := False;
+    SetupUpText(['Genie']);
+    Filter.Walker := False;
+    Filter.MinimapDot := False;
+    Filter.Finder := True;
+    Filter.UpText := True;
+    Finder.ColorClusters += [
+      CTS2(14188077, 16, 0.10, 1.79),
+      CTS2(10033555, 3, 0.06, 0.88),
+      20
+    ];
+  end;
+end;
+
+procedure TRSRandomEvents.LoadSettings();
+var
+  json: TJSONObject;
+  mode: String;
+begin
+  json := WLSettings.GetObject('antiban').getJSONObject('random_events');
+  mode := json.getString('mode').Lower();
+
+  case mode of
+    'dismiss':  Self.Mode := ERandomEventMode.DISMISS;
+    'interact': Self.Mode := ERandomEventMode.INTERACT;
+    else        Self.Mode := ERandomEventMode.OFF;
+  end;
+
+  Self.Skill := ERSLampSkill.FromKey(json.getString('skill'));
+  LampHandler.Skill := Self.Skill;
+end;
+
+procedure TRSRandomEvents.DebugRandom();
+var
+  number: Int32;
+begin
+  if not Antiban.DebugRandoms then
+    Exit;
+
+  CreateDirectory('randoms');
+  number := Length(GetFiles('randoms/', 'png'));
+  if number > 1000 then
+    TerminateScript('Lots of randoms debugged');
+
+  SaveScreenshot('randoms/' + IntToStr(number) + '.png');
+end;
+
+function TRSRandomEvents.DismissByName(): Boolean;
+var
+  name: String;
+  foundBox: TBox;
+  p: TPoint;
+begin
+  name := Chat.GetDisplayName();
+  if name = '' then
+    Exit(False);
+
+  if OCR.LocateText(Box(MainScreen.Center, 250, 100), name, RS_FONT_BOLD_12, TOCRColorFilter.Create([$00FFFF, 0]), foundBox) < 1 then
+    Exit(False);
+
+  Self.DebugRandom();
+
+  p := foundBox.Middle;
+  p.Y := foundBox.Y2 + MainScreen.NormalizeDistance(15);
+  Mouse.Move(p);
+  Result := ChooseOption.Select('Dismiss');
+end;
+
+function TRSRandomEvents.DismissGenie(): Boolean;
+var
+  atpa: T2DPointArray;
+begin
+  if not Self.Genie.Find(atpa) then
+    Exit(False);
+
+  Self.DebugRandom();
+  Result := Self.Genie.SelectOption(['Dismiss']);
+end;
+
+function TRSRandomEvents.AdvanceGenieChat(): Boolean;
+var
+  timeout: TCountdown;
+  lamp: TRSItem;
+begin
+  WaitUntil(Chat.HasContinue() or LampHandler.HasLamp(lamp), 100, 5000);
+
+  timeout.Init(12000);
+  while (not timeout.IsFinished()) and Chat.HasContinue() do
+  begin
+    Chat.ClickContinue(True);
+    Wait(60, 1500, wdLeft);
+  end;
+
+  Result := WaitUntil(LampHandler.HasLamp(lamp), 100, 6000);
+end;
+
+function TRSRandomEvents.UseLamp(): Boolean;
+begin
+  LampHandler.Skill := Self.Skill;
+  Result := LampHandler.Open() and LampHandler.SelectLampSkill();
+end;
+
+function TRSRandomEvents.InteractGenie(): Boolean;
+var
+  atpa: T2DPointArray;
+begin
+  if not Self.Genie.Find(atpa) then
+    Exit(False);
+
+  Self.DebugRandom();
+
+  if not Self.Genie.Click() then
+  begin
+    Self.DebugLn('Genie click failed');
+    Exit(False);
+  end;
+
+  if not Self.AdvanceGenieChat() then
+  begin
+    Self.DebugLn('Genie interact: no lamp in inventory');
+    Exit(False);
+  end;
+
+  Result := Self.UseLamp();
+end;
+
+function TRSRandomEvents.Handle(): Boolean;
+begin
+  // Disabled until finished fuck u
+  Exit(False);
+
+  Self.LoadSettings();
+
+  case Self.Mode of
+    ERandomEventMode.OFF:
+      Exit(False);
+    ERandomEventMode.DISMISS:
+      Result := Self.DismissGenie() or Self.DismissByName();
+    ERandomEventMode.INTERACT:
+      Result := Self.InteractGenie();
+  end;
+end;
+
+procedure TRSRandomEvents.Setup();
+begin
+  Self.Name := 'RandomEvents';
+  Self.Mode := ERandomEventMode.OFF;
+  Self.Skill := ERSLampSkill.WOODCUTTING;
+  Self.SetupGenie();
+  Self.LoadSettings();
+end;
+
+var
+  RandomEvents: TRSRandomEvents;
+
+function TAntiban.DismissRandom(): Boolean; override;
+begin
+  Result := False;
+end;
+
+procedure TSRL.Setup; override;
+begin
+  inherited;
+
+  RandomEvents.Setup();
+end;

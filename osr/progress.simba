@@ -201,7 +201,10 @@ uncomment:
 *)
 procedure TRSProgressReport.Update();
 begin
-  Self.ClientImg.Clear();
+  // HUD drawing is currently disabled. Do not Clear the remote-input overlay
+  // here — that wipes other overlays such as the AI Chat status text.
+  // When re-enabling DrawBackground/DrawProgress, Clear the image first.
+  //Self.ClientImg.Clear();
   //Self.TextColor := Self.GetNextCycleColor(Self.TextColor, 10);
   //Self.DrawBackground();
   //Self.DrawProgress();

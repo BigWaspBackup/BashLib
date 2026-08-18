@@ -273,7 +273,28 @@ var
   moveMouse: Boolean;
 begin
   if not Self.Cooldown.IsFinished() then Exit;
-  if not Logout.Open() then Exit;
+
+  if Chat.HasContinue() then
+  begin
+    Self.DebugLn('Closing continue dialog before hopping');
+    Chat.ClickContinue();
+    WaitUntil(not Chat.HasContinue(), 50, 2500);
+  end;
+
+  if not Logout.Open() then
+  begin
+    if Chat.HasContinue() then
+    begin
+      Self.DebugLn('Continue dialog blocked logout, closing it');
+      Chat.ClickContinue();
+      if not WaitUntil(not Chat.HasContinue(), 50, 2500) then
+        Exit;
+      if not Logout.Open() then
+        Exit;
+    end
+    else
+      Exit;
+  end;
 
   if not Logout.IsWorldSwitcherOpen() then
     Logout.GetButton(ERSLogoutButton.WORLD_SWITCHER).Click(MOUSE_LEFT);

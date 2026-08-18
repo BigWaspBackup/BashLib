@@ -341,7 +341,6 @@ end;
 (*
 ## TScriptForm.CreateTabs
 ```pascal
-function TScriptForm.CreateAPISettings(): TTabSheet;
 function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
 function TScriptForm.CreateAccountManager(): TTabSheet; overload;
 procedure TScriptForm.ShowWorldFetcherDialog();
@@ -419,7 +418,6 @@ begin
   Self.CreateAntibanManager();
   Self.CreateBankSettings();
   Self.CreateWaspLibSettings();
-  Self.CreateAPISettings();
 
   inherited;
 end;
@@ -433,246 +431,9 @@ begin
 end.
 ```
 *)
-function TScriptForm.CreateAPISettings(): TTabSheet;
-  type TScriptForm = TScriptForm;
-  procedure TScriptForm._NewUUIDOnChange(sender: TObject);
-  var
-    newEdit, oldEdit: TEdit;
-    font: TFont;
-    new, old: String;
-  begin
-    newEdit := sender;
-    oldEdit := Self.Form.GetChild('api_uuid_edit');
-    font := newEdit.getFont();
-    new := Trim(newEdit.getText());
-    old := Trim(oldEdit.getText());
-
-    if new = old then
-      font.setColor($0088AA)
-    else if new.IsUUIDV4() then
-      font.setColor($007F3F)
-    else
-      font.setColor($0000BF);
-
-    newEdit.SetFont(font);
-  end;
-
-  procedure TScriptForm._CopyToClipboard(sender: TObject);
-  var
-    parent: TPanel;
-    edit: TEdit;
-    text: String;
-  begin
-    edit := sender;
-    text := Trim(edit.getText());
-    SetClipBoard(text);
-    parent := edit.getParent();
-    parent.SetFocus();
-  end;
-
-  procedure TScriptForm._UpdateUUID({$H-}sender: TObject);{$H+}
-  var
-    oldUUIDEdit, newUUIDEdit, oldPassEdit, newPassEdit: TEdit;
-    new: String;
-    password: String;
-    success: Boolean;
-  begin
-    newUUIDEdit := Self.Form.GetChild('api_new_uuid_edit');
-    oldUUIDEdit := Self.Form.GetChild('api_uuid_edit');
-    new := Trim(newUUIDEdit.getText());
-
-    if new = Trim(oldUUIDEdit.getText()) then
-      Exit;
-
-    if not new.IsUUIDV4() then
-      Exit;
-
-    if not InputQuery('Update UUID', 'Please enter the password of this UUID:', password) then
-      Exit;
-
-    success := APIClient.CheckPassword(new, password);
-    if not success then
-      Exit;
-
-    if MessageDlg('Update UUID', 'Are you sure?' + LINEENDING +
-                  'This can''t be reversed!'     + LINEENDING +
-                  'Backup your current UUID and PASSWORD if you are not sure!',
-                  mtConfirmation, [mbYes, mbCancel]) = mrCancel then
-      Exit;
-
-
-    newPassEdit := Self.Form.GetChild('api_new_pass_edit');
-    oldPassEdit := Self.Form.GetChild('api_pass_edit');
-
-    APIClient.Config.Put('uuid', new);
-    APIClient.Config.Put('password', password);
-    APIClient.Payload.Remove('password');
-    APIClient.Payload.Put('password', password);
-
-    oldUUIDEdit.SetText(new);
-    oldPassEdit.SetText(password);
-    newUUIDEdit.Clear();
-    newPassEdit.Clear();
-  end;
-
-  procedure TScriptForm._UpdatePassword({$H-}sender: TObject);{$H+}
-  var
-    oldEdit, newEdit: TEdit;
-    new: String;
-    success: Boolean;
-  begin
-    oldEdit := Self.Form.GetChild('api_pass_edit');
-    newEdit := Self.Form.GetChild('api_new_pass_edit');
-    new := Trim(newEdit.getText());
-
-    if new = '' then Exit;
-    success := APIClient.UpdatePassword(APIClient.GetUUID(), APIClient.GetPassword(), new);
-
-    if not success then
-    begin
-      newEdit.setCaption('Failed!');
-      Exit;
-    end;
-
-    oldEdit.setCaption(new);
-    newEdit.Clear();
-  end;
-
-  procedure TScriptForm._UserOnDone(sender: TObject);
-  var
-    user: TEdit;
-  begin
-    user := sender;
-    APIClient.SetUsername(Trim(user.getText()));
-  end;
-
-var
-  info, website: TLabel;
-  uuid, newUUID, user, pass, newPass: TLabeledEdit;
-  updateUUID, updatePass: TButton;
-  fullWidth, w, space, y: Int32;
+function TScriptForm.CreateAPISettings(): TTabSheet; deprecated 'WaspStats API has been removed.';
 begin
-  Self.AddTab('API Settings');
-  Result := Self.Tabs[High(Self.Tabs)];
-
-  fullWidth := Floor(Self.Size.X/10);
-  space := Floor(fullWidth * 0.1);
-  w := Floor(fullWidth * 3.7);
-  y := Floor(Self.Size.Y/10);
-
-  with info do
-  begin
-    Create(Result);
-    SetCaption('Check live stats at: ');
-    SetName('api_info_label');
-    SetLeft(space);
-    SetTop(y);
-    SetWidth(GetTrueWidth());
-  end;
-
-  with website do
-  begin
-    Create(Result);
-    SetCaption('https://waspscripts.com/stats');
-    SetName('api_website_label');
-    SetLeft(info.GetRight());
-    SetTop(info.GetTop());
-    SetWidth(GetTrueWidth());
-    setOnClick(@OpenLink);
-    setCursor(crHandPoint);
-  end;
-
-  with uuid do
-  begin
-    Create(Result);
-    SetCaption('WaspStats UUID:');
-    SetName('api_uuid');
-    SetLeft(space);
-    SetTop(y + Caption.AdjustToDPI(50));
-    SetWidth(w);
-    SetText(APIClient.GetUUID());
-    Edit.SetOnClick(@Self._CopyToClipboard);
-    Edit.SetCursor(crHandPoint);
-    Edit.setReadOnly(True);
-    SetTooltip('You WaspStats UUID. This is your identifier.' + LINEENDING + 'If you change it and lose it, you will lose access to this WaspStats account.' + LINEENDING + LINEENDING + 'Click to copy to clipboard!');
-  end;
-
-  with newUUID do
-  begin
-    Create(Result);
-    SetCaption('WaspStats new UUID (restore old UUID):');
-    SetName('api_new_uuid');
-
-    SetTooltip('You should not change this if you don''t know what it is.'
-    + LINEENDING + 'Use it to restore an old Stats account.' + LINEENDING
-    + LINEENDING + 'Only valid UUID v4 are accepted.');
-
-    SetLeft(w + space * 2);
-    SetTop(uuid.GetTop());
-    SetWidth(w);
-    SetMaxLength(36);
-    Edit.setOnChange(@Self._NewUUIDOnChange);
-  end;
-
-  with updateUUID do
-  begin
-    Create(Result);
-    SetCaption('Update UUID');
-    SetName('update_uuid_button');
-    SetLeft(w * 2 + space * 3);
-    SetTop(uuid.GetBottom() - GetHeight());
-    setWidth(fullWidth * 2);
-    setOnClick(@Self._UpdateUUID);
-  end;
-
-  with pass do
-  begin
-    Create(Result);
-    SetCaption('WaspStats Password:');
-    SetName('api_pass');
-    SetLeft(uuid.getLeft());
-    SetTop(uuid.GetBottom() + TControl.AdjustToDPI(25));
-    SetWidth(w);
-    SetText(APIClient.GetPassword());
-    Edit.SetOnClick(@Self._CopyToClipboard);
-    Edit.SetCursor(crHandPoint);
-    Edit.setReadOnly(True);
-    SetTooltip('You WaspStats UUID. This is your identifier.' + LINEENDING + 'If you change it and lose it, you will lose access to this WaspStats account.' + LINEENDING + LINEENDING + 'Click to copy to clipboard!');
-  end;
-
-  with newPass do
-  begin
-    Create(Result);
-    SetCaption('WaspStats New Password:');
-    SetName('api_new_pass');
-    SetLeft(newUUID.getLeft());
-    SetTop(pass.GetTop());
-    SetWidth(w);
-  end;
-
-  with updatePass do
-  begin
-    Create(Result);
-    SetCaption('Update Password');
-    SetName('update_pass_button');
-    SetLeft(w * 2 + space * 3);
-    SetTop(pass.GetBottom() - GetHeight());
-    setWidth(fullWidth * 2);
-    setOnClick(@Self._UpdatePassword);
-  end;
-
-  with user do
-  begin
-    Create(Result);
-    SetCaption('WaspStats Username (this will be visible!):');
-    SetName('api_user');
-    SetLeft(uuid.getLeft());
-    SetTop(pass.GetBottom() + TControl.AdjustToDPI(25));
-    SetWidth(w);
-    SetText(APIClient.GetUsername());
-    SetTooltip('Your WaspStats username.');
-    Edit.setOnEditingDone(@Self._UserOnDone);
-  end;
+  Result := nil;
 end;
 
 (*
@@ -2169,6 +1930,48 @@ function TScriptForm.CreateAntibanManager(owner: TControl): TPanel;
     if edit <> nil then edit.SetText(ToStr(Antiban.GetSleepLength()));
   end;
 
+  procedure TScriptForm._RandomEventsModeOnChange(sender: TObject);
+  var
+    combo, skill: TComboBox;
+    mode: String;
+  begin
+    combo := sender;
+    case combo.getItemIndex() of
+      1: mode := 'dismiss';
+      2: mode := 'interact';
+      else mode := 'off';
+    end;
+
+    WLSettings.GetObject('antiban').getJSONObject('random_events').Put('mode', mode);
+    WLSettings.SaveConfig();
+
+    skill := Self.Form.GetChild('ab_lamp_skill_combobox');
+    if skill <> nil then
+      skill.setEnabled(mode = 'interact');
+  end;
+
+  procedure TScriptForm._LampSkillOnChange(sender: TObject);
+  const
+    LAMP_SKILL_KEYS: TStringArray = [
+      'attack', 'strength', 'range', 'magic', 'defence', 'sailing',
+      'hitpoints', 'prayer', 'agility', 'herblore', 'theiving',
+      'crafting', 'runecrafting', 'slayer', 'farming', 'mining',
+      'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting',
+      'fletching', 'construction', 'hunter'
+    ];
+  var
+    combo: TComboBox;
+    idx: Int32;
+  begin
+    combo := sender;
+    idx := combo.getItemIndex();
+    if (idx < 0) or (idx > High(LAMP_SKILL_KEYS)) then
+      Exit;
+
+    WLSettings.GetObject('antiban').getJSONObject('random_events').Put('skill', LAMP_SKILL_KEYS[idx]);
+    WLSettings.SaveConfig();
+  end;
+
 var
   bioPanel: TPanel;
   limitPanel: TPanel;
@@ -2177,11 +1980,13 @@ var
   bar: TTrackBar;
   antibanGroup: TCheckCheckGroup;
   breaks, sleeps, useBio: TLabeledCheckBox;
+  randomEventsMode, lampSkill: TLabeledComboBox;
   arr: TStringArray;
-  str: String;
+  str, mode, skillKey: String;
   combobox: TComboBox;
   checked: Boolean;
   ownerW, ownerH: Int32;
+  lampSkillKeys, lampSkillLabels: TStringArray;
 begin
   with Result do
   begin
@@ -2343,6 +2148,69 @@ begin
     Edit.setOnKeyPress(@Edit.FloatField);
     Edit.setOnChange(@Self._SleepLengthOnChange);
     SetText(ToStr(Antiban.GetSleepLength()));
+  end;
+
+  lampSkillKeys := [
+    'attack', 'strength', 'range', 'magic', 'defence', 'sailing',
+    'hitpoints', 'prayer', 'agility', 'herblore', 'theiving',
+    'crafting', 'runecrafting', 'slayer', 'farming', 'mining',
+    'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting',
+    'fletching', 'construction', 'hunter'
+  ];
+  lampSkillLabels := [
+    'Attack', 'Strength', 'Range', 'Magic', 'Defence', 'Sailing',
+    'Hitpoints', 'Prayer', 'Agility', 'Herblore', 'Thieving',
+    'Crafting', 'Runecrafting', 'Slayer', 'Farming', 'Mining',
+    'Smithing', 'Fishing', 'Cooking', 'Firemaking', 'Woodcutting',
+    'Fletching', 'Construction', 'Hunter'
+  ];
+
+  with randomEventsMode do
+  begin
+    Create(Result);
+    SetCaption('Random events:');
+    SetName('ab_random_events');
+    SetToolTip('Off does nothing. Dismiss right-clicks Dismiss. Interact talks to Genie and spends the lamp on the skill below. Enable RuneLite Entity Hider with Hide others random events.');
+    SetLeft(antibanGroup.GetLeft());
+    SetTop(antibanGroup.GetBottom() + TControl.AdjustToDPI(10));
+    SetWidth(antibanGroup.GetRight() - antibanGroup.GetLeft());
+    SetStyle(csDropDownList);
+    AddItemArray(['Off', 'Dismiss', 'Interact']);
+
+    mode := WLSettings.GetObject('antiban').getJSONObject('random_events').getString('mode').Lower();
+    case mode of
+      'dismiss':  SetItemIndex(1);
+      'interact': SetItemIndex(2);
+      else        SetItemIndex(0);
+    end;
+
+    ComboBox.setOnChange(@Self._RandomEventsModeOnChange);
+  end;
+
+  with lampSkill do
+  begin
+    Create(Result);
+    SetCaption('Lamp XP skill:');
+    SetName('ab_lamp_skill');
+    SetToolTip('Skill used when a Genie lamp is rubbed. All random-event XP uses this skill.');
+    SetLeft(randomEventsMode.GetLeft());
+    SetTop(randomEventsMode.GetBottom() + TControl.AdjustToDPI(8));
+    SetWidth(randomEventsMode.GetRight() - randomEventsMode.GetLeft());
+    SetStyle(csDropDownList);
+    AddItemArray(lampSkillLabels);
+
+    skillKey := WLSettings.GetObject('antiban').getJSONObject('random_events').getString('skill').Lower().Replace('thieving', 'theiving');
+    i := 20;
+    for y := 0 to High(lampSkillKeys) do
+      if lampSkillKeys[y] = skillKey then
+      begin
+        i := y;
+        Break;
+      end;
+    SetItemIndex(i);
+
+    ComboBox.setOnChange(@Self._LampSkillOnChange);
+    SetEnabled(mode = 'interact');
   end;
 
   Self._SleepsOnChange(sleeps.CheckBox);
@@ -3033,42 +2901,14 @@ function TScriptForm.CreateVersionPanel(owner: TControl; colors: TIntegerArray =
     Result.setHeight(TControl.AdjustToDPI(15));
     Result.setWidth(captionlabel.getWidth() + currentLabel.getWidth() + latestLabel.getWidth());
   end;
-
-  procedure _CheckFailed(out str: String; out color: Int32);
-  begin
-    if str <> '' then
-      Exit;
-    str   := 'Check Failed';
-    color := colors[1];
-  end;
-
-  procedure _CheckMatch(current, latest: String; out color: Int32);
-  begin
-    if current <> latest then
-      color := colors[2];
-  end;
 var
   srltPanel, wlPanel, revPanel: TPanel;
-  latestSRLT, latestWL, latestRev, currentSRLT, currentWL, currentRev: String;
-  srltColor, wlColor, revColor, pad1, pad2: Int32;
+  currentSRLT, currentWL, currentRev: String;
+  pad1, pad2: Int32;
 begin
-  APIClient.GetAllVersions({$macro SCRIPT_ID}, latestRev, latestSRLT, latestWL);
-
-  srltColor := colors[0];
-  wlColor   := colors[0];
-  revColor  := colors[0];
-
-  _CheckFailed(latestSRLT, srltColor);
-  _CheckFailed(latestWL  , wlColor);
-  _CheckFailed(latestRev, revColor);
-
   currentSRLT := GetPackageVersion('srl-b');
   currentWL   := GetPackageVersion('bashlib');
   currentRev  := {$macro SCRIPT_REVISION};
-
-  _CheckMatch(currentSRLT, latestSRLT, srltColor);
-  _CheckMatch(currentWL, latestWL, wlColor);
-  _CheckMatch(currentRev, latestRev, revColor);
 
   with Result do
   begin
@@ -3076,17 +2916,17 @@ begin
     setName('version_panel');
     setCaption('');
     setBevelWidth(0);
-    SetTooltip('Version checker.');
+    SetTooltip('Installed versions.');
     setWidth(Self.Size.X);
     setAlign(align);
   end;
 
-  pad1 := Max(Max(Length('SRL-B'), Length('BashLib')), Length('BashLib')) + 8;
+  pad1 := Max(Max(Length('SRL-B'), Length('BashLib')), Length('Script')) + 8;
   pad2 := Max(Max(Length(currentSRLT), Length(currentWL)), Length(currentRev));
 
-  srltPanel := _MakeVersionLabel(Result, 'SRL-B'  , 'Current: ' + currentSRLT, 'Latest: ' + latestSRLT, srltColor, pad1, pad2);
-  wlPanel   := _MakeVersionLabel(Result, 'BashLib', 'Current: ' + currentWL  , 'Latest: ' + latestWL  , wlColor  , pad1, pad2);
-  revPanel  := _MakeVersionLabel(Result, 'Script' , 'Current: ' + currentRev , 'Latest: ' + latestRev , revColor , pad1, pad2);
+  srltPanel := _MakeVersionLabel(Result, 'SRL-B'  , 'Current: ' + currentSRLT, '', colors[0], pad1, pad2);
+  wlPanel   := _MakeVersionLabel(Result, 'BashLib', 'Current: ' + currentWL  , '', colors[0], pad1, pad2);
+  revPanel  := _MakeVersionLabel(Result, 'Script' , 'Current: ' + currentRev , '', colors[0], pad1, pad2);
 
   srltPanel.SetTop(0);
   wlPanel.SetTop(srltPanel.GetBottom());

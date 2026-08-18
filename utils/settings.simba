@@ -206,16 +206,30 @@ begin
     modified := True;
   end;
 
+  //ANTIBAN.RANDOM_EVENTS
+  if not Self.GetObject('antiban').has('random_events') then
+  begin
+    json.Init();
+    Self.GetObject('antiban').Put('random_events', json);
+    modified := True;
+  end;
+
+  if not Self.GetObject('antiban').getJSONObject('random_events').has('mode') then
+  begin
+    Self.GetObject('antiban').getJSONObject('random_events').Put('mode', 'off');
+    modified := True;
+  end;
+
+  if not Self.GetObject('antiban').getJSONObject('random_events').has('skill') then
+  begin
+    Self.GetObject('antiban').getJSONObject('random_events').Put('skill', 'woodcutting');
+    modified := True;
+  end;
+
 
   if not Self.Has('reports') then
   begin
     Self.Put('reports', True);
-    modified := True;
-  end;
-
-  if not Self.Has('stats') then
-  begin
-    Self.Put('stats', True);
     modified := True;
   end;
 
