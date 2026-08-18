@@ -1,3 +1,12 @@
+# [8.5.0](https://github.com/BigWaspBackup/BashLib/compare/v8.4.15...v8.5.0) (2026-08-18)
+
+
+### Features
+
+* started work on random events handler, Removed all legacy wasp API calls, AI Chatbot improvements, world hopper improvements ([7a65c9b](https://github.com/BigWaspBackup/BashLib/commit/7a65c9b6446047129a3a5e4f78e2b86b3f280c99))
+
+
+
 ## [8.4.15](https://github.com/BigWaspBackup/BashLib/compare/v8.4.14...v8.4.15) (2026-08-16)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * farm tweaks ([0f302ae](https://github.com/BigWaspBackup/BashLib/commit/0f302ae28a8e22475cb0127c6618854a8c0d8922))
-
-
-
-## [8.4.11](https://github.com/BigWaspBackup/BashLib/compare/v8.4.10...v8.4.11) (2026-08-12)
-
-
-### Bug Fixes
-
-* Quetzel improvements and compost improvements ([269e602](https://github.com/BigWaspBackup/BashLib/commit/269e60243a805c9c6f2affbf589039a82d9fa933))
 
 
 
