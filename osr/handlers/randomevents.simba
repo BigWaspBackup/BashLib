@@ -172,9 +172,6 @@ end;
 
 function TRSRandomEvents.Handle(): Boolean;
 begin
-  // Disabled until finished fuck u
-  Exit(False);
-
   Self.LoadSettings();
 
   case Self.Mode of
@@ -201,7 +198,7 @@ var
 
 function TAntiban.DismissRandom(): Boolean; override;
 begin
-  Result := False;
+  Result := RandomEvents.Handle();
 end;
 
 procedure TSRL.Setup; override;

@@ -19,6 +19,7 @@ type
       MouseWheel: Boolean;
       MouseWheelConfirmed: Boolean;
       MagicFiltersRemoved: Boolean;
+      Checked: Boolean;
     end;
 
     IsRecording: Boolean;

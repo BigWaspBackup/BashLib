@@ -115,6 +115,106 @@ begin
   end;
 end;
 
+function BASHFarmLettersOnly(const s: String): String;
+var
+  i: Int32;
+  c: String;
+begin
+  Result := '';
+  for i := 1 to Length(s) do
+  begin
+    c := LowerCase(Copy(s, i, 1));
+    if (Length(c) = 1) and (c[1] in ['a'..'z']) then
+      Result := Result + c;
+  end;
+end;
+
+function BASHFarmUpTextActionLetters(const upText: String): String;
+var
+  low, prefix: String;
+  cut: Int32;
+begin
+  low := LowerCase(upText);
+  cut := Pos('/', low);
+  if cut <= 0 then
+    cut := Pos('->', low);
+  if cut <= 0 then
+    cut := Pos(',>', low);
+  if cut > 1 then
+    prefix := Copy(low, 1, cut - 1)
+  else
+    prefix := Copy(low, 1, Min(28, Length(low)));
+  Result := BASHFarmLettersOnly(prefix);
+end;
+
+function BASHFarmUpTextHasHarvestAction(const upText, harvestNeedle: String): Boolean;
+var
+  letters, lowNeedle: String;
+begin
+  Result := False;
+  if upText = '' then
+    Exit;
+
+  if harvestNeedle <> '' then
+  begin
+    if harvestNeedle in upText then
+      Exit(True);
+    lowNeedle := LowerCase(harvestNeedle);
+    if (lowNeedle <> '') and (lowNeedle in LowerCase(upText)) then
+      Exit(True);
+  end;
+
+  letters := BASHFarmUpTextActionLetters(upText);
+  if letters = '' then
+    Exit;
+
+  if Pos('harvest', letters) > 0 then
+    Exit(True);
+  // OCR often splits Harvest into "Ha' vest"
+  if Pos('havest', letters) > 0 then
+    Exit(True);
+
+  if (harvestNeedle = 'ick') and (Pos('pick', letters) > 0) then
+    Exit(True);
+  if (harvestNeedle = 'heck') and
+     ((Pos('checkhealth', letters) > 0) or (Pos('check', letters) > 0)) then
+    Exit(True);
+end;
+
+function BASHFarmMenuHasHarvest(harvestNeedle: String): Boolean;
+var
+  option: TRSChooseOption_Option;
+begin
+  Result := False;
+  if not ChooseOption.IsOpen() then
+    if not ChooseOption.Open() then
+      Exit(False);
+
+  for option in ChooseOption.GetOptions() do
+    if BASHFarmUpTextHasHarvestAction(option.Text, harvestNeedle) then
+      Exit(True);
+end;
+
+function BASHFarmMenuSelectHarvest(harvestNeedle: String): Boolean;
+var
+  option: TRSChooseOption_Option;
+begin
+  Result := False;
+  if not ChooseOption.IsOpen() then
+    if not ChooseOption.Open() then
+      Exit(False);
+
+  for option in ChooseOption.GetOptions() do
+  begin
+    if BASHFarmUpTextHasHarvestAction(option.Text, harvestNeedle) then
+    begin
+      ChooseOption.Select(option, MOUSE_LEFT);
+      Exit(True);
+    end;
+  end;
+  ChooseOption.Close();
+end;
+
 function BASHFarmCompostConfirmed(const chatBefore: String): Boolean;
 var
   line: String;
@@ -857,7 +957,7 @@ begin
     Exit(True);
   if ('Chop' in upText) or ('lear' in upText) then
     Exit(True);
-  if (Self.HarvestUpText <> '') and (Self.HarvestUpText in upText) then
+  if (Self.HarvestUpText <> '') and BASHFarmUpTextHasHarvestAction(upText, Self.HarvestUpText) then
     Exit(True);
   if (Self.EmptyUpText <> '') and (Self.EmptyUpText in upText) then
     Exit(True);
@@ -959,7 +1059,14 @@ begin
     if not Self.Hover(attempt) then
       Exit;
 
-    if WaitUntil((text in MainScreen.GetUpText()) or MainScreen.IsUpText(text), 40, 2000) then
+    if WaitUntil(
+      (text in MainScreen.GetUpText()) or
+      MainScreen.IsUpText(text) or
+      ((text = Self.HarvestUpText) and
+        BASHFarmUpTextHasHarvestAction(MainScreen.GetUpText(), text)),
+      40,
+      2000
+    ) then
     begin
       Mouse.Click(MOUSE_LEFT);
       Exit(True);
@@ -991,11 +1098,70 @@ begin
           Self.Data.Name, ' (got="', MainScreen.GetUpText(), '")');
 end;
 
+function TBASHFarmPatch.ClassifyFromUpText(const up: String; out classified: EBASHPatchState): Boolean;
+begin
+  Result := True;
+  if 'Rake' in up then
+  begin
+    classified := EBASHPatchState.OVERGROWN;
+    Exit;
+  end;
+  if 'ead' in up then
+  begin
+    classified := EBASHPatchState.DEAD;
+    Exit;
+  end;
+  if 'seas' in up then
+  begin
+    classified := EBASHPatchState.DISEASED;
+    Exit;
+  end;
+  if ('Chop' in up) or ('lear' in up) then
+  begin
+    if Self.DontClear then
+      classified := EBASHPatchState.GROWING
+    else if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
+      classified := EBASHPatchState.DEAD
+    else
+      classified := EBASHPatchState.NEED_CLEAR;
+    Exit;
+  end;
+  if 'eck-hea' in up then
+  begin
+    classified := EBASHPatchState.FRESH;
+    Exit;
+  end;
+  if BASHFarmUpTextHasHarvestAction(up, Self.HarvestUpText) then
+  begin
+    classified := EBASHPatchState.GROWN;
+    Exit;
+  end;
+  if 'spect' in up then
+  begin
+    if Self.EmptyUpText in up then
+      classified := EBASHPatchState.EMPTY
+    else
+      classified := EBASHPatchState.GROWING;
+    Exit;
+  end;
+  if (Self.EmptyUpText in up) or (Self.PlantedUpText in up) then
+  begin
+    if Self.EmptyUpText in up then
+      classified := EBASHPatchState.EMPTY
+    else
+      classified := EBASHPatchState.GROWING;
+    Exit;
+  end;
+  Result := False;
+end;
+
 function TBASHFarmPatch.Inspect(): EBASHPatchState;
 label
   doInspect;
 var
   upText: String;
+  rotateTry: Int32;
+  state: EBASHPatchState;
 begin
   if Self.Complete then
     Exit(EBASHPatchState.COMPLETE);
@@ -1041,51 +1207,31 @@ begin
     Exit(EBASHPatchState.NOT_FOUND);
 
   upText := MainScreen.GetUpText();
+  if Self.ClassifyFromUpText(upText, state) then
+    Exit(state);
 
-  if 'Rake' in upText then
-    Exit(EBASHPatchState.OVERGROWN);
-  if 'ead' in upText then
-    Exit(EBASHPatchState.DEAD);
-  if 'seas' in upText then
-    Exit(EBASHPatchState.DISEASED);
-  if ('Chop' in upText) or ('lear' in upText) then
+  if Self.HasPatchUpText(upText) then
   begin
-    if Self.DontClear then
-      Exit(EBASHPatchState.GROWING);
-    if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
-      Exit(EBASHPatchState.DEAD);
-    Exit(EBASHPatchState.NEED_CLEAR);
-  end;
-  if 'eck-hea' in upText then
-    Exit(EBASHPatchState.FRESH);
-  if Self.HarvestUpText in upText then
-    Exit(EBASHPatchState.GROWN);
-
-  if 'spect' in upText then
-  begin
-    if Self.Data.PatchType in [EBASHPatchType.HERB, EBASHPatchType.FLOWER, EBASHPatchType.ALLOTMENT] then
+    for rotateTry := 1 to 2 do
     begin
-      if Self.EmptyUpText in upText then
-        Exit(EBASHPatchState.EMPTY);
-      Exit(EBASHPatchState.GROWING);
+      WriteLn('[BASHFarm] Inspect action unreadable at ', Self.Data.Name,
+              ' ("', upText, '") - rotating camera (', rotateTry, '/2)');
+      Minimap.SetCompassAngle(
+        Minimap.GetCompassAngle() + Random(40, 85) * (1 - 2 * (rotateTry mod 2)), 10);
+      Wait(180, 320);
+      if not Self.Hover(rotateTry + 1) then
+        Break;
+      upText := MainScreen.GetUpText();
+      if Self.ClassifyFromUpText(upText, state) then
+        Exit(state);
     end;
-
-    if Self.EmptyUpText in upText then
-      Exit(EBASHPatchState.EMPTY);
-    Exit(EBASHPatchState.GROWING);
-  end
-  else if (Self.EmptyUpText in upText) or (Self.PlantedUpText in upText) then
-  begin
-    if Self.EmptyUpText in upText then
-      Exit(EBASHPatchState.EMPTY);
-    Exit(EBASHPatchState.GROWING);
   end;
 
   WriteLn('[BASHFarm] Inspect ambiguous uptext at ', Self.Data.Name, ' ("', upText, '") - menu probe');
   if Self.Hover() then
   begin
     ChooseOption.Open();
-    if BASHFarmMenuHas(Self.HarvestUpText, False) then
+    if BASHFarmMenuHasHarvest(Self.HarvestUpText) then
     begin
       ChooseOption.Close();
       Exit(EBASHPatchState.GROWN);
@@ -1197,137 +1343,140 @@ begin
     WriteLn('[BASHFarm] Harvest: still full after noting at ', Self.Data.Name);
 end;
 
+function TBASHFarmPatch.PatchStillHarvestable(const hoverUp: String): Boolean;
+begin
+  Result := BASHFarmUpTextHasHarvestAction(hoverUp, Self.HarvestUpText) or
+            BASHFarmUpTextHasFarmProduce(hoverUp);
+end;
+
+function TBASHFarmPatch.PatchLooksEmpty(const hoverUp: String): Boolean;
+begin
+  Result := ('spect' in hoverUp) and (Self.EmptyUpText in hoverUp) and
+            (not ('lear' in hoverUp)) and (not ('Rake' in hoverUp));
+end;
+
+function TBASHFarmPatch.ClickHarvestAim(attempt: Int32): Boolean;
+var
+  up: String;
+begin
+  Result := False;
+  if not Self.EnsureHarvestSpace() then
+    Exit;
+  if not Self.Hover(attempt) then
+    Exit;
+
+  if WaitUntil(
+    BASHFarmUpTextHasHarvestAction(MainScreen.GetUpText(), Self.HarvestUpText),
+    40,
+    700
+  ) then
+  begin
+    Mouse.Click(MOUSE_LEFT);
+    Exit(MainScreen.DidRedClick());
+  end;
+
+  up := MainScreen.GetUpText();
+  if not Self.HasPatchUpText(up) then
+    Exit;
+
+  if attempt < 5 then
+  begin
+    WriteLn('[BASHFarm] Harvest: action unreadable at ', Self.Data.Name,
+            ' ("', up, '") - rotating and retrying');
+    Minimap.SetCompassAngle(
+      Minimap.GetCompassAngle() + Random(40, 85) * (1 - 2 * (attempt mod 2)), 10);
+    Wait(180, 320);
+    Exit(False);
+  end;
+
+  WriteLn('[BASHFarm] Harvest: action unreadable at ', Self.Data.Name,
+          ' ("', up, '") - menu-select');
+  if BASHFarmMenuSelectHarvest(Self.HarvestUpText) then
+    Exit(True);
+end;
+
+function TBASHFarmPatch.ResumePick(var aimAttempt: Int32; var lastCount, lastEmpty: Int32): Boolean;
+begin
+  Result := False;
+  if not Self.EnsureHarvestSpace() then
+    Exit;
+  if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
+  begin
+    Inc(aimAttempt);
+    if aimAttempt < 1 then
+      aimAttempt := 1;
+    if not Self.ClickHarvestAim(aimAttempt) then
+      Exit;
+  end
+  else
+  begin
+    if not Self.ClickUpText(Self.HarvestUpText) then
+      Exit;
+    if not MainScreen.DidRedClick() then
+      Exit;
+  end;
+
+  lastCount := Inventory.Count();
+  lastEmpty := Inventory.CountEmptySlots();
+  Result := True;
+end;
+
+procedure TBASHFarmPatch.FreeInventForPick(var lastCount, lastEmpty: Int32);
+begin
+  Self.DropEmptyBuckets();
+  if Inventory.IsFull() or (Inventory.CountEmptySlots() < 3) then
+    Self.NoteItems();
+  lastCount := Inventory.Count();
+  lastEmpty := Inventory.CountEmptySlots();
+end;
+
+function TBASHFarmPatch.PostNotePatchCheck(): Boolean;
+var
+  upText: String;
+begin
+  Minimap.WaitPlayerMoving(250, 1200);
+
+  if not Self.Hover() then
+  begin
+    WriteLn('[BASHFarm] Harvest: post-note hover missed - will recheck');
+    Self.Harvested := False;
+    Exit(True);
+  end;
+
+  upText := MainScreen.GetUpText();
+  if BASHFarmUpTextHasHarvestAction(upText, Self.HarvestUpText) then
+  begin
+    Self.Harvested := False;
+    Exit(True);
+  end;
+  if BASHFarmUpTextHasFarmProduce(upText) then
+  begin
+    WriteLn('[BASHFarm] Harvest: post-note produce still on patch ("', upText, '")');
+    Self.Harvested := False;
+    Exit(True);
+  end;
+  if Self.PatchLooksEmpty(upText) then
+  begin
+    Self.Harvested := True;
+    Exit(True);
+  end;
+
+  WriteLn('[BASHFarm] Harvest: post-note uptext ambiguous ("', upText, '") - will recheck');
+  Self.Harvested := False;
+  Result := True;
+end;
+
 function TBASHFarmPatch.Harvest(): Boolean;
 var
   timeout, stall, reaim: TCountdown;
   lastCount, curCount, lastEmpty, curEmpty: Int32;
-  gotActivity, started, herbFirstXpLogged: Boolean;
+  gotActivity, started: Boolean;
   waitMs: Int32;
   upText: String;
   aimAttempt: Int32;
-
-  function PatchStillHarvestable(const hoverUp: String): Boolean;
-  begin
-    Result := (Self.HarvestUpText in hoverUp) or BASHFarmUpTextHasFarmProduce(hoverUp);
-  end;
-
-  function PatchLooksEmpty(const hoverUp: String): Boolean;
-  begin
-    Result := ('spect' in hoverUp) and (Self.EmptyUpText in hoverUp) and
-              (not ('lear' in hoverUp)) and (not ('Rake' in hoverUp));
-  end;
-
-  procedure LogHerbSoil({$H-}const stage: String); {$H+}
-  begin
-    if Self.Data.PatchType <> EBASHPatchType.HERB then
-      Exit;
-  end;
-
-  function CheckHarvestXp(): Boolean;
-  begin
-    Result := XPBar.EarnedXP();
-    if Result and (not herbFirstXpLogged) then
-    begin
-      herbFirstXpLogged := True;
-      LogHerbSoil('first XP');
-    end;
-  end;
-
-  function ClickHarvestAim(attempt: Int32): Boolean;
-  begin
-    Result := False;
-    if not Self.EnsureHarvestSpace() then
-      Exit;
-    if not Self.Hover(attempt) then
-      Exit;
-
-    if WaitUntil(
-      (Self.HarvestUpText in MainScreen.GetUpText()) or MainScreen.IsUpText(Self.HarvestUpText),
-      40,
-      2000
-    ) then
-    begin
-      Mouse.Click(MOUSE_LEFT);
-      Exit(MainScreen.DidRedClick());
-    end;
-  end;
-
-  function ResumePick(): Boolean;
-  begin
-    Result := False;
-    if not Self.EnsureHarvestSpace() then
-      Exit;
-    if Self.Data.PatchType = EBASHPatchType.ALLOTMENT then
-    begin
-      Inc(aimAttempt);
-      if aimAttempt < 1 then
-        aimAttempt := 1;
-      if not ClickHarvestAim(aimAttempt) then
-        Exit;
-    end
-    else
-    begin
-      if not Self.ClickUpText(Self.HarvestUpText) then
-        Exit;
-      if not MainScreen.DidRedClick() then
-        Exit;
-    end;
-
-    lastCount := Inventory.Count();
-    lastEmpty := Inventory.CountEmptySlots();
-    Result := True;
-  end;
-
-  procedure FreeInventForPick();
-  begin
-    Self.DropEmptyBuckets();
-    if Inventory.IsFull() or (Inventory.CountEmptySlots() < 3) then
-    begin
-      Self.NoteItems();
-    end;
-    lastCount := Inventory.Count();
-    lastEmpty := Inventory.CountEmptySlots();
-  end;
-
-  function PostNotePatchCheck(): Boolean;
-  var
-    upText: String;
-  begin
-    Minimap.WaitPlayerMoving(250, 1200);
-
-    if not Self.Hover() then
-    begin
-      WriteLn('[BASHFarm] Harvest: post-note hover missed - will recheck');
-      Self.Harvested := False;
-      Exit(True);
-    end;
-
-    upText := MainScreen.GetUpText();
-    if Self.HarvestUpText in upText then
-    begin
-      Self.Harvested := False;
-      Exit(True);
-    end;
-    if BASHFarmUpTextHasFarmProduce(upText) then
-    begin
-      WriteLn('[BASHFarm] Harvest: post-note produce still on patch ("', upText, '")');
-      Self.Harvested := False;
-      Exit(True);
-    end;
-    if PatchLooksEmpty(upText) then
-    begin
-      Self.Harvested := True;
-      Exit(True);
-    end;
-
-    WriteLn('[BASHFarm] Harvest: post-note uptext ambiguous ("', upText, '") - will recheck');
-    Self.Harvested := False;
-    Result := True;
-  end;
 begin
   Result := False;
   Self.Harvested := False;
-  herbFirstXpLogged := False;
   aimAttempt := 0;
   gotActivity := False;
 
@@ -1336,7 +1485,7 @@ begin
   if not Self.EnsureHarvestSpace() then
   begin
     WriteLn('[BASHFarm] Harvest: cannot pick, inventory still full at ', Self.Data.Name);
-    Exit(PostNotePatchCheck());
+    Exit(Self.PostNotePatchCheck());
   end;
 
   if Self.Data.PatchType = EBASHPatchType.FLOWER then
@@ -1349,11 +1498,11 @@ begin
     lastEmpty := Inventory.CountEmptySlots();
 
     if Inventory.IsFull() or (Inventory.CountEmptySlots() < 3) then
-      FreeInventForPick();
+      Self.FreeInventForPick(lastCount, lastEmpty);
     if Inventory.IsFull() then
     begin
       WriteLn('[BASHFarm] Harvest: invent full before allotment pick at ', Self.Data.Name);
-      Exit(PostNotePatchCheck());
+      Exit(Self.PostNotePatchCheck());
     end;
 
     for aimAttempt := 1 to 8 do
@@ -1361,15 +1510,15 @@ begin
       if Inventory.IsFull() then
       begin
         WriteLn('[BASHFarm] Harvest: invent full before aim - noting at ', Self.Data.Name);
-        FreeInventForPick();
+        Self.FreeInventForPick(lastCount, lastEmpty);
         if Inventory.IsFull() then
         begin
           WriteLn('[BASHFarm] Harvest: invent still full - cannot pick ', Self.Data.Name);
-          Exit(PostNotePatchCheck());
+          Exit(Self.PostNotePatchCheck());
         end;
       end;
 
-      if not ClickHarvestAim(aimAttempt) then
+      if not Self.ClickHarvestAim(aimAttempt) then
       begin
         if aimAttempt < 8 then
         begin
@@ -1405,11 +1554,11 @@ begin
       if Inventory.IsFull() then
       begin
         WriteLn('[BASHFarm] Harvest: no start - invent full after click, noting at ', Self.Data.Name);
-        FreeInventForPick();
+        Self.FreeInventForPick(lastCount, lastEmpty);
         if Inventory.IsFull() then
         begin
           WriteLn('[BASHFarm] Harvest: invent still full - cannot pick ', Self.Data.Name);
-          Exit(PostNotePatchCheck());
+          Exit(Self.PostNotePatchCheck());
         end;
         Continue;
       end;
@@ -1438,7 +1587,7 @@ begin
     if not Self.EnsureHarvestSpace() then
     begin
       WriteLn('[BASHFarm] Harvest: invent full before pick at ', Self.Data.Name);
-      Exit(PostNotePatchCheck());
+      Exit(Self.PostNotePatchCheck());
     end;
 
     if not Self.ClickUpText(Self.HarvestUpText) then
@@ -1483,7 +1632,7 @@ begin
     stall.Init(2000);
     Result := True;
   end
-  else if CheckHarvestXp() or
+  else if XPBar.EarnedXP() or
           (Inventory.Count() <> lastCount) or
           (Inventory.CountEmptySlots() <> lastEmpty) then
   begin
@@ -1501,7 +1650,7 @@ begin
 
     gotActivity := False;
 
-    if CheckHarvestXp() then
+    if XPBar.EarnedXP() then
       gotActivity := True;
 
     curCount := Inventory.Count();
@@ -1533,15 +1682,15 @@ begin
       if Inventory.IsFull() then
       begin
         WriteLn('[BASHFarm] Harvest: invent full before re-aim - noting at ', Self.Data.Name);
-        FreeInventForPick();
+        Self.FreeInventForPick(lastCount, lastEmpty);
         if Inventory.IsFull() then
-          Exit(PostNotePatchCheck());
+          Exit(Self.PostNotePatchCheck());
       end
       else
       begin
         Inc(aimAttempt);
         WriteLn('[BASHFarm] Harvest: still no XP - re-aim attempt ', aimAttempt, ' at ', Self.Data.Name);
-        if ClickHarvestAim(aimAttempt) then
+        if Self.ClickHarvestAim(aimAttempt) then
         begin
           lastCount := Inventory.Count();
           lastEmpty := Inventory.CountEmptySlots();
@@ -1557,7 +1706,7 @@ begin
       WriteLn('[BASHFarm] Harvest: allotment invent full - noting');
       Self.DropEmptyBuckets();
       Self.NoteItems();
-      Exit(PostNotePatchCheck());
+      Exit(Self.PostNotePatchCheck());
     end;
 
     if started and (not gotActivity) and stall.IsFinished() then
@@ -1565,14 +1714,14 @@ begin
       if Self.Hover(Max(1, aimAttempt)) then
       begin
         upText := MainScreen.GetUpText();
-        if PatchStillHarvestable(upText) then
+        if Self.PatchStillHarvestable(upText) then
         begin
           if not Self.EnsureHarvestSpace() then
           begin
             Self.Harvested := False;
-            Exit(PostNotePatchCheck());
+            Exit(Self.PostNotePatchCheck());
           end;
-          if ResumePick() then
+          if Self.ResumePick(aimAttempt, lastCount, lastEmpty) then
           begin
             stall.Restart();
             Continue;
@@ -1583,12 +1732,11 @@ begin
           Exit(True);
         end;
 
-        if PatchLooksEmpty(upText) then
+        if Self.PatchLooksEmpty(upText) then
         begin
           Self.DropEmptyBuckets();
           if Inventory.IsFull() then
             Self.NoteItems();
-          LogHerbSoil('finished');
           Self.Harvested := True;
           Exit(True);
         end;
@@ -1596,15 +1744,14 @@ begin
         Self.DropEmptyBuckets();
         if Inventory.IsFull() then
           Self.NoteItems();
-        LogHerbSoil('finished');
         Self.Harvested := True;
         Exit(True);
       end;
 
       if Inventory.IsFull() or (Inventory.CountEmptySlots() < 2) then
       begin
-        FreeInventForPick();
-        if ResumePick() then
+        Self.FreeInventForPick(lastCount, lastEmpty);
+        if Self.ResumePick(aimAttempt, lastCount, lastEmpty) then
         begin
           stall.Restart();
           timeout.Init(25000);
@@ -1614,26 +1761,24 @@ begin
         if Self.Hover(Max(1, aimAttempt)) then
         begin
           upText := MainScreen.GetUpText();
-          if PatchStillHarvestable(upText) then
+          if Self.PatchStillHarvestable(upText) then
           begin
             WriteLn('[BASHFarm] Harvest: resume failed, still grown');
             Self.Harvested := False;
             Exit(True);
           end;
-          if PatchLooksEmpty(upText) then
+          if Self.PatchLooksEmpty(upText) then
           begin
-            LogHerbSoil('finished');
             Self.Harvested := True;
             Exit(True);
           end;
         end;
 
-        LogHerbSoil('finished');
         Self.Harvested := True;
         Exit(True);
       end;
 
-      if ResumePick() then
+      if Self.ResumePick(aimAttempt, lastCount, lastEmpty) then
       begin
         stall.Restart();
         Continue;
@@ -1642,7 +1787,7 @@ begin
       if Self.Hover(Max(1, aimAttempt)) then
       begin
         upText := MainScreen.GetUpText();
-        if PatchStillHarvestable(upText) then
+        if Self.PatchStillHarvestable(upText) then
         begin
           WriteLn('[BASHFarm] Harvest: resume failed, still grown');
           Self.Harvested := False;
@@ -1651,13 +1796,12 @@ begin
       end;
 
       Self.DropEmptyBuckets();
-      LogHerbSoil('finished');
       Self.Harvested := True;
       Exit(True);
     end;
 
     WaitUntil(
-      CheckHarvestXp() or
+      XPBar.EarnedXP() or
       (Inventory.Count() <> lastCount) or
       (Inventory.CountEmptySlots() <> lastEmpty) or
       Self.CombatHpDropped(),
@@ -1675,20 +1819,19 @@ begin
   end;
 
   if Inventory.IsFull() then
-    FreeInventForPick();
+    Self.FreeInventForPick(lastCount, lastEmpty);
 
   if Self.Hover() then
   begin
     upText := MainScreen.GetUpText();
-    if PatchStillHarvestable(upText) then
+    if Self.PatchStillHarvestable(upText) then
     begin
       WriteLn('[BASHFarm] Harvest timeout: still harvestable');
       Self.Harvested := False;
       Result := True;
     end
-    else if PatchLooksEmpty(upText) then
+    else if Self.PatchLooksEmpty(upText) then
     begin
-      LogHerbSoil('finished');
       Self.Harvested := True;
       Result := True;
     end
@@ -1799,8 +1942,7 @@ var
                (not ready) and
                (
                  BASHFarmUpTextHasFarmProduce(useTarget) or
-                 (Self.HarvestUpText in useTarget) or
-                 ('arves' in useTarget) or
+                 BASHFarmUpTextHasHarvestAction(useTarget, Self.HarvestUpText) or
                  (('ick' in useTarget) and ('pick' in LowerCase(useTarget)))
                );
       Result := ready or grown;
@@ -2048,7 +2190,7 @@ begin
     end;
 
     up := MainScreen.GetUpText();
-    if (Self.HarvestUpText in up) or BASHFarmUpTextHasFarmProduce(up) then
+    if BASHFarmUpTextHasHarvestAction(up, Self.HarvestUpText) or BASHFarmUpTextHasFarmProduce(up) then
     begin
       WriteLn('[BASHFarm] Plant: harvest uptext after fail at ', Self.Data.Name,
               ' ("', up, '")');
@@ -2164,7 +2306,7 @@ begin
     Exit(True);
   if BASHFarmUpTextHasFarmProduce(target) or BASHFarmUpTextHasFarmProduce(up) then
     Exit(True);
-  if (Self.HarvestUpText <> '') and (Self.HarvestUpText in target) then
+  if (Self.HarvestUpText <> '') and BASHFarmUpTextHasHarvestAction(target, Self.HarvestUpText) then
     Exit(True);
 end;
 
@@ -3922,8 +4064,19 @@ begin
         end;
       EBASHPatchState.GROWN:
         begin
-          if Self.Harvest() and Self.Harvested then
-            journal.RecordState(Self.Id, Self.Data.PatchType, EBASHJournalState.EMPTY);
+          if Self.Harvest() then
+          begin
+            if Self.Harvested then
+              journal.RecordState(Self.Id, Self.Data.PatchType, EBASHJournalState.EMPTY);
+          end
+          else
+          begin
+            Inc(Self.FailCount);
+            WriteLn('[BASHFarm] Harvest did not start at ', Self.Data.Name,
+                    ' (', Self.FailCount, '/3)');
+            if Self.FailCount >= 3 then
+              Self.SkipPatch('Could not start harvest');
+          end;
         end;
       EBASHPatchState.FRESH:
         Self.CheckHealth();

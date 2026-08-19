@@ -46,22 +46,55 @@ end;
 procedure TRSClient.CheckClientSettings();
 var
   userB: TBox;
+  steps: TIntegerArray;
+  i, j, tmp, step: Int32;
 begin
-  if not MainScreen.HighestPitch then MainScreen.SetHighestPitch();
-
-  if not WL.GameSettings.MaxBrightness then
+  if not WL.GameSettings.Checked then
   begin
-    WL.GameSettings.MaxBrightness := Options.SetMaxBrightness();
+    steps := [0, 1, 2, 3];
+    for i := High(steps) downto 1 do
+    begin
+      j := Random(i + 1);
+      tmp := steps[i];
+      steps[i] := steps[j];
+      steps[j] := tmp;
+    end;
 
-    if (MM2MS.ZoomLevel = -1) and Options.IsOpen() and (Options.GetCurrentTab() = ERSOptionsTab.DISPLAY) then
-      MM2MS.ZoomLevel := Options.GetZoomLevel();
+    for step in steps do
+    begin
+      case step of
+        0:
+          if not MainScreen.HighestPitch then
+          begin
+            Wait(Random(80, 350));
+            MainScreen.SetHighestPitch();
+          end;
+        1:
+          if not WL.GameSettings.MaxBrightness then
+          begin
+            Wait(Random(80, 350));
+            WL.GameSettings.MaxBrightness := Options.SetMaxBrightness();
+
+            if (MM2MS.ZoomLevel = -1) and Options.IsOpen() and (Options.GetCurrentTab() = ERSOptionsTab.DISPLAY) then
+              MM2MS.ZoomLevel := Options.GetZoomLevel();
+          end;
+        2:
+          if not WL.GameSettings.RoofsHidden then
+          begin
+            Wait(Random(80, 350));
+            WL.GameSettings.RoofsHidden := Options.HideRoofs();
+          end;
+        3:
+          if XPBar.Tracker.Current = 0 then
+          begin
+            Wait(Random(80, 350));
+            XPBar.Read();
+          end;
+      end;
+    end;
+
+    WL.GameSettings.Checked := True;
   end;
-
-  if not WL.GameSettings.RoofsHidden then
-    WL.GameSettings.RoofsHidden := Options.HideRoofs();
-
-  if XPBar.Tracker.Current = 0 then
-    XPBar.Read();
 
   if WLSettings.GetObject('video').getBoolean('enabled') and not WL.IsRecording then
   begin

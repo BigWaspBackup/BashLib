@@ -268,17 +268,13 @@ begin
     Exit(Self.ZoomLevel);
   end;
 
-  case Random(3) of
-    0: Options.SetZoomLevel(Random(101));
-    1: Self.MaxZoomBlind(SRL.Dice(50));
-    else
-    begin
-      Self.DebugLn('Unknown zoom level, reading from options...');
-      Self.ZoomLevel := Self.Slider2Level(MM2MS.GetZoomLevel());
-      Self.DebugLn('Current zoom level: ' + ToString(Self.ZoomLevel));
-    end;
+  if not WL.GameSettings.MouseWheel then
+  begin
+    Self.ZoomLevel := Self.Slider2Level(Options.GetZoomLevel());
+    Exit(Self.ZoomLevel);
   end;
 
+  Self.MaxZoomBlind(SRL.Dice(50));
   Result := Self.ZoomLevel;
 end;
 
@@ -476,6 +472,8 @@ begin
 end;
 
 function TRSGameTabs.GetCurrentTab(): ERSGameTab; override;
+var
+  wheelFromDisplay: Boolean;
 begin
   Result := inherited;
 
@@ -483,12 +481,12 @@ begin
   if WL.GameSettings.MouseWheelConfirmed then Exit;
   if Options.GetCurrentTab() <> ERSOptionsTab.DISPLAY then Exit;
 
-  WL.GameSettings.MouseWheel := SRL.CountColor(200, Self.Bounds) = 0;
-  WL.GameSettings.MouseWheelConfirmed := True;
+  wheelFromDisplay := SRL.CountColor(200, Self.Bounds) = 0;
 
-  if not WL.GameSettings.MouseWheel then
-  begin
-    RSMouseZoom.ZoomLevel := -1;
-    MM2MS.ZoomLevel := -1;
-  end;
+  // If we already zoomed with the wheel this session, trust that over the Display-tab color check.
+  if (not wheelFromDisplay) and (RSMouseZoom.ZoomLevel > -1) then
+    wheelFromDisplay := True;
+
+  WL.GameSettings.MouseWheel := wheelFromDisplay;
+  WL.GameSettings.MouseWheelConfirmed := True;
 end;

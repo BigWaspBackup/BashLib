@@ -256,6 +256,17 @@ MM2MS.SetupZoom;
 WriteLn MM2MS.ZoomLevel;
 ```
 *)
+function TMM2MS.GetZoomLevel(): Integer; override;
+begin
+  if Self.ZoomLevel > -1 then
+    Exit(Self.ZoomLevel);
+
+  Self.DebugLn('Unknown zoom level, establishing with mouse wheel...');
+  RSMouseZoom.GetZoomLevel();
+  Result := Self.ZoomLevel;
+  Self.DebugLn('Current zoom level: ' + ToString(Result));
+end;
+
 procedure TMM2MS.SetupZoom();
 begin
   if Self.ZoomLevel > -1 then

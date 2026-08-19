@@ -457,6 +457,36 @@ begin
 end;
 
 (*
+## SettingsHandler.HideRoofsInMenu()
+```pascal
+function TSettingsHandler.HideRoofsInMenu(): Boolean;
+```
+Opens the in-game Settings searcher and enables **Hide roofs**.
+Returns True if the setting was found and enabled (or already on).
+*)
+function TSettingsHandler.HideRoofsInMenu(): Boolean;
+var
+  search: String;
+begin
+  if Self.Name = '' then
+    Self.Setup();
+
+  Self.DebugLn('HideRoofsInMenu -> Opening settings searcher');
+
+  if not Self.OpenSettings() then
+  begin
+    Self.DebugLn('HideRoofsInMenu -> Failed to open settings');
+    Exit;
+  end;
+
+  Wait(200, 450);
+  search := Copy('roofs', 0, Random(3, 5));
+  Result := Self.ToggleSetting(search, True);
+  Wait(200, 450);
+  RSInterface.Close(True);
+end;
+
+(*
 ## SettingsHandler.DisableMagicFilters()
 ```pascal
 function TSettingsHandler.DisableMagicFilters(out actionsTaken: Int32): Boolean;
@@ -1187,3 +1217,25 @@ var
 Global `TSettingsHandler` variable.
 *)
   {$H-}SettingsHandler: TSettingsHandler;{$H+}
+
+function TRSOptions.HideRoofs(): Boolean; override;
+begin
+  if RSCacheParser.Disabled then
+  begin
+    WriteLn('[BASH] Could not read the client cache for roofs. If roofs are still showing, run Settings Searcher while logged in.');
+    Exit(True);
+  end;
+
+  if Self.GetRoofsState() then
+    Exit(True);
+
+  Result := SettingsHandler.HideRoofsInMenu();
+  if Result then
+  begin
+    WriteLn('[BASH] Roofs hidden via Settings. Run Settings Searcher once per account for shift-click and other options.');
+    Exit;
+  end;
+
+  WriteLn('[BASH] Could not hide roofs in the Settings menu.');
+  WriteLn('[BASH] Run Settings Searcher (BigAussie Free Scripts) while logged in.');
+end;

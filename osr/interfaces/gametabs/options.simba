@@ -161,20 +161,7 @@ begin
   if RSCacheParser.Disabled then
     Exit(True);
 
-  if Self.GetRoofsState() then
-    Exit(True);
-
-  Self.DebugLn('Roofs are enabled! They are going to be temporarily disabled but you should consider permanently disable them in the game settings!');
-  Self.DebugLn('Temporarily disabling the roofs often can get you banned!');
-
-  if SRL.CountColor(CHAT_COLOR_BLUE, Chat.LineBoxes[CHAT_INPUT_LINE]) > 14 then
-    Keyboard.PressKey(VK_ENTER); //Clear input line.
-
-  Keyboard.Send('::toggleroofs', VK_ENTER);
-  Result := True;
-
-  if not Self.GetRoofsState() then
-    RSCacheParser.Disabled := True;
+  Result := Self.GetRoofsState();
 end;
 
 
@@ -215,7 +202,9 @@ end;
 
 function TRSOptions.SetMaxBrightness(): Boolean; override;
 begin
-  if Self.GetBrightness() = 100 then Exit(True);
+  if Self.GetBrightness() = 100 then
+    Exit(True);
+
   if not Self.OpenTab(ERSOptionsTab.DISPLAY) then Exit;
 
   with Self.Sliders[ERSOptionsSlider.BRIGHTNESS] do
