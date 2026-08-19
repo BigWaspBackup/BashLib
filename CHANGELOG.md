@@ -1,3 +1,12 @@
+## [8.5.1](https://github.com/BigWaspBackup/BashLib/compare/v8.5.0...v8.5.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* Antiban improvements to all scripts, Randomised order gametabs are opened on start of script. ([bf53eb9](https://github.com/BigWaspBackup/BashLib/commit/bf53eb9a6e7689c0ee35889e197dc9e2b29dc060))
+
+
+
 # [8.5.0](https://github.com/BigWaspBackup/BashLib/compare/v8.4.15...v8.5.0) (2026-08-18)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Moved setting handler fully into libs, reworked compost and planting, reworked patch finding at some locations. ([79ef6a4](https://github.com/BigWaspBackup/BashLib/commit/79ef6a409f2bfed4cec4cee4aa55656693df8fee))
-
-
-
-## [8.4.12](https://github.com/BigWaspBackup/BashLib/compare/v8.4.11...v8.4.12) (2026-08-13)
-
-
-### Bug Fixes
-
-* farm tweaks ([0f302ae](https://github.com/BigWaspBackup/BashLib/commit/0f302ae28a8e22475cb0127c6618854a8c0d8922))
 
 
 
