@@ -770,6 +770,54 @@ begin
 end;
 
 
+function TAntiban.BreakScheduleText(): String;
+var
+  i: Int32;
+  nextAt, nextLen: Double;
+begin
+  if Length(Self.Breaks) = 0 then
+    Exit('Break: off');
+
+  nextAt := Self.Breaks[0].NextAtTime;
+  nextLen := Self.Breaks[0].Length;
+  for i := 1 to High(Self.Breaks) do
+    if Self.Breaks[i].NextAtTime < nextAt then
+    begin
+      nextAt := Self.Breaks[i].NextAtTime;
+      nextLen := Self.Breaks[i].Length;
+    end;
+
+  if nextAt <= GetTimeRunning() then
+    Result := 'Break in: READY for: ' + SRL.MsToTime(Max(0, Round(nextLen)), Time_Short)
+  else
+    Result := 'Break in: ' + SRL.MsToTime(Round(nextAt - GetTimeRunning()), Time_Short) +
+              ' for: ' + SRL.MsToTime(Max(0, Round(nextLen)), Time_Short);
+end;
+
+function TAntiban.SleepScheduleText(): String;
+var
+  i: Int32;
+  nextAt, nextLen: Double;
+begin
+  if Length(Self.Sleeps) = 0 then
+    Exit('Sleep: off');
+
+  nextAt := Self.Sleeps[0].NextAtTime;
+  nextLen := Self.Sleeps[0].Length;
+  for i := 1 to High(Self.Sleeps) do
+    if Self.Sleeps[i].NextAtTime < nextAt then
+    begin
+      nextAt := Self.Sleeps[i].NextAtTime;
+      nextLen := Self.Sleeps[i].Length;
+    end;
+
+  if nextAt <= GetTimeRunning() then
+    Result := 'Sleep in: READY for: ' + SRL.MsToTime(Max(0, Round(nextLen)), Time_Short)
+  else
+    Result := 'Sleep in: ' + SRL.MsToTime(Round(nextAt - GetTimeRunning()), Time_Short) +
+              ' for: ' + SRL.MsToTime(Max(0, Round(nextLen)), Time_Short);
+end;
+
 procedure TAntiban.Setup(); //override me to add stuff!
 begin
   Mouse.Speed      := 15 + Self.GetBehavior(EBioBehavior.MOUSE_SPEED);

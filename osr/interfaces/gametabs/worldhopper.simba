@@ -253,11 +253,39 @@ begin
 end;
 
 (*
+## TRSWorldHopper.FilterValidWorlds
+```pascal
+function TRSWorldHopper.FilterValidWorlds(targetWorlds: TIntegerArray): TIntegerArray;
+```
+Returns `targetWorlds` with any worlds that are no longer on Jagex's live
+server list removed. Uses the same source as Account Manager **Generate Worlds**.
+*)
+function TRSWorldHopper.FilterValidWorlds(targetWorlds: TIntegerArray): TIntegerArray;
+var
+  skipped: TIntegerArray;
+  i: Int32;
+begin
+  Result := WorldFetcher.FilterExistingWorlds(targetWorlds);
+  if Length(Result) = Length(targetWorlds) then
+    Exit;
+
+  skipped := [];
+  for i := 0 to High(targetWorlds) do
+    if not Result.Contains(targetWorlds[i]) then
+      skipped += targetWorlds[i];
+
+  if Length(skipped) > 0 then
+    Self.DebugLn('Skipping worlds not on the live world list: ' + ToStr(skipped));
+end;
+
+(*
 ## TRSWorldHopper.Hop
 ```pascal
 function TRSWorldHopper.Hop(targetWorlds: TIntegerArray): Boolean;
 ```
 Hops to a different world from the specified **targetWorlds**.
+Worlds that are not on the live official server list are skipped, so a stale
+account-manager worlds list will not try to hop to a removed world.
 
 Example:
 ```pascal
@@ -273,6 +301,13 @@ var
   moveMouse: Boolean;
 begin
   if not Self.Cooldown.IsFinished() then Exit;
+
+  targetWorlds := Self.FilterValidWorlds(targetWorlds);
+  if targetWorlds.Len() = 0 then
+  begin
+    Self.DebugLn('No valid worlds to hop to');
+    Exit;
+  end;
 
   if Chat.HasContinue() then
   begin

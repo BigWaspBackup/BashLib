@@ -29,6 +29,7 @@ end;
 
 const
   WORLD_LIST_URL = 'http://oldschool.runescape.com/slu';
+  WORLD_LIST_CACHE_MS = 24 * 60 * 60 * 1000;
 
 type
 (*
@@ -117,6 +118,8 @@ The main record for fetching and managing world information.
     Worlds: array of TWorldInfo;
     LastFetched: UInt64;
     Settings: TWorldFetcherSettings;
+    AvailableWorlds: TIntegerArray;
+    AvailableWorldsFetched: UInt64;
   end;
 
 // Extracts all substrings between start/finish delimiters (Simba 1.4k substitute for BetweenAll)
@@ -342,6 +345,11 @@ begin
       raise 'No world numbers found. Expected URLs containing: game?world=XXX';
 
     Result := (Length(WorldNumbers) > 0) and (Length(WorldRows) > 0);
+    if Result then
+    begin
+      Self.AvailableWorlds := WorldNumbers;
+      Self.AvailableWorldsFetched := GetTickCount();
+    end;
   except
     WriteLn('Error: Failed to parse world page - ' + GetExceptionMessage());
     Result := False;
@@ -601,16 +609,52 @@ end;
 
 (*
 ## TWorldFetcher.GetAvailableWorlds
-Fetches and returns all currently available world numbers.
+Fetches and returns all currently available world numbers from the official
+server list (`http://oldschool.runescape.com/slu`). Results are cached for
+24 hours. On a failed refresh, a previous successful cache is returned if
+one exists.
 *)
-function TWorldFetcher.GetAvailableWorlds(): TIntegerArray;
+function TWorldFetcher.GetAvailableWorlds(forceRefresh: Boolean = False): TIntegerArray;
 var
   WorldRows: TStringArray;
 begin
   SetLength(Result, 0);
 
-  if not Self._ParseWorldPage(Result, WorldRows) then
+  if (not forceRefresh) and (Length(Self.AvailableWorlds) > 0) and
+     ((GetTickCount() - Self.AvailableWorldsFetched) < WORLD_LIST_CACHE_MS) then
+    Exit(Copy(Self.AvailableWorlds));
+
+  if Self._ParseWorldPage(Result, WorldRows) then
+    Exit;
+
+  if Length(Self.AvailableWorlds) > 0 then
+    Result := Copy(Self.AvailableWorlds)
+  else
     SetLength(Result, 0);
+end;
+
+(*
+## TWorldFetcher.FilterExistingWorlds
+Keeps only world numbers that currently exist on the official server list.
+Player hop order is preserved. If the live list cannot be fetched (and there
+is no cache), the original array is returned so hopping is not blocked.
+*)
+function TWorldFetcher.FilterExistingWorlds(worlds: TIntegerArray): TIntegerArray;
+var
+  live: TIntegerArray;
+  i: Int32;
+begin
+  Result := [];
+  if Length(worlds) = 0 then
+    Exit;
+
+  live := Self.GetAvailableWorlds();
+  if Length(live) = 0 then
+    Exit(worlds);
+
+  for i := 0 to High(worlds) do
+    if live.Contains(worlds[i]) then
+      Result += worlds[i];
 end;
 
 function TWorldFetcher._GetWorldNumbers(): TIntegerArray;
