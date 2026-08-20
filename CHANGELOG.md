@@ -1,3 +1,12 @@
+## [8.5.2](https://github.com/BigWaspBackup/BashLib/compare/v8.5.1...v8.5.2) (2026-08-20)
+
+
+### Bug Fixes
+
+* BioHash and Antiban now supports reporting break time/length ([936fae1](https://github.com/BigWaspBackup/BashLib/commit/936fae1ef91549bbcba249529e0b1f504d9e2d25))
+
+
+
 ## [8.5.1](https://github.com/BigWaspBackup/BashLib/compare/v8.5.0...v8.5.1) (2026-08-19)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * bump ([d256686](https://github.com/BigWaspBackup/BashLib/commit/d256686ca18c0dbae3330edd3b46ea34d0f0a290))
-
-
-
-## [8.4.13](https://github.com/BigWaspBackup/BashLib/compare/v8.4.12...v8.4.13) (2026-08-15)
-
-
-### Bug Fixes
-
-* Moved setting handler fully into libs, reworked compost and planting, reworked patch finding at some locations. ([79ef6a4](https://github.com/BigWaspBackup/BashLib/commit/79ef6a409f2bfed4cec4cee4aa55656693df8fee))
 
 
 
