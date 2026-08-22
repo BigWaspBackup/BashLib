@@ -1,3 +1,12 @@
+## [8.5.3](https://github.com/BigWaspBackup/BashLib/compare/v8.5.2...v8.5.3) (2026-08-22)
+
+
+### Bug Fixes
+
+* Initial support for tracking farming/birdhouse loot ([385a0e9](https://github.com/BigWaspBackup/BashLib/commit/385a0e9166368c66116dbbec259e40a6d1b81454))
+
+
+
 ## [8.5.2](https://github.com/BigWaspBackup/BashLib/compare/v8.5.1...v8.5.2) (2026-08-20)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * improved composting ([5fbf1f2](https://github.com/BigWaspBackup/BashLib/commit/5fbf1f27d3d0ea1b78c73e325224102e37092c47))
-
-
-
-## [8.4.14](https://github.com/BigWaspBackup/BashLib/compare/v8.4.13...v8.4.14) (2026-08-15)
-
-
-### Bug Fixes
-
-* bump ([d256686](https://github.com/BigWaspBackup/BashLib/commit/d256686ca18c0dbae3330edd3b46ea34d0f0a290))
 
 
 
