@@ -1,3 +1,118 @@
+{$IFNDEF BASH_LOOT_TRACKER}
+{$DEFINE BASH_LOOT_TRACKER}
+
+type
+  TBASHLootTracker = record
+    Names: TStringArray;
+    Qtys: TIntegerArray;
+  end;
+
+function BASHInventoryQty(item: TRSItem): Int32;
+var
+  slots, stack: Int32;
+begin
+  slots := Inventory.CountItem(item);
+  stack := Inventory.CountItemStack(item);
+  if stack < 0 then
+    stack := 0;
+  Result := Max(slots, stack);
+end;
+
+procedure TBASHLootTracker.Clear();
+begin
+  SetLength(Self.Names, 0);
+  SetLength(Self.Qtys, 0);
+end;
+
+procedure TBASHLootTracker.Add(item: String; qty: Int32);
+var
+  i: Int32;
+  key: String;
+begin
+  if (item = '') or (qty <= 0) then
+    Exit;
+
+  key := item;
+  for i := 0 to High(Self.Names) do
+    if LowerCase(Self.Names[i]) = LowerCase(key) then
+    begin
+      Self.Qtys[i] += qty;
+      Exit;
+    end;
+
+  Self.Names += key;
+  Self.Qtys += [qty];
+end;
+
+function TBASHLootTracker.GetCount(item: String): Int32;
+var
+  i: Int32;
+begin
+  Result := 0;
+  if item = '' then
+    Exit;
+
+  for i := 0 to High(Self.Names) do
+    if LowerCase(Self.Names[i]) = LowerCase(item) then
+      Exit(Self.Qtys[i]);
+end;
+
+function TBASHLootTracker.Total(): Int32;
+var
+  i: Int32;
+begin
+  Result := 0;
+  for i := 0 to High(Self.Qtys) do
+    Result += Self.Qtys[i];
+end;
+
+function TBASHLootTracker.GetReportLines(): TStringArray;
+var
+  i: Int32;
+begin
+  SetLength(Result, 0);
+  for i := 0 to High(Self.Names) do
+    if Self.Qtys[i] > 0 then
+      Result += Self.Names[i] + ': ' + ToStr(Self.Qtys[i]);
+end;
+
+procedure TBASHLootTracker.AddSnapshotDelta(before: TBASHLootTracker; items: TRSItemArray);
+var
+  i: Int32;
+  name: String;
+  gained, startQty: Int32;
+begin
+  for i := 0 to High(items) do
+  begin
+    name := ToStr(items[i]);
+    if name = '' then
+      Continue;
+    startQty := before.GetCount(name);
+    gained := BASHInventoryQty(items[i]) - startQty;
+    if gained > 0 then
+      Self.Add(name, gained);
+  end;
+end;
+
+procedure TBASHLootTracker.CaptureItems(items: TRSItemArray);
+var
+  i: Int32;
+  name: String;
+  qty: Int32;
+begin
+  Self.Clear();
+  for i := 0 to High(items) do
+  begin
+    name := ToStr(items[i]);
+    if name = '' then
+      Continue;
+    qty := BASHInventoryQty(items[i]);
+    if qty > 0 then
+      Self.Add(name, qty);
+  end;
+end;
+{$ENDIF}
+
 {$IFNDEF BASH_ENSURE_RUN_ZOOM}
 {$DEFINE BASH_ENSURE_RUN_ZOOM}
 

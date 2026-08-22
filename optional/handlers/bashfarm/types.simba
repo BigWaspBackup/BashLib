@@ -229,7 +229,8 @@ const
     'Grimy irit leaf', 'Grimy avantoe',
     'Grimy kwuarm', 'Grimy snapdragon',
     'Grimy cadantine', 'Grimy lantadyme',
-    'Grimy dwarf weed', 'Grimy torstol'
+    'Grimy dwarf weed', 'Grimy torstol',
+    'Grimy huasca'
   ];
 
   BASH_FARM_LEPRECHAUN_ITEMS: TRSItemArray = [
@@ -246,20 +247,32 @@ const
     'Potato cactus', 'Cactus spine',
     'Cooking apple', 'Banana', 'Orange', 'Curry leaf',
     'Pineapple', 'Papaya fruit', 'Dragonfruit', 'Coconut',
+    'Barley', 'Hammerstone hops', 'Asgarnian hops', 'Jute fibre',
+    'Yanillian hops', 'Krandorian hops', 'Wildblood hops',
+    'Grapes', 'Zamorak''s grapes',
+    'Giant seaweed', 'Mushroom', 'Cave nightshade',
+    'Calquat fruit', 'Celastrus bark',
     'Grimy guam leaf', 'Grimy marrentill',
     'Grimy tarromin', 'Grimy harralander',
     'Grimy ranarr weed', 'Grimy toadflax',
     'Grimy irit leaf', 'Grimy avantoe',
     'Grimy kwuarm', 'Grimy snapdragon',
     'Grimy cadantine', 'Grimy lantadyme',
-    'Grimy dwarf weed', 'Grimy torstol'
+    'Grimy dwarf weed', 'Grimy torstol',
+    'Grimy huasca'
   ];
+
+{$I BashLib/optional/handlers/bashcommon.simba}
 
 var
   BASHFarmAbortRun: Boolean;
   BASHFarmAbortReason: String;
+  BASHFarmLoot: TBASHLootTracker;
 
-{$I BashLib/optional/handlers/bashcommon.simba}
+procedure BASHFarmAddLoot(item: TRSItem; qty: Int32);
+begin
+  BASHFarmLoot.Add(ToStr(item), qty);
+end;
 
 procedure BASHFarmFailTools(reason: String);
 begin

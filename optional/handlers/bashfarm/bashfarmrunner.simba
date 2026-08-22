@@ -2260,6 +2260,7 @@ begin
   Self.Journal.Save();
 
   Self.OnComplete();
+  Self.PrintReport();
 end;
 
 procedure TBASHFarmRunner.DisableFarmRuns(reason: String);
@@ -2283,6 +2284,69 @@ begin
   Self.ReadyTimer.Init(Random(86 * ONE_MINUTE, 97 * ONE_MINUTE));
   Self.NextRunLogTimer.Init(0);
   WriteLn('[BASHFarm] Next farm run in ', SRL.MsToTime(Self.ReadyTimer.TimeRemaining(), TTimeFormat.Time_Short));
+end;
+
+function TBASHFarmRunner.GetLoot(): TBASHLootTracker;
+begin
+  Result := BASHFarmLoot;
+end;
+
+function TBASHFarmRunner.GetLootCount(item: String): Int32;
+begin
+  Result := BASHFarmLoot.GetCount(item);
+end;
+
+function TBASHFarmRunner.GetReportStrings(): TStringArray;
+const
+  spacingStart: String = '[';
+  spacingEnd: String = '|]';
+var
+  listOfStrings, lootLines: TStringArray;
+  i: Int32;
+begin
+  listOfStrings += spacingStart + '=================================' + spacingEnd;
+  listOfStrings += 'BASH Farm Runner';
+  listOfStrings += listOfStrings[0];
+  listOfStrings += 'Next run in ' + SRL.MsToTime(Self.ReadyTimer.TimeRemaining(), TTimeFormat.Time_Short);
+  listOfStrings += 'Runs Completed: ' + ToStr(Self.RunsComplete);
+  listOfStrings += 'Patches Completed: ' + ToStr(Self.PatchesCompleted);
+  listOfStrings += 'Patches Skipped: ' + ToStr(Self.PatchesSkipped);
+
+  lootLines := BASHFarmLoot.GetReportLines();
+  if Length(lootLines) > 0 then
+  begin
+    listOfStrings += 'Items obtained:';
+    for i := 0 to High(lootLines) do
+      listOfStrings += lootLines[i];
+  end
+  else
+    listOfStrings += 'Items obtained: none yet';
+
+  listOfStrings += listOfStrings[0];
+
+  Result += listOfStrings[0];
+  Result += spacingStart + PadL(' ', 3, ' ') + PadR(listOfStrings[1], 30, ' ') + spacingEnd;
+  Result += listOfStrings[2];
+
+  for i := 3 to High(listOfStrings) - 1 do
+    Result += spacingStart + PadL(' ', 3, ' ') + PadR(listOfStrings[i], 30, ' ') + spacingEnd;
+
+  Result += listOfStrings[High(listOfStrings)];
+end;
+
+procedure TBASHFarmRunner.DisplayReport();
+var
+  report: TStringArray;
+  i: Int32;
+begin
+  report := Self.GetReportStrings();
+  for i := 0 to High(report) do
+    WriteLn(report[i]);
+end;
+
+procedure TBASHFarmRunner.PrintReport();
+begin
+  Self.DisplayReport();
 end;
 
 function TBASHFarmRunner.CanDoFarmRun(): Boolean;

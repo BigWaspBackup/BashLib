@@ -59,10 +59,21 @@ type
     RunsCompleted: Int32;
     NestsLooted: Int32;
     RunStartXp, TotalXPEarned: UInt64;
+    Loot, RunStartLoot: TBASHLootTracker;
     Mushrooms: array [0..2] of TBASHMushroom;
     BirdHouses: array [0..3] of TBASHBirdHouse;
     State: EBASHBirdHouseState;
   end;
+
+const
+  BASH_BIRDHOUSE_LOOT_ITEMS: TRSItemArray = [
+    'Bird nest',
+    'Clue nest (beginner)',
+    'Clue nest (easy)',
+    'Clue nest (medium)',
+    'Clue nest (hard)',
+    'Clue nest (elite)'
+  ];
 
 var
   BASHBirdHouseRunner: TBASHBirdHouseRunner;
@@ -876,7 +887,6 @@ begin
     WriteLn('[BASHBirdHouse] Run finished');
     Inc(Self.RunsCompleted);
     Self.TotalXPEarned += XPBar.Read() - Self.RunStartXp;
-    Self.NestsLooted += Inventory.CountItem('Bird nest');
     if WaitUntil(Chat.HasContinue(), 65, 1400) then
       Chat.ClickContinue(True);
 
@@ -1157,12 +1167,33 @@ begin
     WriteLn('[BASHBirdHouse] Could not teleport');
 end;
 
+function TBASHBirdHouseRunner.GetLoot(): TBASHLootTracker;
+begin
+  Result := Self.Loot;
+end;
+
+function TBASHBirdHouseRunner.GetLootCount(item: String): Int32;
+begin
+  Result := Self.Loot.GetCount(item);
+end;
+
+procedure TBASHBirdHouseRunner.RecordRunLoot();
+var
+  before: Int32;
+begin
+  before := Self.Loot.Total();
+  Self.Loot.AddSnapshotDelta(Self.RunStartLoot, BASH_BIRDHOUSE_LOOT_ITEMS);
+  Self.NestsLooted := Self.Loot.Total();
+  if Self.Loot.Total() > before then
+    WriteLn('[BASHBirdHouse] Loot this run: +', Self.Loot.Total() - before, ' nest(s)');
+end;
+
 function TBASHBirdHouseRunner.GetReportStrings(): TStringArray;
 const
   spacingStart: String = '[';
   spacingEnd: String = '|]';
 var
-  listOfStrings: TStringArray;
+  listOfStrings, lootLines: TStringArray;
   i: Int32;
 begin
   listOfStrings += spacingStart + '=================================' + spacingEnd;
@@ -1172,6 +1203,15 @@ begin
   listOfStrings += 'Runs Completed: ' + ToStr(Self.RunsCompleted);
   listOfStrings += 'XP Earned: ' + ToStr(Self.TotalXPEarned);
   listOfStrings += 'Nests Looted: ' + ToStr(Self.NestsLooted);
+
+  lootLines := Self.Loot.GetReportLines();
+  if Length(lootLines) > 0 then
+  begin
+    listOfStrings += 'Items obtained:';
+    for i := 0 to High(lootLines) do
+      listOfStrings += lootLines[i];
+  end;
+
   listOfStrings += listOfStrings[0];
 
   Result += listOfStrings[0];
@@ -1219,6 +1259,7 @@ begin
   end;
 
   Self.RunStartXp := XPBar.Read();
+  Self.RunStartLoot.CaptureItems(BASH_BIRDHOUSE_LOOT_ITEMS);
 
   while not Self.HasRunFinished do
   begin
@@ -1242,6 +1283,7 @@ begin
     end;
   end;
 
+  Self.RecordRunLoot();
   Self.OnComplete();
   Self.HasRunFinished := False;
 end;

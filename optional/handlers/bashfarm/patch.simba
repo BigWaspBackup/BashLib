@@ -3937,7 +3937,7 @@ end;
 
 procedure TBASHFarmPatch.NoteItems();
 var
-  slot, i, attempt: Int32;
+  slot, i, attempt, qty: Int32;
   item: TRSItem;
   items: TRSItemArray;
   tpa: TPointArray;
@@ -3972,6 +3972,7 @@ begin
   for i := 0 to High(items) do
   begin
     noted := False;
+    qty := BASHInventoryQty(items[i]);
 
     for attempt := 1 to 3 do
     begin
@@ -4014,7 +4015,9 @@ begin
       Wait(Random(150, 350));
     end;
 
-    if not noted then
+    if noted then
+      BASHFarmAddLoot(items[i], qty)
+    else
       WriteLn('[BASHFarm] NoteItems: failed to note ', items[i],
               ' after 3 attempts at ', Self.Data.Name);
   end;
