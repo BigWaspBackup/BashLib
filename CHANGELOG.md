@@ -1,3 +1,12 @@
+## [8.5.4](https://github.com/BigWaspBackup/BashLib/compare/v8.5.3...v8.5.4) (2026-08-24)
+
+
+### Bug Fixes
+
+* Added support for trimmed farming cape; Added inital code for solving random events and using lamps ([bc447b1](https://github.com/BigWaspBackup/BashLib/commit/bc447b1a7ddebb1186e1d784c74af3ff2f4e584a))
+
+
+
 ## [8.5.3](https://github.com/BigWaspBackup/BashLib/compare/v8.5.2...v8.5.3) (2026-08-22)
 
 
@@ -31,15 +40,6 @@
 ### Features
 
 * started work on random events handler, Removed all legacy wasp API calls, AI Chatbot improvements, world hopper improvements ([7a65c9b](https://github.com/BigWaspBackup/BashLib/commit/7a65c9b6446047129a3a5e4f78e2b86b3f280c99))
-
-
-
-## [8.4.15](https://github.com/BigWaspBackup/BashLib/compare/v8.4.14...v8.4.15) (2026-08-16)
-
-
-### Bug Fixes
-
-* improved composting ([5fbf1f2](https://github.com/BigWaspBackup/BashLib/commit/5fbf1f27d3d0ea1b78c73e325224102e37092c47))
 
 
 
