@@ -5,6 +5,20 @@
 
 {$SCOPEDENUMS ON}
 
+(*
+  OSRS random events are scheduled on real-world time, 1 to 2 hours after the
+  last event. The countdown keeps running while logged out, so the last-event
+  timestamp is persisted and scans are gated to that window.
+*)
+const
+  GENIE_PANTS_COLOR: TCTS2Color = [9311880, 6, 0.05, 0.66];   // CTS2(9311880, 6, 0.05, 0.66)
+  GENIE_BODY_COLOR: TCTS2Color = [14189363, 23, 0.08, 1.26];  // CTS2(14189363, 23, 0.08, 1.26)
+  GENIE_PAIR_DIST = 20;
+  GENIE_CLUSTER_DISTANCE = 8;
+  RANDOM_EVENT_MIN_SEC = 60 * 60;
+  RANDOM_EVENT_MAX_SEC = 120 * 60;
+  RANDOM_EVENT_EARLY_SCAN_MS = 60 * 1000;
+
 type
   ERandomEventMode = (OFF, DISMISS, INTERACT);
 
@@ -12,6 +26,8 @@ type
     Mode: ERandomEventMode;
     Skill: ERSLampSkill;
     Genie: TRSNPC;
+    LastEventUnix: Int64;
+    NextEarlyScan: UInt64;
   end;
 
 function ERSLampSkill.ToKey(): String; constref;
@@ -50,11 +66,13 @@ begin
     Filter.MinimapDot := False;
     Filter.Finder := True;
     Filter.UpText := True;
+    Finder := [];
     Finder.ColorClusters += [
-      CTS2(14188077, 16, 0.10, 1.79),
-      CTS2(10033555, 3, 0.06, 0.88),
-      20
+      GENIE_BODY_COLOR,
+      GENIE_PANTS_COLOR,
+      GENIE_PAIR_DIST
     ];
+    Finder.ClusterDistance := GENIE_CLUSTER_DISTANCE;
   end;
 end;
 
@@ -74,6 +92,49 @@ begin
 
   Self.Skill := ERSLampSkill.FromKey(json.getString('skill'));
   LampHandler.Skill := Self.Skill;
+
+  Self.LastEventUnix := 0;
+  if json.has('last_event_unix') then
+    Self.LastEventUnix := json.getInt('last_event_unix');
+end;
+
+function TRSRandomEvents.SecondsSinceLastEvent(): Int64;
+begin
+  if Self.LastEventUnix <= 0 then
+    Exit(RANDOM_EVENT_MAX_SEC);
+
+  Result := UnixTime() - Self.LastEventUnix;
+  if Result < 0 then
+    Result := RANDOM_EVENT_MAX_SEC;
+end;
+
+function TRSRandomEvents.InSpawnWindow(): Boolean;
+begin
+  Result := Self.SecondsSinceLastEvent() >= RANDOM_EVENT_MIN_SEC;
+end;
+
+function TRSRandomEvents.ShouldScan(): Boolean;
+begin
+  if Self.InSpawnWindow() then
+    Exit(True);
+
+  if GetTickCount() < Self.NextEarlyScan then
+    Exit(False);
+
+  Self.NextEarlyScan := GetTickCount() + RANDOM_EVENT_EARLY_SCAN_MS;
+  Result := True;
+end;
+
+procedure TRSRandomEvents.MarkEventHandled();
+var
+  json: TJSONObject;
+begin
+  Self.LastEventUnix := UnixTime();
+  Self.NextEarlyScan := GetTickCount() + RANDOM_EVENT_EARLY_SCAN_MS;
+  json := WLSettings.GetObject('antiban').getJSONObject('random_events');
+  json.Put('last_event_unix', Int32(Self.LastEventUnix));
+  WLSettings.SaveConfig();
+  Self.DebugLn('Random event handled. Next spawn window in 1-2 hours');
 end;
 
 procedure TRSRandomEvents.DebugRandom();
@@ -146,10 +207,21 @@ begin
   Result := LampHandler.Open() and LampHandler.SelectLampSkill();
 end;
 
+function TRSRandomEvents.HasInventorySpace(): Boolean;
+begin
+  Result := Inventory.Open() and Inventory.HasSpace(1);
+end;
+
 function TRSRandomEvents.InteractGenie(): Boolean;
 var
   atpa: T2DPointArray;
 begin
+  if not Self.HasInventorySpace() then
+  begin
+    Self.DebugLn('Genie interact: need 1 empty inventory slot');
+    Exit(False);
+  end;
+
   if not Self.Genie.Find(atpa) then
     Exit(False);
 
@@ -171,6 +243,8 @@ begin
 end;
 
 function TRSRandomEvents.Handle(): Boolean;
+var
+  lamp: TRSItem;
 begin
   Self.LoadSettings();
 
@@ -178,9 +252,32 @@ begin
     ERandomEventMode.OFF:
       Exit(False);
     ERandomEventMode.DISMISS:
-      Result := Self.DismissGenie() or Self.DismissByName();
+      begin
+        if not Self.ShouldScan() then
+          Exit(False);
+
+        Result := Self.DismissGenie() or Self.DismissByName();
+        if Result then
+          Self.MarkEventHandled();
+      end;
     ERandomEventMode.INTERACT:
-      Result := Self.InteractGenie();
+      begin
+        if LampHandler.HasLamp(lamp) then
+          Exit(Self.UseLamp());
+
+        if not Self.ShouldScan() then
+          Exit(False);
+
+        if not Self.HasInventorySpace() then
+        begin
+          Self.DebugLn('Random event interact: need 1 empty inventory slot');
+          Exit(False);
+        end;
+
+        Result := Self.InteractGenie();
+        if Result then
+          Self.MarkEventHandled();
+      end;
   end;
 end;
 

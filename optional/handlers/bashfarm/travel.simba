@@ -45,7 +45,8 @@ const
   BASH_TRAVEL_GUILD: TStringArray = [
     'Skills Necklace',
     'Farming Cape',
-    'Fairy CIR (Ardy Cloak)'
+    'Fairy CIR (Ardy Cloak)',
+    'Farming Cape (t)'
   ];
   BASH_TRAVEL_LUMBRIDGE_TREE: TStringArray = [
     'Lumbridge Spell',
@@ -207,12 +208,23 @@ end;
 function BASHFarmTravel_Guild(idx: Int32): TTeleportLocation;
 begin
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_GUILD) of
-    1: Exit(RSTeleportsV2.FARMING_GUILD_CAPE);
+    1: Exit(setupTeleportLocation(
+         ETeleportType.OTHER,
+         ['Farming cape(t)', 'Farming cape'],
+         'Teleport',
+         RSTeleportsV2.FARMING_GUILD_CAPE.worldPoint
+       ));
     2: Exit(setupTeleportLocation(
          ETeleportType.OTHER,
          [],
          'BASH Guild Fairy CIR',
          RSTeleportsV2.FARMING_GUILD.worldPoint
+       ));
+    3: Exit(setupTeleportLocation(
+         ETeleportType.OTHER,
+         ['Farming cape(t)'],
+         'Teleport',
+         RSTeleportsV2.FARMING_GUILD_CAPE.worldPoint
        ));
   end;
   Result := RSTeleportsV2.FARMING_GUILD;

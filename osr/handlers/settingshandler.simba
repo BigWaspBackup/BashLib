@@ -1007,7 +1007,8 @@ function TSettingsHandler.IsBashProfileActive(out activeName: String): Boolean;
 Returns True when the currently active RuneLite profile is a BASH-installed
 profile. Accepts the current 10-character launcher name and the older
 8-character name, and confirms the profile file includes the BASH launcher
-fingerprint (`runelite.totemfletchingplugin=true`).
+fingerprint (`runelite.totemfletchingplugin=true` and/or
+`runelite.woodcuttingplugin=true`).
 *)
 function TSettingsHandler.IsBashProfileActive(out activeName: String): Boolean;
 var
@@ -1027,7 +1028,11 @@ begin
 
   fullPath := Self.GetProfilesPath() + DirectorySeparator + profileFile;
   content := ReadFileContents(fullPath);
-  if (content = '') or (Pos('runelite.totemfletchingplugin=true', content) = 0) then
+  if content = '' then
+    Exit;
+
+  if (Pos('runelite.totemfletchingplugin=true', content) = 0) and
+     (Pos('runelite.woodcuttingplugin=true', content) = 0) then
     Exit;
 
   Result := True;

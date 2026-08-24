@@ -306,7 +306,7 @@ begin
   RSTeleportsV2.NEXUS_WEISS := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Weiss', [7297, 34691]);
   RSTeleportsV2.NEXUS_WEST_ARDOUGNE := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'West Ardougne', [3012, 37273]);
   RSTeleportsV2.NEXUS_Civitas_Illa_Fortis:= setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Civitas illa Fortis', [2620, 37890]);
-  RSTeleportsV2.FARMING_GUILD_CAPE := setupTeleportLocation(ETeleportType.OTHER, ['Farming cape', 'Farming cape(t)'], 'Teleport', [900, 35542]);
+  RSTeleportsV2.FARMING_GUILD_CAPE := setupTeleportLocation(ETeleportType.OTHER, ['Farming cape(t)', 'Farming cape'], 'Teleport', [900, 35542]);
   RSTeleportsV2.CRAFTING_GUILD_CAPE := setupTeleportLocation(ETeleportType.OTHER, ['Crafting cape', 'Crafting cape(t)'], 'Teleport', [7632, 37294]);
   RSTeleportsV2.HOUSE_CAPE := setupTeleportLocation(ETeleportType.OTHER, ['Construct. cape', 'Construct. cape(t)', 'Max cape'], 'Tele to POH', [0, 0]);
   RSTeleportsV2.HOUSE := setupTeleportLocation(ETeleportType.NORMAL_MAGIC, 'House', 40, [0, 0]);
