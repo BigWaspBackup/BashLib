@@ -1930,48 +1930,6 @@ function TScriptForm.CreateAntibanManager(owner: TControl): TPanel;
     if edit <> nil then edit.SetText(ToStr(Antiban.GetSleepLength()));
   end;
 
-  procedure TScriptForm._RandomEventsModeOnChange(sender: TObject);
-  var
-    combo, skill: TComboBox;
-    mode: String;
-  begin
-    combo := sender;
-    case combo.getItemIndex() of
-      1: mode := 'dismiss';
-      2: mode := 'interact';
-      else mode := 'off';
-    end;
-
-    WLSettings.GetObject('antiban').getJSONObject('random_events').Put('mode', mode);
-    WLSettings.SaveConfig();
-
-    skill := Self.Form.GetChild('ab_lamp_skill_combobox');
-    if skill <> nil then
-      skill.setEnabled(mode = 'interact');
-  end;
-
-  procedure TScriptForm._LampSkillOnChange(sender: TObject);
-  const
-    LAMP_SKILL_KEYS: TStringArray = [
-      'attack', 'strength', 'range', 'magic', 'defence', 'sailing',
-      'hitpoints', 'prayer', 'agility', 'herblore', 'theiving',
-      'crafting', 'runecrafting', 'slayer', 'farming', 'mining',
-      'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting',
-      'fletching', 'construction', 'hunter'
-    ];
-  var
-    combo: TComboBox;
-    idx: Int32;
-  begin
-    combo := sender;
-    idx := combo.getItemIndex();
-    if (idx < 0) or (idx > High(LAMP_SKILL_KEYS)) then
-      Exit;
-
-    WLSettings.GetObject('antiban').getJSONObject('random_events').Put('skill', LAMP_SKILL_KEYS[idx]);
-    WLSettings.SaveConfig();
-  end;
-
 var
   bioPanel: TPanel;
   limitPanel: TPanel;
@@ -1980,13 +1938,11 @@ var
   bar: TTrackBar;
   antibanGroup: TCheckCheckGroup;
   breaks, sleeps, useBio: TLabeledCheckBox;
-  randomEventsMode, lampSkill: TLabeledComboBox;
   arr: TStringArray;
-  str, mode, skillKey: String;
+  str: String;
   combobox: TComboBox;
   checked: Boolean;
   ownerW, ownerH: Int32;
-  lampSkillKeys, lampSkillLabels: TStringArray;
 begin
   with Result do
   begin
@@ -2148,69 +2104,6 @@ begin
     Edit.setOnKeyPress(@Edit.FloatField);
     Edit.setOnChange(@Self._SleepLengthOnChange);
     SetText(ToStr(Antiban.GetSleepLength()));
-  end;
-
-  lampSkillKeys := [
-    'attack', 'strength', 'range', 'magic', 'defence', 'sailing',
-    'hitpoints', 'prayer', 'agility', 'herblore', 'theiving',
-    'crafting', 'runecrafting', 'slayer', 'farming', 'mining',
-    'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting',
-    'fletching', 'construction', 'hunter'
-  ];
-  lampSkillLabels := [
-    'Attack', 'Strength', 'Range', 'Magic', 'Defence', 'Sailing',
-    'Hitpoints', 'Prayer', 'Agility', 'Herblore', 'Thieving',
-    'Crafting', 'Runecrafting', 'Slayer', 'Farming', 'Mining',
-    'Smithing', 'Fishing', 'Cooking', 'Firemaking', 'Woodcutting',
-    'Fletching', 'Construction', 'Hunter'
-  ];
-
-  with randomEventsMode do
-  begin
-    Create(Result);
-    SetCaption('Random events:');
-    SetName('ab_random_events');
-    SetToolTip('Off does nothing. Dismiss right-clicks Dismiss. Interact talks to Genie and spends the lamp on the skill below. Enable RuneLite Entity Hider with Hide others random events.');
-    SetLeft(antibanGroup.GetLeft());
-    SetTop(antibanGroup.GetBottom() + TControl.AdjustToDPI(10));
-    SetWidth(antibanGroup.GetRight() - antibanGroup.GetLeft());
-    SetStyle(csDropDownList);
-    AddItemArray(['Off', 'Dismiss', 'Interact']);
-
-    mode := WLSettings.GetObject('antiban').getJSONObject('random_events').getString('mode').Lower();
-    case mode of
-      'dismiss':  SetItemIndex(1);
-      'interact': SetItemIndex(2);
-      else        SetItemIndex(0);
-    end;
-
-    ComboBox.setOnChange(@Self._RandomEventsModeOnChange);
-  end;
-
-  with lampSkill do
-  begin
-    Create(Result);
-    SetCaption('Lamp XP skill:');
-    SetName('ab_lamp_skill');
-    SetToolTip('Skill used when a Genie lamp is rubbed. All random-event XP uses this skill.');
-    SetLeft(randomEventsMode.GetLeft());
-    SetTop(randomEventsMode.GetBottom() + TControl.AdjustToDPI(8));
-    SetWidth(randomEventsMode.GetRight() - randomEventsMode.GetLeft());
-    SetStyle(csDropDownList);
-    AddItemArray(lampSkillLabels);
-
-    skillKey := WLSettings.GetObject('antiban').getJSONObject('random_events').getString('skill').Lower().Replace('thieving', 'theiving');
-    i := 20;
-    for y := 0 to High(lampSkillKeys) do
-      if lampSkillKeys[y] = skillKey then
-      begin
-        i := y;
-        Break;
-      end;
-    SetItemIndex(i);
-
-    ComboBox.setOnChange(@Self._LampSkillOnChange);
-    SetEnabled(mode = 'interact');
   end;
 
   Self._SleepsOnChange(sleeps.CheckBox);

@@ -87,6 +87,7 @@ procedure TWLSettings.Setup(jsonFile: String = ScriptName); override;
 var
   json: TJSONObject;
   modified: Boolean;
+  mode: String;
 begin
   inherited(jsonFile);
 
@@ -223,6 +224,35 @@ begin
   if not Self.GetObject('antiban').getJSONObject('random_events').has('skill') then
   begin
     Self.GetObject('antiban').getJSONObject('random_events').Put('skill', 'woodcutting');
+    modified := True;
+  end;
+
+  if not Self.GetObject('antiban').getJSONObject('random_events').has('warning_shown') then
+  begin
+    Self.GetObject('antiban').getJSONObject('random_events').Put('warning_shown', False);
+    modified := True;
+  end;
+
+  if not Self.GetObject('antiban').getJSONObject('random_events').has('genie') then
+  begin
+    mode := Self.GetObject('antiban').getJSONObject('random_events').getString('mode').Lower();
+    Self.GetObject('antiban').getJSONObject('random_events').Put('genie', (mode = 'dismiss') or (mode = 'interact'));
+    modified := True;
+  end;
+
+  if not Self.GetObject('antiban').getJSONObject('random_events').has('genie_action') then
+  begin
+    mode := Self.GetObject('antiban').getJSONObject('random_events').getString('mode').Lower();
+    if mode = 'interact' then
+      Self.GetObject('antiban').getJSONObject('random_events').Put('genie_action', 'interact')
+    else
+      Self.GetObject('antiban').getJSONObject('random_events').Put('genie_action', 'ignore');
+    modified := True;
+  end;
+
+  if not Self.GetObject('antiban').getJSONObject('random_events').has('count_check') then
+  begin
+    Self.GetObject('antiban').getJSONObject('random_events').Put('count_check', False);
     modified := True;
   end;
 

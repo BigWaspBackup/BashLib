@@ -103,6 +103,39 @@ begin
   Result := idx;
 end;
 
+function BASHFarmTravelSorted(options: TStringArray): TStringArray;
+begin
+  Result := options.Sorted();
+end;
+
+function BASHFarmTravelIdxFromName(options: TStringArray; name: String): Int32;
+var
+  i: Int32;
+  needle: String;
+begin
+  Result := 0;
+  needle := LowerCase(name);
+  for i := 0 to High(options) do
+    if LowerCase(options[i]) = needle then
+      Exit(i);
+end;
+
+function BASHFarmTravelSortedIdx(options: TStringArray; unsortedIdx: Int32): Int32;
+var
+  sorted: TStringArray;
+begin
+  sorted := BASHFarmTravelSorted(options);
+  Result := BASHFarmTravelIdxFromName(sorted, options[BASHFarmTravelClamp(unsortedIdx, options)]);
+end;
+
+function BASHFarmTravelUnsortedIdx(options: TStringArray; sortedIdx: Int32): Int32;
+var
+  sorted: TStringArray;
+begin
+  sorted := BASHFarmTravelSorted(options);
+  Result := BASHFarmTravelIdxFromName(options, sorted[BASHFarmTravelClamp(sortedIdx, sorted)]);
+end;
+
 function BASHFarmTravel_Weiss(idx: Int32): TTeleportLocation;
 begin
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_WEISS) of

@@ -18,16 +18,37 @@ const
   RANDOM_EVENT_MIN_SEC = 60 * 60;
   RANDOM_EVENT_MAX_SEC = 120 * 60;
   RANDOM_EVENT_EARLY_SCAN_MS = 60 * 1000;
+  GENIE_MAX_TRIES = 3;
+  GENIE_GONE_MS = 10 * 1000;
+  BASH_RANDOM_EVENT_MODES: TStringArray = ['Ignore', 'Interact'];
+  BASH_LAMP_SKILL_KEYS: TStringArray = [
+    'agility', 'attack', 'construction', 'cooking', 'crafting',
+    'defence', 'farming', 'firemaking', 'fishing', 'fletching',
+    'herblore', 'hitpoints', 'hunter', 'magic', 'mining',
+    'prayer', 'range', 'runecrafting', 'sailing', 'slayer',
+    'smithing', 'strength', 'theiving', 'woodcutting'
+  ];
+  BASH_LAMP_SKILL_LABELS: TStringArray = [
+    'Agility', 'Attack', 'Construction', 'Cooking', 'Crafting',
+    'Defence', 'Farming', 'Firemaking', 'Fishing', 'Fletching',
+    'Herblore', 'Hitpoints', 'Hunter', 'Magic', 'Mining',
+    'Prayer', 'Range', 'Runecrafting', 'Sailing', 'Slayer',
+    'Smithing', 'Strength', 'Thieving', 'Woodcutting'
+  ];
 
 type
   ERandomEventMode = (OFF, DISMISS, INTERACT);
 
   TRSRandomEvents = record(TSRLBaseRecord)
     Mode: ERandomEventMode;
+    SupportGenie: Boolean;
     Skill: ERSLampSkill;
     Genie: TRSNPC;
     LastEventUnix: Int64;
     NextEarlyScan: UInt64;
+    GenieTries: Int32;
+    IgnoreGenie: Boolean;
+    LastGenieSeen: UInt64;
   end;
 
 function ERSLampSkill.ToKey(): String; constref;
@@ -76,18 +97,61 @@ begin
   end;
 end;
 
+procedure TRSRandomEvents.EnableGenie();
+begin
+  Self.SupportGenie := True;
+end;
+
+function TRSRandomEvents.GetConfig(): TJSONObject;
+begin
+  Result := WLSettings.GetObject('antiban').getJSONObject('random_events');
+end;
+
+function TRSRandomEvents.SkillIndexFromKey(skillKey: String): Int32;
+var
+  i: Int32;
+begin
+  skillKey := skillKey.Lower().Replace('thieving', 'theiving');
+  Result := High(BASH_LAMP_SKILL_KEYS);
+  for i := 0 to High(BASH_LAMP_SKILL_KEYS) do
+  begin
+    if BASH_LAMP_SKILL_KEYS[i] = 'woodcutting' then
+      Result := i;
+    if BASH_LAMP_SKILL_KEYS[i] = skillKey then
+      Exit(i);
+  end;
+end;
+
 procedure TRSRandomEvents.LoadSettings();
 var
   json: TJSONObject;
-  mode: String;
+  mode, action: String;
 begin
-  json := WLSettings.GetObject('antiban').getJSONObject('random_events');
-  mode := json.getString('mode').Lower();
+  if not Self.SupportGenie then
+  begin
+    Self.Mode := ERandomEventMode.OFF;
+    Exit;
+  end;
 
-  case mode of
-    'dismiss':  Self.Mode := ERandomEventMode.DISMISS;
-    'interact': Self.Mode := ERandomEventMode.INTERACT;
-    else        Self.Mode := ERandomEventMode.OFF;
+  json := Self.GetConfig();
+  Self.Mode := ERandomEventMode.OFF;
+
+  if json.has('genie') then
+  begin
+    if json.getBoolean('genie') then
+    begin
+      action := 'ignore';
+      if json.has('genie_action') then
+        action := json.getString('genie_action').Lower();
+      if action = 'interact' then
+        Self.Mode := ERandomEventMode.INTERACT;
+    end;
+  end
+  else
+  begin
+    mode := json.getString('mode').Lower();
+    if mode = 'interact' then
+      Self.Mode := ERandomEventMode.INTERACT;
   end;
 
   Self.Skill := ERSLampSkill.FromKey(json.getString('skill'));
@@ -131,7 +195,7 @@ var
 begin
   Self.LastEventUnix := UnixTime();
   Self.NextEarlyScan := GetTickCount() + RANDOM_EVENT_EARLY_SCAN_MS;
-  json := WLSettings.GetObject('antiban').getJSONObject('random_events');
+  json := Self.GetConfig();
   json.Put('last_event_unix', Int32(Self.LastEventUnix));
   WLSettings.SaveConfig();
   Self.DebugLn('Random event handled. Next spawn window in 1-2 hours');
@@ -212,19 +276,58 @@ begin
   Result := Inventory.Open() and Inventory.HasSpace(1);
 end;
 
-function TRSRandomEvents.InteractGenie(): Boolean;
+procedure TRSRandomEvents.ResetGenieInstance();
+begin
+  Self.GenieTries := 0;
+  Self.IgnoreGenie := False;
+  Self.LastGenieSeen := 0;
+end;
+
+function TRSRandomEvents.ShouldIgnoreGenie(): Boolean;
 var
   atpa: T2DPointArray;
 begin
-  if not Self.HasInventorySpace() then
-  begin
-    Self.DebugLn('Genie interact: need 1 empty inventory slot');
+  Result := False;
+  if not Self.IgnoreGenie then
     Exit(False);
+
+  if Self.Genie.Find(atpa) then
+  begin
+    Self.LastGenieSeen := GetTickCount();
+    Exit(True);
   end;
+
+  if (Self.LastGenieSeen > 0) and (GetTickCount() - Self.LastGenieSeen < GENIE_GONE_MS) then
+    Exit(True);
+
+  Self.ResetGenieInstance();
+  Self.DebugLn('Previous Genie instance gone. Ready for the next one');
+end;
+
+procedure TRSRandomEvents.NoteGenieFail();
+begin
+  Inc(Self.GenieTries);
+  Self.LastGenieSeen := GetTickCount();
+  Self.DebugLn('Genie interact failed (' + IntToStr(Self.GenieTries) + '/' + IntToStr(GENIE_MAX_TRIES) + ')');
+  if Self.GenieTries >= GENIE_MAX_TRIES then
+  begin
+    Self.IgnoreGenie := True;
+    Self.DebugLn('Ignoring this Genie after ' + IntToStr(GENIE_MAX_TRIES) + ' failed tries');
+  end;
+end;
+
+function TRSRandomEvents.InteractGenie(out attempted: Boolean): Boolean; overload;
+var
+  atpa: T2DPointArray;
+begin
+  attempted := False;
+  if not Self.HasInventorySpace() then
+    Exit(False);
 
   if not Self.Genie.Find(atpa) then
     Exit(False);
 
+  attempted := True;
   Self.DebugRandom();
 
   if not Self.Genie.Click() then
@@ -234,18 +337,26 @@ begin
   end;
 
   if not Self.AdvanceGenieChat() then
-  begin
-    Self.DebugLn('Genie interact: no lamp in inventory');
     Exit(False);
-  end;
 
   Result := Self.UseLamp();
+end;
+
+function TRSRandomEvents.InteractGenie(): Boolean; overload;
+var
+  attempted: Boolean;
+begin
+  Result := Self.InteractGenie(attempted);
 end;
 
 function TRSRandomEvents.Handle(): Boolean;
 var
   lamp: TRSItem;
+  attempted: Boolean;
 begin
+  if not Self.SupportGenie then
+    Exit(False);
+
   Self.LoadSettings();
 
   case Self.Mode of
@@ -256,7 +367,7 @@ begin
         if not Self.ShouldScan() then
           Exit(False);
 
-        Result := Self.DismissGenie() or Self.DismissByName();
+        Result := Self.DismissGenie();
         if Result then
           Self.MarkEventHandled();
       end;
@@ -265,29 +376,234 @@ begin
         if LampHandler.HasLamp(lamp) then
           Exit(Self.UseLamp());
 
+        if Self.ShouldIgnoreGenie() then
+          Exit(False);
+
         if not Self.ShouldScan() then
           Exit(False);
 
         if not Self.HasInventorySpace() then
-        begin
-          Self.DebugLn('Random event interact: need 1 empty inventory slot');
           Exit(False);
-        end;
 
-        Result := Self.InteractGenie();
+        Result := Self.InteractGenie(attempted);
         if Result then
+        begin
+          Self.ResetGenieInstance();
           Self.MarkEventHandled();
+        end
+        else if attempted then
+          Self.NoteGenieFail();
       end;
   end;
+end;
+
+procedure RandomEventsFormCloseClicked(sender: TObject);
+begin
+  TForm(TButton(sender).GetParent()).Close();
+end;
+
+procedure TRSRandomEvents.SetupFormCombo(
+  var box: TLabeledComboBox;
+  parent: TControl;
+  caption: String;
+  left, top, width: Int32;
+  items: TStringArray;
+  itemIndex: Int32;
+  enabled: Boolean
+);
+begin
+  box.Create(parent);
+  box.SetLeft(TControl.AdjustToDPI(left));
+  box.SetTop(TControl.AdjustToDPI(top));
+  box.SetWidth(TControl.AdjustToDPI(width));
+  box.SetHeight(TControl.AdjustToDPI(58));
+  box.SetCaption(caption);
+  box.AddItemArray(items);
+  if (itemIndex >= 0) and (itemIndex <= High(items)) then
+    box.SetItemIndex(itemIndex)
+  else
+    box.SetItemIndex(0);
+  box.SetStyle(csDropDownList);
+  box.SetEnabled(enabled);
+end;
+
+procedure TRSRandomEvents.ShowWarningIfNeeded();
+var
+  json: TJSONObject;
+  warningForm: TForm;
+  msg: TMemo;
+  okButton: TButton;
+begin
+  json := Self.GetConfig();
+  if json.has('warning_shown') and json.getBoolean('warning_shown') then
+    Exit;
+
+  with warningForm do
+  begin
+    Init(nil);
+    SetCaption('Random Events');
+    SetBounds(0, 0, TControl.AdjustToDPI(560), TControl.AdjustToDPI(280));
+    SetPosition(poScreenCenter);
+  end;
+
+  with msg do
+  begin
+    Init(warningForm);
+    SetParent(warningForm);
+    SetBounds(TControl.AdjustToDPI(16), TControl.AdjustToDPI(16),
+              TControl.AdjustToDPI(528), TControl.AdjustToDPI(180));
+    GetFont().SetSize(11);
+    SetReadOnly(True);
+    SetCaption(
+      'For this to work correctly, make sure you are on the BASH profile, or that Entity Hider is enabled with Hide others random events turned on.' +
+      LineEnding + LineEnding +
+      'The lamp handler relies on reading the selected skill. In rare cases the lamp may be awarded in an incorrect skill. Use at your own risk.'
+    );
+  end;
+
+  with okButton do
+  begin
+    Init(warningForm);
+    SetParent(warningForm);
+    SetCaption('OK');
+    SetWidth(TControl.AdjustToDPI(100));
+    SetHeight(TControl.AdjustToDPI(28));
+    SetLeft((warningForm.GetWidth() - TControl.AdjustToDPI(100)) div 2);
+    SetTop(TControl.AdjustToDPI(210));
+    SetOnClick(@RandomEventsFormCloseClicked);
+  end;
+
+  warningForm.ShowModal();
+  warningForm.Free();
+
+  json.Put('warning_shown', True);
+  WLSettings.SaveConfig();
+end;
+
+procedure TRSRandomEvents.ShowSettingsForm();
+var
+  json: TJSONObject;
+  form: TForm;
+  title, subtitle: TLabel;
+  genieCheck, countCheck: TCheckBox;
+  genieAction, countAction, lampSkill: TLabeledComboBox;
+  closeButton: TButton;
+  genieEnabled: Boolean;
+  genieActionIdx, skillIdx: Int32;
+  mode: String;
+begin
+  Self.ShowWarningIfNeeded();
+
+  json := Self.GetConfig();
+  genieEnabled := False;
+  genieActionIdx := 0;
+  skillIdx := Self.SkillIndexFromKey(json.getString('skill'));
+
+  if json.has('genie') then
+  begin
+    genieEnabled := json.getBoolean('genie');
+    if json.has('genie_action') and (json.getString('genie_action').Lower() = 'interact') then
+      genieActionIdx := 1;
+  end
+  else
+  begin
+    mode := json.getString('mode').Lower();
+    case mode of
+      'dismiss':
+        genieEnabled := True;
+      'interact':
+        begin
+          genieEnabled := True;
+          genieActionIdx := 1;
+        end;
+    end;
+  end;
+
+  with form do
+  begin
+    Init(nil);
+    SetCaption('Random Events');
+    SetBounds(0, 0, TControl.AdjustToDPI(560), TControl.AdjustToDPI(340));
+    SetPosition(poScreenCenter);
+  end;
+
+  with title do
+  begin
+    Init(form);
+    SetParent(form);
+    SetLeft(TControl.AdjustToDPI(20));
+    SetTop(TControl.AdjustToDPI(14));
+    SetCaption('Random Events');
+    GetFont().SetSize(14);
+    GetFont().SetStyle([fsBold]);
+  end;
+
+  with subtitle do
+  begin
+    Init(form);
+    SetParent(form);
+    SetLeft(TControl.AdjustToDPI(20));
+    SetTop(TControl.AdjustToDPI(40));
+    SetWidth(TControl.AdjustToDPI(520));
+    SetCaption('Tick the events you want the script to handle.');
+  end;
+
+  genieCheck.Create(form, 'Genie', 'Leave the NPC alone or talk to them.', [20, 72], [200, 22], True);
+  genieCheck.SetChecked(genieEnabled);
+
+  Self.SetupFormCombo(genieAction, form, 'Action', 20, 98, 240, BASH_RANDOM_EVENT_MODES, genieActionIdx, True);
+  genieAction.SetTooltip('Ignore does nothing to the NPC. Interact talks to them and uses the lamp.');
+  Self.SetupFormCombo(lampSkill, form, 'Lamp XP skill', 280, 98, 240, BASH_LAMP_SKILL_LABELS, skillIdx, True);
+  lampSkill.SetTooltip('Skill used when a Genie lamp is rubbed.');
+
+  countCheck.Create(form, 'Count Check (coming soon)', '', [20, 172], [280, 22], True);
+  countCheck.SetChecked(False);
+  countCheck.SetEnabled(False);
+
+  Self.SetupFormCombo(countAction, form, 'Action', 20, 198, 240, BASH_RANDOM_EVENT_MODES, 0, False);
+
+  with closeButton do
+  begin
+    Init(form);
+    SetParent(form);
+    SetCaption('Save and Close');
+    SetWidth(TControl.AdjustToDPI(120));
+    SetHeight(TControl.AdjustToDPI(28));
+    SetLeft((form.GetWidth() - TControl.AdjustToDPI(120)) div 2);
+    SetTop(TControl.AdjustToDPI(280));
+    SetOnClick(@RandomEventsFormCloseClicked);
+  end;
+
+  form.ShowModal();
+
+  json.Put('genie', genieCheck.IsChecked());
+  if genieAction.GetItemIndex() = 1 then
+    json.Put('genie_action', 'interact')
+  else
+    json.Put('genie_action', 'ignore');
+  json.Put('count_check', False);
+  json.Put('count_check_action', 'ignore');
+
+  if (lampSkill.GetItemIndex() >= 0) and (lampSkill.GetItemIndex() <= High(BASH_LAMP_SKILL_KEYS)) then
+    json.Put('skill', BASH_LAMP_SKILL_KEYS[lampSkill.GetItemIndex()]);
+
+  if genieCheck.IsChecked() and (genieAction.GetItemIndex() = 1) then
+    json.Put('mode', 'interact')
+  else
+    json.Put('mode', 'off');
+
+  form.Free();
+  WLSettings.SaveConfig();
 end;
 
 procedure TRSRandomEvents.Setup();
 begin
   Self.Name := 'RandomEvents';
   Self.Mode := ERandomEventMode.OFF;
+  Self.SupportGenie := False;
   Self.Skill := ERSLampSkill.WOODCUTTING;
+  Self.ResetGenieInstance();
   Self.SetupGenie();
-  Self.LoadSettings();
 end;
 
 var
@@ -295,6 +611,9 @@ var
 
 function TAntiban.DismissRandom(): Boolean; override;
 begin
+  if not RandomEvents.SupportGenie then
+    Exit(False);
+
   Result := RandomEvents.Handle();
 end;
 

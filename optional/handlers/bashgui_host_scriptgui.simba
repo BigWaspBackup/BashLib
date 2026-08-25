@@ -1,0 +1,29 @@
+{$IFNDEF BASH_PREMIUM_GUI_HOST}
+{$DEFINE BASH_PREMIUM_GUI_HOST}
+
+procedure TScriptGUI.BindPremiumHostHooks();
+begin
+  Self.FnInitGUI := @Self.InitGUI;
+  Self.FnLoadActionSettings := @Self.LoadActionSettings;
+  Self.FnSetupAIChat := @Self.SetupAIChat;
+  Self.FnBuildActionSection := @Self.BuildActionSection;
+  Self.FnBuildExtraSections := @Self.BuildExtraSections;
+  Self.FnBuildAccountsExtras := @Self.BuildAccountsExtras;
+  Self.FnApplyActionSettings := @Self.ApplyActionSettings;
+  Self.FnAfterBuildShell := @Self.AfterBuildShell;
+  Self.FnConfigureAntibanTasks := @Self.ConfigureAntibanTasks;
+  Self.FnRefreshNavLayout := @Self.RefreshNavLayout;
+  Self.FnBuildAntibanExtras := @Self.BuildAntibanExtras;
+  Self.FnStartScript := @Self.StartScript;
+  Self.FnOnFarmEnableChanged := @Self.OnFarmEnableChanged;
+  Self.FnOnBirdhouseEnableChanged := @Self.OnBirdhouseEnableChanged;
+  Self.FnWebhooksCheckboxChanged := @Self.WebhooksCheckboxChanged;
+end;
+
+procedure TScriptGUI.Run(); override;
+begin
+  Self.BindPremiumHostHooks();
+  inherited;
+end;
+
+{$ENDIF}

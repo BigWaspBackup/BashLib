@@ -1,4 +1,9 @@
+{$IFNDEF BASH_GUI_KIT}
 {$DEFINE BASH_GUI_KIT}
+
+{$IFNDEF WL_OSR}
+  {$I BashLib/osr.simba}
+{$ENDIF}
 
 const
   BASH_GUI_NAV       = $F0EBE4;
@@ -26,6 +31,13 @@ const
   BASH_GUI_COMBO_COL2 = 308;
   BASH_GUI_COMBO_COL3 = 592;
   BASH_GUI_BOTTOM_INSET = 14;
+  BASH_GUI_NAV_START_Y = 100;
+  BASH_GUI_NAV_GAP = 52;
+  BASH_GUI_SETTINGS_FILE = 'Configs/BASettings.ini';
+  BASH_GUI_WEBHOOK_SECTION = ' Webhook Settings';
+  BASH_GUI_ANTIBAN_SECTION = ' BASH Antiban';
+  BASH_GUI_DISCORD_AVATAR =
+    'https://raw.githubusercontent.com/BigWaspBackup/BashLib/master/utils/assets/bash-logo.bmp';
 
 type
   TBASHGUIBase = record(TScriptForm)
@@ -209,6 +221,30 @@ begin
     box.CheckBox.SetChecked(True);
 end;
 
+procedure TBASHGUIBase.AddEdit(
+  parent: TWinControl;
+  var box: TLabeledEdit;
+  ctrlName, labelText, text: String;
+  left, top, width: Int32
+);
+begin
+  box.Create(parent);
+  box.SetLeft(TControl.AdjustToDPI(left));
+  box.SetTop(TControl.AdjustToDPI(top));
+  box.SetWidth(TControl.AdjustToDPI(width));
+  box.SetName(ctrlName);
+  box.SetCaption(labelText);
+  box.SetText(text);
+  box.SetFontColor(BASH_GUI_TEXT);
+end;
+
+function TBASHGUIBase.GetSelectedString(comboBox: TLabeledComboBox): String;
+begin
+  Result := '';
+  if comboBox.GetItemIndex() >= 0 then
+    Result := comboBox.ComboBox.getItems().getStrings(comboBox.GetItemIndex());
+end;
+
 procedure TBASHGUIBase.AddHeader(parent: TPanel; titleText, subtitleText: String);
 var
   header: TPanel;
@@ -251,7 +287,37 @@ begin
   Result := combo.GetItemIndex();
 end;
 
-procedure TBASHGUIBase.BuildChrome(tab: TTabSheet);
+function TBASHGUIBase.ReadComboText(ctrlName: String): String;
+var
+  combo: TComboBox;
+  idx: Int32;
+begin
+  Result := '';
+  if Self.Form = nil then
+    Exit;
+  combo := Self.Form.GetChild(ctrlName + '_combobox');
+  if combo = nil then
+    Exit;
+  idx := combo.GetItemIndex();
+  if idx < 0 then
+    Exit;
+  Result := combo.GetItems().GetStrings(idx);
+end;
+
+function TBASHGUIBase.ReadEdit(ctrlName: String): String;
+var
+  edit: TEdit;
+begin
+  Result := '';
+  if Self.Form = nil then
+    Exit;
+  edit := Self.Form.GetChild(ctrlName + '_edit');
+  if edit = nil then
+    Exit;
+  Result := edit.GetText();
+end;
+
+procedure TBASHGUIBase.BuildChrome(parent: TWinControl);
 var
   startW, startH, shellW, shellH, statusTop, statusH, mainLeft, mainW, navW: Int32;
 begin
@@ -270,7 +336,7 @@ begin
   startW := TControl.AdjustToDPI(132);
   startH := TControl.AdjustToDPI(BASH_GUI_BTN_H);
 
-  Self.NavPanel.Create(tab);
+  Self.NavPanel.Create(parent);
   Self.NavPanel.SetLeft(0);
   Self.NavPanel.SetTop(0);
   Self.NavPanel.SetWidth(navW);
@@ -278,7 +344,7 @@ begin
   Self.NavPanel.SetColor(BASH_GUI_NAV);
   Self.NavPanel.SetBevelOuter(bvNone);
 
-  Self.DividerPanel.Create(tab);
+  Self.DividerPanel.Create(parent);
   Self.DividerPanel.SetLeft(navW);
   Self.DividerPanel.SetTop(0);
   Self.DividerPanel.SetWidth(TControl.AdjustToDPI(2));
@@ -286,7 +352,7 @@ begin
   Self.DividerPanel.SetColor(BASH_GUI_DIVIDER);
   Self.DividerPanel.SetBevelOuter(bvNone);
 
-  Self.ContentPanel.Create(tab);
+  Self.ContentPanel.Create(parent);
   Self.ContentPanel.SetLeft(mainLeft);
   Self.ContentPanel.SetTop(0);
   Self.ContentPanel.SetWidth(mainW);
@@ -294,7 +360,7 @@ begin
   Self.ContentPanel.SetColor(BASH_GUI_BG);
   Self.ContentPanel.SetBevelOuter(bvNone);
 
-  Self.StatusDivider.Create(tab);
+  Self.StatusDivider.Create(parent);
   Self.StatusDivider.SetLeft(mainLeft);
   Self.StatusDivider.SetTop(statusTop);
   Self.StatusDivider.SetWidth(mainW);
@@ -302,7 +368,7 @@ begin
   Self.StatusDivider.SetColor(BASH_GUI_DIVIDER);
   Self.StatusDivider.SetBevelOuter(bvNone);
 
-  Self.StatusPanel.Create(tab);
+  Self.StatusPanel.Create(parent);
   Self.StatusPanel.SetLeft(mainLeft);
   Self.StatusPanel.SetTop(statusTop + Self.StatusDivider.GetHeight());
   Self.StatusPanel.SetWidth(mainW);
@@ -310,7 +376,7 @@ begin
   Self.StatusPanel.SetColor(BASH_GUI_STATUS);
   Self.StatusPanel.SetBevelOuter(bvNone);
 
-  Self.StatusPad.Create(tab);
+  Self.StatusPad.Create(parent);
   Self.StatusPad.SetLeft(mainLeft);
   Self.StatusPad.SetTop(Self.StatusPanel.GetTop() + Self.StatusPanel.GetHeight());
   Self.StatusPad.SetWidth(mainW);
@@ -326,3 +392,1085 @@ begin
   Self.StartChip.SetCursor(crHandPoint);
   Self.PaintRoundChip(Self.StartChip, 'Start', BASH_GUI_START, BASH_GUI_STATUS, True, True);
 end;
+{$ENDIF}
+
+{$IFNDEF BASH_GUI_KIT_ONLY}
+{$IFNDEF BASH_PREMIUM_GUI}
+{$DEFINE BASH_PREMIUM_GUI}
+
+{$IFNDEF WL_OSR}
+  {$I BashLib/osr.simba}
+{$ENDIF}
+{$IFNDEF WL_DISCORD_INCLUDED}
+  {$I BashLib/optional/handlers/discord.simba}
+{$ENDIF}
+{$IFNDEF WL_STOPATLEVEL_INCLUDED}
+  {$I BashLib/utils/stopatlevel.simba}
+{$ENDIF}
+
+{$IFNDEF WL_RANDOM_EVENTS_INCLUDED}
+const
+  BASH_RANDOM_EVENT_MODES: TStringArray = ['Off', 'Dismiss', 'Interact'];
+  BASH_LAMP_SKILL_KEYS: TStringArray = [
+    'agility', 'attack', 'construction', 'cooking', 'crafting',
+    'defence', 'farming', 'firemaking', 'fishing', 'fletching',
+    'herblore', 'hitpoints', 'hunter', 'magic', 'mining',
+    'prayer', 'range', 'runecrafting', 'sailing', 'slayer',
+    'smithing', 'strength', 'theiving', 'woodcutting'
+  ];
+  BASH_LAMP_SKILL_LABELS: TStringArray = [
+    'Agility', 'Attack', 'Construction', 'Cooking', 'Crafting',
+    'Defence', 'Farming', 'Firemaking', 'Fishing', 'Fletching',
+    'Herblore', 'Hitpoints', 'Hunter', 'Magic', 'Mining',
+    'Prayer', 'Range', 'Runecrafting', 'Sailing', 'Slayer',
+    'Smithing', 'Strength', 'Thieving', 'Woodcutting'
+  ];
+{$ENDIF}
+
+var
+  WEBHOOKURL: String = '';
+  ENABLEWEBHOOKS: Boolean = False;
+  OVERRIDEBREAKS: Boolean = False;
+  CUSTOMBREAKINTERVAL: Integer = 60;
+  CUSTOMBREAKDURATION: Integer = 5;
+  ENABLEWORLDHOPPING: Boolean = False;
+  WORLDHOPINTERVAL: Integer = 45;
+  ENABLEFARMRUNS: Boolean = False;
+  BIRDHOUSEENABLED: Boolean = False;
+  Discord: TDiscordClient;
+
+type
+  TBASHGUIProc = procedure of object;
+  TBASHGUISenderProc = procedure(sender: TObject) of object;
+  TBASHGUIExtrasProc = procedure(var nextY: Int32) of object;
+
+  TBASHPremiumGUI = record(TBASHGUIBase)
+    BrandTitle, WindowTitle, Username: String;
+    LegacyAntibanSection, WebhookTestPrefix: String;
+    HasFarm, HasAIChat, HasWorldHopping, HasMaxActions, HasStopAtLevel, HasRandomEvents: Boolean;
+    LockCameraTask, LockChatTask, LockMouseTask, LockGameTabsTask, LockBankTask: Boolean;
+    StopAtLevelSkills: array of ERSSkill;
+
+    ActionNav, AccountsNav, AntibanNav, AIChatNav: TImage;
+    PatchesNav, TravelNav, BirdhouseNav: TImage;
+    ActionSection, AccountsSection, AntibanSection, AIChatSection: TPanel;
+    PatchesSection, TravelSection, BirdhouseSection: TPanel;
+    ExtraNavs: array of TImage;
+    ExtraSections: array of TPanel;
+
+    EnableFarmRunsCheckBox, EnableBirdhouseRunsCheckBox: TLabeledCheckBox;
+    SideRunReturnCombo: TLabeledComboBox;
+
+    EnableWebhooksCheckBox: TLabeledCheckBox;
+    WebHookInput: TLabeledEdit;
+    TestButton: TButton;
+    WebhookInfo: TLabel;
+
+    MaxActionsInput, MaxTimeInput: TLabeledEdit;
+    ShortBreaksCheckBox, SleepBreaksCheckBox: TLabeledCheckBox;
+    SleepHourInput, SleepLengthInput: TLabeledEdit;
+    TasksEnabledCheckBox: TLabeledCheckBox;
+    TaskCameraCheckBox, TaskMouseCheckBox, TaskChatCheckBox: TLabeledCheckBox;
+    TaskGameTabsCheckBox, TaskBankCheckBox: TLabeledCheckBox;
+    OverrideBreaksCheckBox: TLabeledCheckBox;
+    CustomBreakIntervalInput, CustomBreakDurationInput: TLabeledEdit;
+    EnableWorldHoppingCheckBox: TLabeledCheckBox;
+    WorldHopIntervalInput: TLabeledEdit;
+    StopAtLevelChip: TImage;
+    RandomEventsButton: TButton;
+
+    FnInitGUI, FnLoadActionSettings, FnBuildActionSection, FnBuildExtraSections: TBASHGUIProc;
+    FnBuildAccountsExtras, FnApplyActionSettings, FnAfterBuildShell: TBASHGUIProc;
+    FnConfigureAntibanTasks, FnSetupAIChat, FnRefreshNavLayout: TBASHGUIProc;
+    FnBuildAntibanExtras: TBASHGUIExtrasProc;
+    FnStartScript, FnOnFarmEnableChanged, FnOnBirdhouseEnableChanged, FnWebhooksCheckboxChanged: TBASHGUISenderProc;
+
+    {$IFDEF BASH_FARM_RUNNER}
+    FarmGUI: TBASHFarmGUI;
+    {$ENDIF}
+  end;
+
+function BASHPremiumCurrentUser(): String;
+begin
+  if (Login.PlayerIndex < 0) or (Login.PlayerIndex > High(Login.Players)) then
+    Result := 'NoUserNameSelected'
+  else
+    Result := Login.Players[Login.PlayerIndex].User;
+end;
+
+function TBASHPremiumGUI.ReadINIKey(section, key, defaultVal: String): String;
+begin
+  Result := ReadINI(section, key, BASH_GUI_SETTINGS_FILE);
+  if Result = '' then
+    Result := defaultVal;
+end;
+
+function TBASHPremiumGUI.ReadAntibanINI(key, defaultVal: String): String;
+var
+  v: String;
+begin
+  v := ReadINI(Self.Username + BASH_GUI_ANTIBAN_SECTION, key, BASH_GUI_SETTINGS_FILE);
+  if v <> '' then
+    Exit(v);
+  if Self.LegacyAntibanSection <> '' then
+  begin
+    v := ReadINI(Self.Username + Self.LegacyAntibanSection, key, BASH_GUI_SETTINGS_FILE);
+    if v <> '' then
+      Exit(v);
+  end;
+  Result := defaultVal;
+end;
+
+procedure TBASHPremiumGUI.WriteAntibanINI(key, value: String);
+begin
+  WriteINI(Self.Username + BASH_GUI_ANTIBAN_SECTION, key, value, BASH_GUI_SETTINGS_FILE);
+end;
+
+procedure TBASHPremiumGUI.InitGUI();
+begin
+  Self.BrandTitle := 'BASH';
+  Self.WindowTitle := 'BASH Script';
+  Self.WebhookTestPrefix := 'Test message from BASH';
+  Self.HasFarm := False;
+  Self.HasAIChat := False;
+  Self.HasWorldHopping := True;
+  Self.HasMaxActions := True;
+  Self.HasStopAtLevel := False;
+  Self.HasRandomEvents := False;
+end;
+
+procedure TBASHPremiumGUI.LoadActionSettings();
+begin
+end;
+
+procedure TBASHPremiumGUI.BuildActionSection();
+begin
+end;
+
+procedure TBASHPremiumGUI.BuildAntibanExtras(var nextY: Int32);
+begin
+  if nextY = 0 then;
+end;
+
+procedure TBASHPremiumGUI.BuildExtraSections();
+begin
+end;
+
+procedure TBASHPremiumGUI.BuildAccountsExtras();
+begin
+end;
+
+procedure TBASHPremiumGUI.ApplyActionSettings();
+begin
+end;
+
+procedure TBASHPremiumGUI.ConfigureAntibanTasks();
+begin
+end;
+
+procedure TBASHPremiumGUI.SetupAIChat();
+begin
+  {$IFDEF WL_AICHAT_INCLUDED}
+  AIChatbot.Setup('Gemini', '');
+  AIChatbot.Enabled := False;
+  AIChatbot.LoadSettings();
+  {$ENDIF}
+end;
+
+procedure TBASHPremiumGUI.AfterBuildShell();
+begin
+end;
+
+procedure TBASHPremiumGUI.OnStartChipClick(sender: TObject);
+begin
+  if (@Self.FnStartScript <> nil) then
+    Self.FnStartScript(sender)
+  else
+    Self.StartScript(sender);
+end;
+
+procedure TBASHPremiumGUI.ShowExtra({$H-}sender: TObject); {$H+}
+var
+  i: Int32;
+  hint: String;
+begin
+  hint := '';
+  try
+    hint := TImage(sender).GetHint();
+  except
+  end;
+  for i := 0 to High(Self.ExtraNavs) do
+    if (hint <> '') and (Self.ExtraNavs[i].GetHint() = hint) then
+    begin
+      Self.ShowSection(Self.ExtraSections[i], Self.ExtraNavs[i]);
+      Exit;
+    end;
+end;
+
+function TBASHPremiumGUI.MakeContentSection(): TPanel;
+begin
+  Result := Self.MakePanel(Self.ContentPanel, 0, 0, 100, 100, BASH_GUI_BG);
+  Result.SetWidth(Self.MainWidth());
+  Result.SetHeight(Self.ContentHeight());
+  Result.SetVisible(False);
+end;
+
+function TBASHPremiumGUI.AddExtraTab(caption: String): TPanel;
+var
+  nav: TImage;
+begin
+  nav := Self.MakeNavItem(Self.NavPanel, caption, 12, BASH_GUI_NAV_START_Y);
+  nav.SetOnClick(@Self.ShowExtra);
+  Result := Self.MakeContentSection();
+  Self.ExtraNavs += nav;
+  Self.ExtraSections += Result;
+end;
+
+procedure TBASHPremiumGUI.StyleNav(selected: TImage);
+var
+  i: Int32;
+begin
+  Self.ActiveNav := selected;
+  Self.PaintRoundChip(Self.ActionNav, Self.ActionNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  Self.PaintRoundChip(Self.AccountsNav, Self.AccountsNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  Self.PaintRoundChip(Self.AntibanNav, Self.AntibanNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  if Assigned(Self.AIChatNav) then
+    Self.PaintRoundChip(Self.AIChatNav, Self.AIChatNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  if Assigned(Self.PatchesNav) and Self.PatchesNav.GetVisible() then
+    Self.PaintRoundChip(Self.PatchesNav, Self.PatchesNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  if Assigned(Self.TravelNav) and Self.TravelNav.GetVisible() then
+    Self.PaintRoundChip(Self.TravelNav, Self.TravelNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  if Assigned(Self.BirdhouseNav) and Self.BirdhouseNav.GetVisible() then
+    Self.PaintRoundChip(Self.BirdhouseNav, Self.BirdhouseNav.GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  for i := 0 to High(Self.ExtraNavs) do
+    Self.PaintRoundChip(Self.ExtraNavs[i], Self.ExtraNavs[i].GetHint(), BASH_GUI_NAV_IDLE, BASH_GUI_NAV, False);
+  Self.PaintRoundChip(selected, selected.GetHint(), BASH_GUI_ACCENT, BASH_GUI_NAV, True);
+end;
+
+procedure TBASHPremiumGUI.ShowSection(section: TPanel; selected: TImage);
+var
+  i: Int32;
+begin
+  Self.ActionSection.SetVisible(False);
+  Self.AccountsSection.SetVisible(False);
+  Self.AntibanSection.SetVisible(False);
+  if Assigned(Self.AIChatSection) then
+    Self.AIChatSection.SetVisible(False);
+  if Assigned(Self.PatchesSection) then
+    Self.PatchesSection.SetVisible(False);
+  if Assigned(Self.TravelSection) then
+    Self.TravelSection.SetVisible(False);
+  if Assigned(Self.BirdhouseSection) then
+    Self.BirdhouseSection.SetVisible(False);
+  for i := 0 to High(Self.ExtraSections) do
+    Self.ExtraSections[i].SetVisible(False);
+  section.SetVisible(True);
+  Self.StyleNav(selected);
+end;
+
+procedure TBASHPremiumGUI.ShowAction({$H-}sender: TObject); {$H+}
+begin
+  Self.ShowSection(Self.ActionSection, Self.ActionNav);
+end;
+
+procedure TBASHPremiumGUI.ShowAccounts({$H-}sender: TObject); {$H+}
+begin
+  Self.ShowSection(Self.AccountsSection, Self.AccountsNav);
+end;
+
+procedure TBASHPremiumGUI.ShowAntiban({$H-}sender: TObject); {$H+}
+begin
+  Self.ShowSection(Self.AntibanSection, Self.AntibanNav);
+end;
+
+procedure TBASHPremiumGUI.ShowAIChat({$H-}sender: TObject); {$H+}
+begin
+  if Assigned(Self.AIChatSection) then
+    Self.ShowSection(Self.AIChatSection, Self.AIChatNav);
+end;
+
+procedure TBASHPremiumGUI.ShowPatches({$H-}sender: TObject); {$H+}
+begin
+  {$IFDEF BASH_FARM_RUNNER}
+  Self.FarmGUI.RefreshPatchesEnabled();
+  {$ENDIF}
+  if Assigned(Self.PatchesSection) then
+    Self.ShowSection(Self.PatchesSection, Self.PatchesNav);
+end;
+
+procedure TBASHPremiumGUI.ShowTravel({$H-}sender: TObject); {$H+}
+begin
+  {$IFDEF BASH_FARM_RUNNER}
+  Self.FarmGUI.RefreshTravelEnabled();
+  {$ENDIF}
+  if Assigned(Self.TravelSection) then
+    Self.ShowSection(Self.TravelSection, Self.TravelNav);
+end;
+
+procedure TBASHPremiumGUI.ShowBirdhouse({$H-}sender: TObject); {$H+}
+begin
+  {$IFDEF BASH_FARM_RUNNER}
+  Self.FarmGUI.RefreshBirdhouseLogEnabled();
+  {$ENDIF}
+  if Assigned(Self.BirdhouseSection) then
+    Self.ShowSection(Self.BirdhouseSection, Self.BirdhouseNav);
+end;
+
+procedure TBASHPremiumGUI.PlaceNav(nav: TImage; var y: Int32);
+begin
+  nav.SetTop(y);
+  nav.SetVisible(True);
+  y += TControl.AdjustToDPI(BASH_GUI_NAV_GAP);
+end;
+
+procedure TBASHPremiumGUI.RefreshNavLayout();
+var
+  farmEnabled, bhEnabled, activeHidden: Boolean;
+  y, i: Int32;
+begin
+  farmEnabled := Self.HasFarm and Self.ReadCheck('cb_bash_farmruns');
+  bhEnabled := Self.HasFarm and Self.ReadCheck('cb_bash_birdhouseruns');
+
+  if Assigned(Self.PatchesNav) then
+    Self.PatchesNav.SetVisible(farmEnabled);
+  if Assigned(Self.TravelNav) then
+    Self.TravelNav.SetVisible(farmEnabled);
+  if Assigned(Self.BirdhouseNav) then
+    Self.BirdhouseNav.SetVisible(bhEnabled);
+
+  if Assigned(Self.SideRunReturnCombo) then
+    Self.SideRunReturnCombo.SetVisible(farmEnabled or bhEnabled);
+
+  y := TControl.AdjustToDPI(BASH_GUI_NAV_START_Y);
+  Self.PlaceNav(Self.ActionNav, y);
+  if farmEnabled then
+  begin
+    Self.PlaceNav(Self.PatchesNav, y);
+    Self.PlaceNav(Self.TravelNav, y);
+  end;
+  if bhEnabled and Assigned(Self.BirdhouseNav) then
+    Self.PlaceNav(Self.BirdhouseNav, y);
+  for i := 0 to High(Self.ExtraNavs) do
+  begin
+    if not Assigned(Self.ExtraNavs[i]) then
+      Continue;
+    if not Self.ExtraNavs[i].GetVisible() then
+      Continue;
+    Self.ExtraNavs[i].SetTop(y);
+    y += TControl.AdjustToDPI(BASH_GUI_NAV_GAP);
+  end;
+  Self.PlaceNav(Self.AccountsNav, y);
+  Self.PlaceNav(Self.AntibanNav, y);
+  if Assigned(Self.AIChatNav) then
+    Self.PlaceNav(Self.AIChatNav, y);
+
+  activeHidden :=
+    (Assigned(Self.PatchesNav) and (Self.ActiveNav = Self.PatchesNav) and (not farmEnabled)) or
+    (Assigned(Self.TravelNav) and (Self.ActiveNav = Self.TravelNav) and (not farmEnabled)) or
+    (Assigned(Self.BirdhouseNav) and (Self.ActiveNav = Self.BirdhouseNav) and (not bhEnabled));
+  for i := 0 to High(Self.ExtraNavs) do
+    if Assigned(Self.ExtraNavs[i]) and (Self.ActiveNav = Self.ExtraNavs[i]) and (not Self.ExtraNavs[i].GetVisible()) then
+      activeHidden := True;
+  if activeHidden then
+    Self.ShowAction(Self.ActionNav)
+  else if Assigned(Self.ActiveNav) then
+    Self.StyleNav(Self.ActiveNav);
+end;
+
+procedure TBASHPremiumGUI.OnFarmEnableChanged({$H-}sender: TObject); {$H+}
+begin
+  Self.RefreshNavLayout();
+end;
+
+procedure TBASHPremiumGUI.OnBirdhouseEnableChanged({$H-}sender: TObject); {$H+}
+begin
+  Self.RefreshNavLayout();
+end;
+
+procedure TBASHPremiumGUI.AddSideRunChecks(y: Int32);
+begin
+  Self.AddCheck(Self.ActionSection, Self.EnableFarmRunsCheckBox, 'cb_bash_farmruns',
+    'Enable Farm Runs', 24, y, ENABLEFARMRUNS);
+  Self.EnableFarmRunsCheckBox.SetTooltip('Run BASH farm runs. Configure patches and travel in the Patches/Travel tabs.');
+  Self.EnableFarmRunsCheckBox.CheckBox.SetOnChange(@Self.OnFarmEnableChanged);
+
+  Self.AddCheck(Self.ActionSection, Self.EnableBirdhouseRunsCheckBox, 'cb_bash_birdhouseruns',
+    'Enable Birdhouse Runs', 24, y + 40, BIRDHOUSEENABLED);
+  Self.EnableBirdhouseRunsCheckBox.SetTooltip('Run BASH birdhouse runs. Configure logs/seeds in the Birdhouse tab.');
+  Self.EnableBirdhouseRunsCheckBox.CheckBox.SetOnChange(@Self.OnBirdhouseEnableChanged);
+end;
+
+procedure TBASHPremiumGUI.OverrideBreaksCheckboxChanged({$H-}sender: TObject); {$H+}
+begin
+  Self.CustomBreakIntervalInput.SetVisible(Self.OverrideBreaksCheckBox.IsChecked());
+  Self.CustomBreakDurationInput.SetVisible(Self.OverrideBreaksCheckBox.IsChecked());
+  if Self.OverrideBreaksCheckBox.IsChecked() then
+    Self.ShortBreaksCheckBox.CheckBox.SetChecked(False);
+end;
+
+procedure TBASHPremiumGUI.ShortBreaksCheckboxChanged({$H-}sender: TObject); {$H+}
+begin
+  if Self.ShortBreaksCheckBox.IsChecked() then
+  begin
+    Self.OverrideBreaksCheckBox.CheckBox.SetChecked(False);
+    Self.CustomBreakIntervalInput.SetVisible(False);
+    Self.CustomBreakDurationInput.SetVisible(False);
+  end;
+end;
+
+procedure TBASHPremiumGUI.SleepBreaksCheckboxChanged({$H-}sender: TObject); {$H+}
+var
+  enabled: Boolean;
+begin
+  enabled := Self.SleepBreaksCheckBox.IsChecked();
+  Self.SleepHourInput.SetEnabled(enabled);
+  Self.SleepLengthInput.SetEnabled(enabled);
+end;
+
+procedure TBASHPremiumGUI.TasksEnabledCheckboxChanged({$H-}sender: TObject); {$H+}
+var
+  enabled: Boolean;
+begin
+  enabled := Self.TasksEnabledCheckBox.IsChecked();
+  Self.TaskCameraCheckBox.SetEnabled(enabled and (not Self.LockCameraTask));
+  Self.TaskMouseCheckBox.SetEnabled(enabled and (not Self.LockMouseTask));
+  Self.TaskChatCheckBox.SetEnabled(enabled and (not Self.LockChatTask));
+  Self.TaskGameTabsCheckBox.SetEnabled(enabled and (not Self.LockGameTabsTask));
+  Self.TaskBankCheckBox.SetEnabled(enabled and (not Self.LockBankTask));
+end;
+
+procedure TBASHPremiumGUI.WorldHoppingCheckboxChanged({$H-}sender: TObject); {$H+}
+begin
+  if Assigned(Self.WorldHopIntervalInput) then
+    Self.WorldHopIntervalInput.SetVisible(Self.EnableWorldHoppingCheckBox.IsChecked());
+end;
+
+procedure TBASHPremiumGUI.RandomEventsClicked({$H-}sender: TObject); {$H+}
+begin
+  RandomEvents.ShowSettingsForm();
+end;
+
+procedure TBASHPremiumGUI.BuildRandomEventsAntiban(var nextY: Int32);
+begin
+  Self.MakeLabel(Self.AntibanSection, 'Random events', 24, nextY, 11, BASH_GUI_MUTED, True);
+  nextY += 18;
+  Self.RandomEventsButton.Create(Self.AntibanSection);
+  Self.RandomEventsButton.SetLeft(TControl.AdjustToDPI(24));
+  Self.RandomEventsButton.SetTop(TControl.AdjustToDPI(nextY));
+  Self.RandomEventsButton.SetWidth(TControl.AdjustToDPI(148));
+  Self.RandomEventsButton.SetHeight(TControl.AdjustToDPI(28));
+  Self.RandomEventsButton.SetCaption('Random Events');
+  Self.RandomEventsButton.SetTooltip('Choose which random events to ignore or interact with.');
+  Self.RandomEventsButton.SetOnClick(@Self.RandomEventsClicked);
+  nextY += 40;
+end;
+
+procedure TBASHPremiumGUI.ApplyRandomEventsFromGUI();
+begin
+  if not Self.HasRandomEvents then
+    Exit;
+end;
+
+procedure TBASHPremiumGUI.WebhooksCheckboxChanged({$H-}sender: TObject); {$H+}
+var
+  shown: Boolean;
+begin
+  shown := Self.EnableWebhooksCheckBox.IsChecked();
+  Self.WebHookInput.SetVisible(shown);
+  Self.TestButton.SetVisible(shown);
+  Self.WebhookInfo.SetVisible(shown);
+end;
+
+procedure TBASHPremiumGUI.OpenWebhookHelp({$H-}sender: TObject); {$H+}
+begin
+  OpenWebPage('https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks');
+end;
+
+procedure TBASHPremiumGUI.TestButtonClick({$H-}sender: TObject); {$H+}
+begin
+  if Self.WebHookInput.GetText() = '' then
+  begin
+    ShowMessage('Please enter a Webhook URL');
+    Exit;
+  end;
+  Discord.Webhook.Content := Self.WebhookTestPrefix;
+  Discord.Webhook.URL := Self.WebHookInput.GetText();
+  Discord.Send();
+  ShowMessage('Test message sent. Please check Discord.');
+end;
+
+procedure TBASHPremiumGUI.StopAtLevelClicked({$H-}sender: TObject); {$H+}
+begin
+  if Length(Self.StopAtLevelSkills) > 0 then
+    StopAtLevel.SetAvailableSkills(Self.StopAtLevelSkills);
+  StopAtLevel.ShowFormForCurrentAccount();
+end;
+
+procedure TBASHPremiumGUI.ApplyAntibanFromGUI();
+begin
+  if Assigned(Self.MaxActionsInput) then
+    WLSettings.Put('max_actions', StrToIntDef(Self.MaxActionsInput.GetText(), 0));
+  WLSettings.Put('max_time', StrToIntDef(Self.MaxTimeInput.GetText(), 0));
+
+  WLSettings.GetObject('antiban').Put('breaks', Self.ShortBreaksCheckBox.IsChecked());
+  WLSettings.GetObject('antiban').getJSONObject('sleep').Put('enabled', Self.SleepBreaksCheckBox.IsChecked());
+  WLSettings.GetObject('antiban').getJSONObject('sleep').Put('biohash', False);
+  WLSettings.GetObject('antiban').getJSONObject('sleep').Put('hour', Trim(Self.SleepHourInput.GetText()));
+  WLSettings.GetObject('antiban').getJSONObject('sleep').Put('length', StrToFloatDef(Self.SleepLengthInput.GetText(), 8));
+
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('enabled', Self.TasksEnabledCheckBox.IsChecked());
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('camera', Self.TaskCameraCheckBox.IsChecked() and (not Self.LockCameraTask));
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('mouse', Self.TaskMouseCheckBox.IsChecked() and (not Self.LockMouseTask));
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('chat', Self.TaskChatCheckBox.IsChecked() and (not Self.LockChatTask));
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('gametabs', Self.TaskGameTabsCheckBox.IsChecked() and (not Self.LockGameTabsTask));
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('bank', Self.TaskBankCheckBox.IsChecked() and (not Self.LockBankTask));
+
+  WLSettings.SaveConfig();
+end;
+
+procedure TBASHPremiumGUI.ApplyFarmSettings();
+begin
+  if not Self.HasFarm then
+    Exit;
+  if Assigned(Self.EnableFarmRunsCheckBox) then
+    ENABLEFARMRUNS := Self.EnableFarmRunsCheckBox.IsChecked();
+  if Assigned(Self.EnableBirdhouseRunsCheckBox) then
+    BIRDHOUSEENABLED := Self.EnableBirdhouseRunsCheckBox.IsChecked();
+  {$IFDEF BASH_FARM_RUNNER}
+  BASHFarmConfig.EnablePatches := ENABLEFARMRUNS;
+  BASHFarmConfig.EnableTrees := False;
+  BASHFarmConfig.EnableBirdhouse := BIRDHOUSEENABLED;
+  BASHFarmConfig.StartingLocationIdx := 0;
+  Self.FarmGUI.ApplyEmbeddedSettings();
+  {$ENDIF}
+end;
+
+procedure TBASHPremiumGUI.ApplyDiscordWebhook();
+begin
+  if ENABLEWEBHOOKS and (WEBHOOKURL <> '') then
+  begin
+    Discord.SetWebhook(WEBHOOKURL);
+    Discord.SetUsername('B.A.S.H. Bot');
+    Discord.SetAvatar(BASH_GUI_DISCORD_AVATAR);
+    {$IFDEF WL_AICHAT_INCLUDED}
+    AIChatDiscord.Webhook.URL := WEBHOOKURL;
+    AIChatDiscord.SetUsername('B.A.S.H. Bot');
+    AIChatDiscord.SetAvatar(BASH_GUI_DISCORD_AVATAR);
+    {$ENDIF}
+  end;
+end;
+
+procedure TBASHPremiumGUI.ApplyJagexAccountVisibilitySafe();
+var
+  jagex: TCheckBox;
+  passEdit: TEdit;
+  passPanel: TPanel;
+begin
+  jagex := Self.Form.GetChild('am_jagex_checkbox');
+  passEdit := Self.Form.GetChild('am_pass_edit');
+  passPanel := Self.Form.GetChild('am_pass_panel');
+
+  if (jagex = nil) or (passEdit = nil) then
+    Exit;
+
+  if passPanel <> nil then
+    passPanel.setVisible(True);
+
+  if jagex.IsChecked() then
+  begin
+    passEdit.Clear();
+    passEdit.setEnabled(False);
+  end
+  else
+    passEdit.setEnabled(True);
+end;
+
+procedure TBASHPremiumGUI.BuildAccountsSection();
+var
+  am: TPanel;
+  selectorPanel, userPanel, passPanel, pinPanel, worldsPanel, jagexPanel: TPanel;
+  addBtn, deleteBtn, generateBtn: TButton;
+  leftColW, passW, pinW, worldsLeft, btnW, btnGap: Int32;
+  savedURL: String;
+  savedEnable: Boolean;
+begin
+  savedURL := Self.ReadINIKey(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'WebhookURL', '');
+  savedEnable := StrToBoolDef(Self.ReadINIKey(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'EnableWebhooks', 'false'), False);
+
+  Self.AddHeader(Self.AccountsSection, 'Accounts', 'Login account and optional Discord webhook notifications.');
+
+  am := Self.CreateAccountManager(Self.AccountsSection);
+  am.SetLeft(TControl.AdjustToDPI(16));
+  am.SetTop(TControl.AdjustToDPI(100));
+  am.SetColor(BASH_GUI_BG);
+
+  leftColW := TControl.AdjustToDPI(280);
+  passW := Floor(leftColW * 0.6);
+  pinW := Floor(leftColW * 0.3);
+
+  selectorPanel := Self.Form.GetChild('am_selector_panel');
+  userPanel := Self.Form.GetChild('am_user_panel');
+  passPanel := Self.Form.GetChild('am_pass_panel');
+  pinPanel := Self.Form.GetChild('am_pin_panel');
+  worldsPanel := Self.Form.GetChild('am_worlds_panel');
+  jagexPanel := Self.Form.GetChild('am_jagex_panel');
+
+  if selectorPanel <> nil then
+    selectorPanel.SetWidth(leftColW);
+  if userPanel <> nil then
+    userPanel.SetWidth(leftColW);
+  if jagexPanel <> nil then
+    jagexPanel.SetWidth(leftColW);
+  if passPanel <> nil then
+    passPanel.SetWidth(passW);
+  if (pinPanel <> nil) and (selectorPanel <> nil) then
+  begin
+    pinPanel.SetWidth(pinW);
+    pinPanel.SetLeft(selectorPanel.GetLeft() + leftColW - pinW);
+  end;
+
+  if (worldsPanel <> nil) and (selectorPanel <> nil) and (userPanel <> nil) then
+  begin
+    worldsLeft := selectorPanel.GetLeft() + leftColW + TControl.AdjustToDPI(48);
+    worldsPanel.SetLeft(worldsLeft);
+    worldsPanel.SetHeight(userPanel.GetBottom());
+
+    addBtn := Self.Form.GetChild('am_add_button');
+    deleteBtn := Self.Form.GetChild('am_delete_button');
+    generateBtn := Self.Form.GetChild('am_generate_worlds_button');
+    btnGap := TControl.AdjustToDPI(8);
+    btnW := Floor((worldsPanel.GetWidth() - btnGap) / 2);
+
+    if generateBtn <> nil then
+    begin
+      generateBtn.SetLeft(worldsLeft);
+      generateBtn.SetWidth(worldsPanel.GetWidth());
+    end;
+    if addBtn <> nil then
+    begin
+      addBtn.SetLeft(worldsLeft);
+      addBtn.SetWidth(btnW);
+    end;
+    if deleteBtn <> nil then
+    begin
+      deleteBtn.SetLeft(worldsLeft + worldsPanel.GetWidth() - btnW - TControl.AdjustToDPI(1));
+      deleteBtn.SetWidth(btnW);
+    end;
+
+    if (addBtn <> nil) and (am.GetHeight() < addBtn.GetTop() + addBtn.GetHeight() + TControl.AdjustToDPI(8)) then
+      am.SetHeight(addBtn.GetTop() + addBtn.GetHeight() + TControl.AdjustToDPI(8));
+  end;
+
+  Self.ApplyJagexAccountVisibilitySafe();
+
+  Self.AddCheck(Self.AccountsSection, Self.EnableWebhooksCheckBox, 'cb_bash_webhooks',
+    'Discord notifications', 24, 350, savedEnable);
+  Self.EnableWebhooksCheckBox.SetTooltip('Send progress and session messages to your Discord webhook.');
+  Self.EnableWebhooksCheckBox.CheckBox.SetOnChange(@Self.WebhooksCheckboxChanged);
+
+  Self.WebhookInfo := Self.MakeLabel(Self.AccountsSection,
+    'Click here to learn how to generate a Discord webhook URL', 24, 390, 10, BASH_GUI_LINK, False);
+  Self.WebhookInfo.SetOnClick(@Self.OpenWebhookHelp);
+  Self.WebhookInfo.SetCursor(crHandPoint);
+  Self.WebhookInfo.SetTooltip('Opens a guide for creating a Discord webhook URL.');
+
+  Self.AddEdit(Self.AccountsSection, Self.WebHookInput, 'le_bash_webhook', 'Webhook URL', savedURL, 24, 420, 520);
+  Self.WebHookInput.SetPasswordChar('*');
+  Self.WebHookInput.SetTooltip('Paste your Discord webhook URL here. Kept hidden while typing.');
+
+  Self.TestButton.Create(Self.AccountsSection);
+  Self.TestButton.SetLeft(TControl.AdjustToDPI(560));
+  Self.TestButton.SetTop(TControl.AdjustToDPI(438));
+  Self.TestButton.SetWidth(TControl.AdjustToDPI(80));
+  Self.TestButton.SetHeight(TControl.AdjustToDPI(28));
+  Self.TestButton.SetCaption('Test');
+  Self.TestButton.SetTooltip('Sends a test Discord message using the webhook URL above.');
+  Self.TestButton.SetOnClick(@Self.TestButtonClick);
+
+  if (@Self.FnWebhooksCheckboxChanged <> nil) then
+    Self.FnWebhooksCheckboxChanged(nil)
+  else
+    Self.WebhooksCheckboxChanged(nil);
+  if (@Self.FnBuildAccountsExtras <> nil) then
+    Self.FnBuildAccountsExtras()
+  else
+    Self.BuildAccountsExtras();
+end;
+
+procedure TBASHPremiumGUI.BuildAntibanSection();
+var
+  tasks: TJSONObject;
+  sleepHour: String;
+  sleepLength: Single;
+  wasBio: Boolean;
+  y, chipW, chipH, extrasY: Int32;
+  savedOverride: Boolean;
+  savedInterval, savedDuration, savedHop, savedMaxActions: Integer;
+begin
+  Antiban.SetupBiometrics();
+  tasks := WLSettings.GetObject('antiban').getJSONObject('tasks');
+  wasBio := WLSettings.GetObject('antiban').getJSONObject('sleep').getBoolean('biohash');
+  WLSettings.GetObject('antiban').getJSONObject('sleep').Put('biohash', True);
+  sleepHour := Antiban.GetSleepHour();
+  sleepLength := Antiban.GetSleepLength();
+  WLSettings.GetObject('antiban').getJSONObject('sleep').Put('biohash', wasBio);
+  if (not wasBio) and (WLSettings.GetObject('antiban').getJSONObject('sleep').getString('hour') <> '') then
+  begin
+    sleepHour := WLSettings.GetObject('antiban').getJSONObject('sleep').getString('hour');
+    sleepLength := WLSettings.GetObject('antiban').getJSONObject('sleep').getDouble('length');
+  end;
+  if sleepHour = '' then
+    sleepHour := '23:00:00';
+  if sleepLength <= 0 then
+    sleepLength := 8;
+
+  savedOverride := StrToBoolDef(Self.ReadAntibanINI('OverrideBreaks', 'false'), False);
+  savedInterval := StrToIntDef(Self.ReadAntibanINI('CustomBreakInterval', '60'), 60);
+  savedDuration := StrToIntDef(Self.ReadAntibanINI('CustomBreakDuration', '5'), 5);
+  savedHop := StrToIntDef(Self.ReadAntibanINI('WorldHopInterval', '45'), 45);
+  if WLSettings.Has('max_actions') then
+    savedMaxActions := WLSettings.GetInt('max_actions')
+  else
+    savedMaxActions := 0;
+
+  Self.AddHeader(Self.AntibanSection, 'Antiban', 'Breaks, sleeps, tasks, world hopping, and session limits.');
+
+  y := 100;
+  Self.MakeLabel(Self.AntibanSection, 'Session', 24, y, 11, BASH_GUI_MUTED, True);
+  y := 118;
+  Self.AddEdit(Self.AntibanSection, Self.MaxTimeInput, 'le_bash_maxtime',
+    'Max time minutes (0 = unlimited)', IntToStr(WLSettings.GetInt('max_time')), 24, y, BASH_GUI_EDIT_W);
+  Self.MaxTimeInput.Edit.SetOnKeyPress(@Self.MaxTimeInput.Edit.NumberField);
+  Self.MaxTimeInput.SetTooltip('Stop after this many minutes of runtime. 0 = no limit.');
+
+  if Self.HasMaxActions then
+  begin
+    Self.AddEdit(Self.AntibanSection, Self.MaxActionsInput, 'le_bash_maxactions',
+      'Max actions (0 = unlimited)', IntToStr(savedMaxActions), BASH_GUI_COL2, y, BASH_GUI_EDIT_W);
+    Self.MaxActionsInput.Edit.SetOnKeyPress(@Self.MaxActionsInput.Edit.NumberField);
+    Self.MaxActionsInput.SetTooltip('Stop after this many completed actions. 0 = no limit.');
+  end;
+
+  if Self.HasStopAtLevel and (not Self.HasMaxActions) then
+  begin
+    chipW := TControl.AdjustToDPI(148);
+    chipH := TControl.AdjustToDPI(34);
+    Self.StopAtLevelChip.Create(Self.AntibanSection);
+    Self.StopAtLevelChip.SetLeft(TControl.AdjustToDPI(BASH_GUI_COL2));
+    Self.StopAtLevelChip.SetTop(TControl.AdjustToDPI(126));
+    Self.StopAtLevelChip.SetWidth(chipW);
+    Self.StopAtLevelChip.SetHeight(chipH);
+    Self.StopAtLevelChip.SetCursor(crHandPoint);
+    Self.PaintRoundChip(Self.StopAtLevelChip, 'Stop at level', BASH_GUI_NAV_IDLE, BASH_GUI_BG, False, True);
+    Self.StopAtLevelChip.SetOnClick(@Self.StopAtLevelClicked);
+  end;
+
+  y := 168;
+  if Self.HasMaxActions and Self.HasStopAtLevel then
+  begin
+    chipW := TControl.AdjustToDPI(148);
+    chipH := TControl.AdjustToDPI(34);
+    Self.StopAtLevelChip.Create(Self.AntibanSection);
+    Self.StopAtLevelChip.SetLeft(TControl.AdjustToDPI(24));
+    Self.StopAtLevelChip.SetTop(TControl.AdjustToDPI(y));
+    Self.StopAtLevelChip.SetWidth(chipW);
+    Self.StopAtLevelChip.SetHeight(chipH);
+    Self.StopAtLevelChip.SetCursor(crHandPoint);
+    Self.PaintRoundChip(Self.StopAtLevelChip, 'Stop at level', BASH_GUI_NAV_IDLE, BASH_GUI_BG, False, True);
+    Self.StopAtLevelChip.SetOnClick(@Self.StopAtLevelClicked);
+    y := 208;
+  end;
+
+  Self.MakeLabel(Self.AntibanSection, 'Breaks and sleeps', 24, y, 11, BASH_GUI_MUTED, True);
+  y += 22;
+  Self.AddCheck(Self.AntibanSection, Self.ShortBreaksCheckBox, 'cb_bash_short_breaks',
+    'Short breaks', 24, y, WLSettings.GetObject('antiban').getBoolean('breaks'));
+  Self.ShortBreaksCheckBox.CheckBox.SetOnChange(@Self.ShortBreaksCheckboxChanged);
+  Self.ShortBreaksCheckBox.SetTooltip('Enables short randomized breaks during the session.');
+  Self.AddCheck(Self.AntibanSection, Self.SleepBreaksCheckBox, 'cb_bash_sleep_breaks',
+    'Sleep breaks', BASH_GUI_COL2, y, WLSettings.GetObject('antiban').getJSONObject('sleep').getBoolean('enabled'));
+  Self.SleepBreaksCheckBox.CheckBox.SetOnChange(@Self.SleepBreaksCheckboxChanged);
+  Self.SleepBreaksCheckBox.SetTooltip('Enables longer sleep breaks based on local time.');
+
+  y += 28;
+  Self.AddEdit(Self.AntibanSection, Self.SleepHourInput, 'le_bash_sleep_hour',
+    'Sleep hour (HH:MM:SS)', sleepHour, 24, y, BASH_GUI_EDIT_W);
+  Self.SleepHourInput.Edit.SetOnKeyPress(@Self.SleepHourInput.Edit.TimeField);
+  Self.AddEdit(Self.AntibanSection, Self.SleepLengthInput, 'le_bash_sleep_length',
+    'Sleep length (hours)', ToStr(sleepLength), BASH_GUI_COL2, y, BASH_GUI_EDIT_W);
+  Self.SleepLengthInput.Edit.SetOnKeyPress(@Self.SleepLengthInput.Edit.FloatField);
+
+  y += 62;
+  Self.AddCheck(Self.AntibanSection, Self.OverrideBreaksCheckBox, 'cb_bash_override_breaks',
+    'Override default breaks', 24, y, savedOverride);
+  Self.OverrideBreaksCheckBox.SetTooltip('Replace WaspLib break intervals with your own schedule.');
+  Self.OverrideBreaksCheckBox.CheckBox.SetOnChange(@Self.OverrideBreaksCheckboxChanged);
+
+  y += 28;
+  Self.AddEdit(Self.AntibanSection, Self.CustomBreakIntervalInput, 'le_bash_break_interval',
+    'Break interval (minutes)', IntToStr(savedInterval), 24, y, BASH_GUI_EDIT_W);
+  Self.CustomBreakIntervalInput.Edit.SetOnKeyPress(@Self.CustomBreakIntervalInput.Edit.NumberField);
+  Self.AddEdit(Self.AntibanSection, Self.CustomBreakDurationInput, 'le_bash_break_duration',
+    'Break duration (minutes)', IntToStr(savedDuration), BASH_GUI_COL2, y, BASH_GUI_EDIT_W);
+  Self.CustomBreakDurationInput.Edit.SetOnKeyPress(@Self.CustomBreakDurationInput.Edit.NumberField);
+
+  y += 52;
+  Self.MakeLabel(Self.AntibanSection, 'Tasks', 24, y, 11, BASH_GUI_MUTED, True);
+  y += 18;
+  Self.AddCheck(Self.AntibanSection, Self.TasksEnabledCheckBox, 'cb_bash_tasks',
+    'Enable antiban tasks', 24, y, tasks.getBoolean('enabled'));
+  Self.TasksEnabledCheckBox.CheckBox.SetOnChange(@Self.TasksEnabledCheckboxChanged);
+  Self.TasksEnabledCheckBox.SetTooltip('Enables camera, mouse, chat, gametab, and bank antiban tasks.');
+
+  y += 24;
+  Self.AddCheck(Self.AntibanSection, Self.TaskCameraCheckBox, 'cb_bash_task_camera',
+    'Camera', 24, y, tasks.getBoolean('camera') and (not Self.LockCameraTask));
+  Self.AddCheck(Self.AntibanSection, Self.TaskMouseCheckBox, 'cb_bash_task_mouse',
+    'Mouse', BASH_GUI_COL2, y, tasks.getBoolean('mouse') and (not Self.LockMouseTask));
+  y += 19;
+  Self.AddCheck(Self.AntibanSection, Self.TaskChatCheckBox, 'cb_bash_task_chat',
+    'Chat', 24, y, tasks.getBoolean('chat') and (not Self.LockChatTask));
+  Self.AddCheck(Self.AntibanSection, Self.TaskGameTabsCheckBox, 'cb_bash_task_gametabs',
+    'GameTabs', BASH_GUI_COL2, y, tasks.getBoolean('gametabs') and (not Self.LockGameTabsTask));
+  y += 19;
+  Self.AddCheck(Self.AntibanSection, Self.TaskBankCheckBox, 'cb_bash_task_bank',
+    'Bank', 24, y, tasks.getBoolean('bank') and (not Self.LockBankTask));
+
+  if Self.LockCameraTask then
+    Self.TaskCameraCheckBox.SetEnabled(False);
+  if Self.LockChatTask then
+    Self.TaskChatCheckBox.SetEnabled(False);
+  if Self.LockMouseTask then
+    Self.TaskMouseCheckBox.SetEnabled(False);
+  if Self.LockGameTabsTask then
+    Self.TaskGameTabsCheckBox.SetEnabled(False);
+  if Self.LockBankTask then
+    Self.TaskBankCheckBox.SetEnabled(False);
+
+  y += 30;
+  if Self.HasWorldHopping then
+  begin
+    Self.MakeLabel(Self.AntibanSection, 'World hopping', 24, y, 11, BASH_GUI_MUTED, True);
+    y += 18;
+    Self.AddCheck(Self.AntibanSection, Self.EnableWorldHoppingCheckBox, 'cb_bash_worldhop',
+      'Enable world hopping', 24, y,
+      StrToBoolDef(Self.ReadAntibanINI('EnableWorldHopping', 'false'), False));
+    Self.EnableWorldHoppingCheckBox.SetTooltip('Hop worlds on a timer. Needs at least 2 worlds saved on the account.');
+    Self.EnableWorldHoppingCheckBox.CheckBox.SetOnChange(@Self.WorldHoppingCheckboxChanged);
+    y += 28;
+    Self.AddEdit(Self.AntibanSection, Self.WorldHopIntervalInput, 'le_bash_hop_interval',
+      'World hop interval (minutes)', IntToStr(savedHop), 24, y, BASH_GUI_EDIT_W);
+    Self.WorldHopIntervalInput.Edit.SetOnKeyPress(@Self.WorldHopIntervalInput.Edit.NumberField);
+    y += 40;
+  end;
+
+  extrasY := y;
+  if Self.HasRandomEvents then
+    Self.BuildRandomEventsAntiban(extrasY);
+  if (@Self.FnBuildAntibanExtras <> nil) then
+    Self.FnBuildAntibanExtras(extrasY)
+  else
+    Self.BuildAntibanExtras(extrasY);
+  if (@Self.FnConfigureAntibanTasks <> nil) then
+    Self.FnConfigureAntibanTasks()
+  else
+    Self.ConfigureAntibanTasks();
+
+  Self.SleepBreaksCheckboxChanged(nil);
+  Self.TasksEnabledCheckboxChanged(nil);
+  Self.OverrideBreaksCheckboxChanged(nil);
+  Self.ShortBreaksCheckboxChanged(nil);
+  if Self.HasWorldHopping then
+    Self.WorldHoppingCheckboxChanged(nil);
+end;
+
+procedure TBASHPremiumGUI.BuildShell();
+var
+  i: Int32;
+begin
+  Self.PageControl.SetVisible(False);
+  Self.PageControl.SetAlign(alNone);
+  Self.PageControl.SetBounds(0, 0, 0, 0);
+
+  Self.BuildChrome(Self.Form);
+
+  Self.BrandLabel := Self.MakeLabel(Self.NavPanel, Self.BrandTitle, 16, 28, 14, BASH_GUI_TEXT, True);
+  Self.MakeLabel(Self.NavPanel, 'BASH Scripts', 16, 54, 9, BASH_GUI_MUTED, False);
+
+  Self.ActionNav := Self.MakeNavItem(Self.NavPanel, 'Action', 12, BASH_GUI_NAV_START_Y, True);
+  Self.ActionSection := Self.MakeContentSection();
+  Self.ActionSection.SetVisible(True);
+
+  {$IFDEF BASH_FARM_RUNNER}
+  if Self.HasFarm then
+  begin
+    Self.PatchesNav := Self.MakeNavItem(Self.NavPanel, 'Patches', 12, BASH_GUI_NAV_START_Y);
+    Self.TravelNav := Self.MakeNavItem(Self.NavPanel, 'Travel', 12, BASH_GUI_NAV_START_Y);
+    Self.BirdhouseNav := Self.MakeNavItem(Self.NavPanel, 'Birdhouse', 12, BASH_GUI_NAV_START_Y);
+    Self.PatchesSection := Self.MakeContentSection();
+    Self.TravelSection := Self.MakeContentSection();
+    Self.BirdhouseSection := Self.MakeContentSection();
+  end;
+  {$ENDIF}
+
+  Self.AccountsNav := Self.MakeNavItem(Self.NavPanel, 'Accounts', 12, BASH_GUI_NAV_START_Y);
+  Self.AntibanNav := Self.MakeNavItem(Self.NavPanel, 'Antiban', 12, BASH_GUI_NAV_START_Y);
+  Self.AccountsSection := Self.MakeContentSection();
+  Self.AntibanSection := Self.MakeContentSection();
+
+  {$IFDEF WL_AICHAT_INCLUDED}
+  if Self.HasAIChat then
+  begin
+    Self.AIChatNav := Self.MakeNavItem(Self.NavPanel, 'AI Chat', 12, BASH_GUI_NAV_START_Y);
+    Self.AIChatSection := Self.MakeContentSection();
+  end;
+  {$ENDIF}
+
+  if (@Self.FnBuildActionSection <> nil) then
+    Self.FnBuildActionSection()
+  else
+    Self.BuildActionSection();
+
+  {$IFDEF BASH_FARM_RUNNER}
+  if Self.HasFarm then
+  begin
+    Self.FarmGUI.BindHost(Self.Form, Self.PatchesSection, Self.TravelSection, Self.BirdhouseSection);
+    Self.FarmGUI.BuildEmbeddedSections();
+  end;
+  {$ENDIF}
+
+  if (@Self.FnBuildExtraSections <> nil) then
+    Self.FnBuildExtraSections()
+  else
+    Self.BuildExtraSections();
+
+  Self.BuildAccountsSection();
+  Self.BuildAntibanSection();
+
+  {$IFDEF WL_AICHAT_INCLUDED}
+  if Self.HasAIChat and Assigned(Self.AIChatSection) then
+    AIChatbot.BuildSettings(Self.AIChatSection, Self.MainWidth());
+  {$ENDIF}
+
+  Self.ActionNav.SetOnClick(@Self.ShowAction);
+  Self.AccountsNav.SetOnClick(@Self.ShowAccounts);
+  Self.AntibanNav.SetOnClick(@Self.ShowAntiban);
+  if Assigned(Self.AIChatNav) then
+    Self.AIChatNav.SetOnClick(@Self.ShowAIChat);
+  if Assigned(Self.PatchesNav) then
+    Self.PatchesNav.SetOnClick(@Self.ShowPatches);
+  if Assigned(Self.TravelNav) then
+    Self.TravelNav.SetOnClick(@Self.ShowTravel);
+  if Assigned(Self.BirdhouseNav) then
+    Self.BirdhouseNav.SetOnClick(@Self.ShowBirdhouse);
+  for i := 0 to High(Self.ExtraNavs) do
+    Self.ExtraNavs[i].SetOnClick(@Self.ShowExtra);
+
+  Self.StartChip.SetOnClick(@Self.OnStartChipClick);
+  if (@Self.FnRefreshNavLayout <> nil) then
+    Self.FnRefreshNavLayout()
+  else
+    Self.RefreshNavLayout();
+  Self.ShowAction(Self.ActionNav);
+end;
+
+procedure TBASHPremiumGUI.StartScript(sender: TObject); override;
+begin
+  if sender = nil then;
+
+  try
+    if not DirectoryExists('Configs') then
+      CreateDirectory('Configs');
+
+    Self.Username := BASHPremiumCurrentUser();
+    if (@Self.FnApplyActionSettings <> nil) then
+      Self.FnApplyActionSettings()
+    else
+      Self.ApplyActionSettings();
+    Self.ApplyFarmSettings();
+
+    OVERRIDEBREAKS := Self.OverrideBreaksCheckBox.IsChecked();
+    CUSTOMBREAKINTERVAL := StrToIntDef(Self.CustomBreakIntervalInput.GetText(), 60);
+    CUSTOMBREAKDURATION := StrToIntDef(Self.CustomBreakDurationInput.GetText(), 5);
+    Self.WriteAntibanINI('OverrideBreaks', BoolToStr(OVERRIDEBREAKS, 'true', 'false'));
+    Self.WriteAntibanINI('CustomBreakInterval', IntToStr(CUSTOMBREAKINTERVAL));
+    Self.WriteAntibanINI('CustomBreakDuration', IntToStr(CUSTOMBREAKDURATION));
+
+    if Self.HasWorldHopping and Assigned(Self.EnableWorldHoppingCheckBox) then
+    begin
+      ENABLEWORLDHOPPING := Self.EnableWorldHoppingCheckBox.IsChecked();
+      WORLDHOPINTERVAL := StrToIntDef(Self.WorldHopIntervalInput.GetText(), 45);
+      Self.WriteAntibanINI('EnableWorldHopping', BoolToStr(ENABLEWORLDHOPPING, 'true', 'false'));
+      Self.WriteAntibanINI('WorldHopInterval', IntToStr(WORLDHOPINTERVAL));
+    end;
+
+    WEBHOOKURL := Self.WebHookInput.GetText();
+    ENABLEWEBHOOKS := Self.EnableWebhooksCheckBox.IsChecked();
+    WriteINI(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'WebhookURL', WEBHOOKURL, BASH_GUI_SETTINGS_FILE);
+    WriteINI(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'EnableWebhooks',
+      BoolToStr(ENABLEWEBHOOKS, 'true', 'false'), BASH_GUI_SETTINGS_FILE);
+
+    Self.ApplyAntibanFromGUI();
+    Self.ApplyRandomEventsFromGUI();
+    Self.ApplyDiscordWebhook();
+
+    {$IFDEF WL_AICHAT_INCLUDED}
+    if Self.HasAIChat then
+      AIChatbot.ApplyFromGUI();
+    {$ENDIF}
+  except
+    WriteLn('[Error] StartScript: ', GetExceptionMessage());
+  end;
+
+  inherited;
+end;
+
+procedure TBASHPremiumGUI.Run(); override;
+begin
+  Self.InitGUI();
+  if (@Self.FnInitGUI <> nil) then
+    Self.FnInitGUI();
+  Self.Username := BASHPremiumCurrentUser();
+  if Self.WebhookTestPrefix = '' then
+    Self.WebhookTestPrefix := 'Test message from ' + Self.WindowTitle;
+
+  Self.LoadActionSettings();
+  if (@Self.FnLoadActionSettings <> nil) then
+    Self.FnLoadActionSettings();
+
+  {$IFDEF BASH_FARM_RUNNER}
+  if Self.HasFarm then
+  begin
+    BASHFarmConfig.Read();
+    BASHBirdHouseConfig.Read();
+  end;
+  {$ENDIF}
+
+  {$IFDEF WL_AICHAT_INCLUDED}
+  if Self.HasAIChat then
+  begin
+    if (@Self.FnSetupAIChat <> nil) then
+      Self.FnSetupAIChat()
+    else
+      Self.SetupAIChat();
+  end;
+  {$ENDIF}
+
+  if Self.HasStopAtLevel then
+  begin
+    if Length(Self.StopAtLevelSkills) > 0 then
+      StopAtLevel.SetAvailableSkills(Self.StopAtLevelSkills);
+    StopAtLevel.Load(Self.Username);
+  end;
+
+  BashPromptIfUpdateAvailable();
+  Self.Setup(Self.WindowTitle, [BASH_GUI_W, BASH_GUI_H], False);
+  Self.BuildShell();
+  if (@Self.FnAfterBuildShell <> nil) then
+    Self.FnAfterBuildShell()
+  else
+    Self.AfterBuildShell();
+  inherited;
+end;
+{$ENDIF}
+{$ENDIF}

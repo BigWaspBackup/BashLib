@@ -1,6 +1,6 @@
-{$IFNDEF BASH_GUI_KIT}
-  {$I BashLib/optional/handlers/bashgui.simba}
-{$ENDIF}
+{$DEFINE BASH_GUI_KIT_ONLY}
+{$I BashLib/optional/handlers/bashgui.simba}
+{$UNDEF BASH_GUI_KIT_ONLY}
 
 const
   BASH_BH_GUI_W = 900;

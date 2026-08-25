@@ -1,6 +1,6 @@
-{$IFNDEF BASH_GUI_KIT}
-  {$I BashLib/optional/handlers/bashgui.simba}
-{$ENDIF}
+{$DEFINE BASH_GUI_KIT_ONLY}
+{$I BashLib/optional/handlers/bashgui.simba}
+{$UNDEF BASH_GUI_KIT_ONLY}
 
 type
   TBASHFarmGUI = record(TBASHGUIBase)
@@ -375,7 +375,8 @@ begin
   Self.SetTravelComboEnabled('lcb_bash_hosidius_tp', hosi);
   Self.SetTravelComboEnabled('lcb_bash_ortus_tp', ortus);
   Self.SetTravelComboEnabled('lcb_bash_guild_tp', guild);
-  Self.SetCheckVisible('cb_bash_lumby_elite', guild and (Self.ReadComboIdx('lcb_bash_guild_tp') = 2));
+  Self.SetCheckVisible('cb_bash_lumby_elite', guild and
+    (BASHFarmTravelIdxFromName(BASH_TRAVEL_GUILD, Self.ReadComboText('lcb_bash_guild_tp')) = 2));
 
   Self.SetTravelComboEnabled('lcb_bash_lum_tree_tp', Self.ReadCheck('cb_bash_lum_tree') and treeSap);
   Self.SetTravelComboEnabled('lcb_bash_var_tree_tp', Self.ReadCheck('cb_bash_var_tree') and treeSap);
@@ -516,6 +517,24 @@ begin
   Self.RefreshPatchesEnabled();
 end;
 
+procedure TBASHFarmGUI.AddTravelCombo(
+  parent: TWinControl;
+  var box: TLabeledComboBox;
+  ctrlName, labelText: String;
+  left, top: Int32;
+  options: TStringArray;
+  unsortedIdx: Int32
+);
+begin
+  Self.AddCombo(parent, box, ctrlName, labelText, left, top,
+    BASHFarmTravelSorted(options), BASHFarmTravelSortedIdx(options, unsortedIdx));
+end;
+
+function TBASHFarmGUI.ReadTravelIdx(ctrlName: String; options: TStringArray): Int32;
+begin
+  Result := BASHFarmTravelUnsortedIdx(options, Self.ReadComboIdx(ctrlName));
+end;
+
 procedure TBASHFarmGUI.BuildTravelSection();
 var
   lcb: TLabeledComboBox;
@@ -525,23 +544,23 @@ begin
 
   Self.MakeLabel(Self.TravelSection, 'Herb / flower / allotment', 24, 96, 11, BASH_GUI_TEXT, True);
 
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_weiss_tp', 'Weiss', 24, 116, BASH_TRAVEL_WEISS, BASHFarmConfig.WeissTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_weiss_tp', 'Weiss', 24, 116, BASH_TRAVEL_WEISS, BASHFarmConfig.WeissTP);
   lcb.SetTooltip('How to travel to Weiss. Enabled when the Weiss herb patch is selected.');
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_stronghold_tp', 'Stronghold', BASH_GUI_COMBO_COL2, 116, BASH_TRAVEL_STRONGHOLD, BASHFarmConfig.StrongholdTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_stronghold_tp', 'Stronghold', BASH_GUI_COMBO_COL2, 116, BASH_TRAVEL_STRONGHOLD, BASHFarmConfig.StrongholdTP);
   lcb.SetTooltip('How to travel to the Stronghold herb patch. Enabled when that patch is selected.');
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_ardougne_tp', 'Ardougne', BASH_GUI_COMBO_COL3, 116, BASH_TRAVEL_ARDOUGNE, BASHFarmConfig.ArdougneTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_ardougne_tp', 'Ardougne', BASH_GUI_COMBO_COL3, 116, BASH_TRAVEL_ARDOUGNE, BASHFarmConfig.ArdougneTP);
   lcb.SetTooltip('How to travel to Ardougne patches. Enabled when any Ardougne patch is selected.');
 
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_falador_tp', 'Falador', 24, 178, BASH_TRAVEL_FALADOR, BASHFarmConfig.FaladorTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_falador_tp', 'Falador', 24, 178, BASH_TRAVEL_FALADOR, BASHFarmConfig.FaladorTP);
   lcb.SetTooltip('How to travel to Falador patches. Enabled when any Falador patch is selected.');
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_catherby_tp', 'Catherby', BASH_GUI_COMBO_COL2, 178, BASH_TRAVEL_CATHERBY, BASHFarmConfig.CatherbyTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_catherby_tp', 'Catherby', BASH_GUI_COMBO_COL2, 178, BASH_TRAVEL_CATHERBY, BASHFarmConfig.CatherbyTP);
   lcb.SetTooltip('How to travel to Catherby patches. Enabled when any Catherby patch is selected.');
 
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_hosidius_tp', 'Hosidius', BASH_GUI_COMBO_COL3, 178, BASH_TRAVEL_HOSIDIUS, BASHFarmConfig.HosidiusTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_hosidius_tp', 'Hosidius', BASH_GUI_COMBO_COL3, 178, BASH_TRAVEL_HOSIDIUS, BASHFarmConfig.HosidiusTP);
   lcb.SetTooltip('How to travel to Hosidius patches. Enabled when any Hosidius patch is selected.');
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_ortus_tp', 'Civitas illa Fortis', 24, 240, BASH_TRAVEL_ORTUS, BASHFarmConfig.OrtusTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_ortus_tp', 'Civitas illa Fortis', 24, 240, BASH_TRAVEL_ORTUS, BASHFarmConfig.OrtusTP);
   lcb.SetTooltip('How to travel to Civitas illa Fortis patches. Enabled when any Ortus patch is selected.');
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_guild_tp', 'Farming Guild', BASH_GUI_COMBO_COL2, 240, BASH_TRAVEL_GUILD, BASHFarmConfig.GuildTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_guild_tp', 'Farming Guild', BASH_GUI_COMBO_COL2, 240, BASH_TRAVEL_GUILD, BASHFarmConfig.GuildTP);
   lcb.SetTooltip('How to travel to the Farming Guild. Enabled when any guild patch/tree is selected.');
   lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
   Self.AddCheck(Self.TravelSection, cb, 'cb_bash_lumby_elite', 'Lumby elite (no Dramen)', BASH_GUI_COMBO_COL2, 302, BASHFarmConfig.LumbyElite);
@@ -549,30 +568,30 @@ begin
 
   Self.MakeLabel(Self.TravelSection, 'Trees', 24, 336, 11, BASH_GUI_TEXT, True);
 
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_lum_tree_tp', 'Lumbridge tree', 24, 356, BASH_TRAVEL_LUMBRIDGE_TREE, BASHFarmConfig.LumbridgeTreeTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_lum_tree_tp', 'Lumbridge tree', 24, 356, BASH_TRAVEL_LUMBRIDGE_TREE, BASHFarmConfig.LumbridgeTreeTP);
   lcb.SetTooltip('How to travel to the Lumbridge tree patch.');
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_var_tree_tp', 'Varrock tree', BASH_GUI_COMBO_COL2, 356, BASH_TRAVEL_VARROCK_TREE, BASHFarmConfig.VarrockTreeTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_var_tree_tp', 'Varrock tree', BASH_GUI_COMBO_COL2, 356, BASH_TRAVEL_VARROCK_TREE, BASHFarmConfig.VarrockTreeTP);
   lcb.SetTooltip('How to travel to the Varrock tree patch.');
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_fally_tree_tp', 'Falador tree', BASH_GUI_COMBO_COL3, 356, BASH_TRAVEL_FALADOR_TREE, BASHFarmConfig.FaladorTreeTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_fally_tree_tp', 'Falador tree', BASH_GUI_COMBO_COL3, 356, BASH_TRAVEL_FALADOR_TREE, BASHFarmConfig.FaladorTreeTP);
   lcb.SetTooltip('How to travel to the Falador tree patch.');
 
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_tav_tree_tp', 'Taverley tree', 24, 418, BASH_TRAVEL_TAVERLEY_TREE, BASHFarmConfig.TaverleyTreeTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_tav_tree_tp', 'Taverley tree', 24, 418, BASH_TRAVEL_TAVERLEY_TREE, BASHFarmConfig.TaverleyTreeTP);
   lcb.SetTooltip('How to travel to the Taverley tree patch.');
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_tree_tp', 'Gnome tree', BASH_GUI_COMBO_COL2, 418, BASH_TRAVEL_GNOME_TREE, BASHFarmConfig.GnomeTreeTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_tree_tp', 'Gnome tree', BASH_GUI_COMBO_COL2, 418, BASH_TRAVEL_GNOME_TREE, BASHFarmConfig.GnomeTreeTP);
   lcb.SetTooltip('How to travel to the Gnome Stronghold tree patch.');
 
   Self.MakeLabel(Self.TravelSection, 'Fruit trees', 24, 484, 11, BASH_GUI_TEXT, True);
 
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_fruit_tp', 'Gnome fruit', 24, 504, BASH_TRAVEL_GNOME_FRUIT, BASHFarmConfig.GnomeFruitTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_fruit_tp', 'Gnome fruit', 24, 504, BASH_TRAVEL_GNOME_FRUIT, BASHFarmConfig.GnomeFruitTP);
   lcb.SetTooltip('How to travel to the Gnome Stronghold fruit tree patch.');
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_village_tp', 'Gnome village fruit', BASH_GUI_COMBO_COL2, 504, BASH_TRAVEL_GNOME_VILLAGE_FRUIT, BASHFarmConfig.GnomeVillageFruitTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_gnome_village_tp', 'Gnome village fruit', BASH_GUI_COMBO_COL2, 504, BASH_TRAVEL_GNOME_VILLAGE_FRUIT, BASHFarmConfig.GnomeVillageFruitTP);
   lcb.SetTooltip('How to travel to the Tree Gnome Village fruit tree patch.');
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_cath_fruit_tp', 'Catherby fruit', BASH_GUI_COMBO_COL3, 504, BASH_TRAVEL_CATHERBY_FRUIT, BASHFarmConfig.CatherbyFruitTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_cath_fruit_tp', 'Catherby fruit', BASH_GUI_COMBO_COL3, 504, BASH_TRAVEL_CATHERBY_FRUIT, BASHFarmConfig.CatherbyFruitTP);
   lcb.SetTooltip('How to travel to the Catherby fruit tree patch.');
 
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_brim_fruit_tp', 'Brimhaven fruit', 24, 566, BASH_TRAVEL_BRIMHAVEN_FRUIT, BASHFarmConfig.BrimhavenFruitTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_brim_fruit_tp', 'Brimhaven fruit', 24, 566, BASH_TRAVEL_BRIMHAVEN_FRUIT, BASHFarmConfig.BrimhavenFruitTP);
   lcb.SetTooltip('How to travel to the Brimhaven fruit tree patch.');
-  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_lletya_fruit_tp', 'Lletya fruit', BASH_GUI_COMBO_COL2, 566, BASH_TRAVEL_LLETYA_FRUIT, BASHFarmConfig.LletyaFruitTP);
+  Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_lletya_fruit_tp', 'Lletya fruit', BASH_GUI_COMBO_COL2, 566, BASH_TRAVEL_LLETYA_FRUIT, BASHFarmConfig.LletyaFruitTP);
   lcb.SetTooltip('How to travel to the Lletya fruit tree patch.');
 
   Self.RefreshTravelEnabled();
@@ -818,6 +837,7 @@ begin
   {$ELSE}
   Self.BrandLabel := Self.MakeLabel(Self.NavPanel, 'BASH Farm', 16, 28, 16, BASH_GUI_TEXT, True);
   {$ENDIF}
+  Self.MakeLabel(Self.NavPanel, 'BASH Scripts', 16, 54, 9, BASH_GUI_MUTED, False);
 
   {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
   Self.ActivitiesNav := Self.MakeNavItem(Self.NavPanel, 'Activities', 12, 100, True);
@@ -949,47 +969,47 @@ begin
     BASHFarmConfig.CompostIdx := Self.ReadComboIdx('lcb_bash_compost');
 
   if Self.HasNamedControl('lcb_bash_weiss_tp', '_combobox') then
-    BASHFarmConfig.WeissTP := Self.ReadComboIdx('lcb_bash_weiss_tp');
+    BASHFarmConfig.WeissTP := Self.ReadTravelIdx('lcb_bash_weiss_tp', BASH_TRAVEL_WEISS);
   if Self.HasNamedControl('lcb_bash_stronghold_tp', '_combobox') then
-    BASHFarmConfig.StrongholdTP := Self.ReadComboIdx('lcb_bash_stronghold_tp');
+    BASHFarmConfig.StrongholdTP := Self.ReadTravelIdx('lcb_bash_stronghold_tp', BASH_TRAVEL_STRONGHOLD);
   if Self.HasNamedControl('lcb_bash_ardougne_tp', '_combobox') then
-    BASHFarmConfig.ArdougneTP := Self.ReadComboIdx('lcb_bash_ardougne_tp');
+    BASHFarmConfig.ArdougneTP := Self.ReadTravelIdx('lcb_bash_ardougne_tp', BASH_TRAVEL_ARDOUGNE);
   if Self.HasNamedControl('lcb_bash_falador_tp', '_combobox') then
-    BASHFarmConfig.FaladorTP := Self.ReadComboIdx('lcb_bash_falador_tp');
+    BASHFarmConfig.FaladorTP := Self.ReadTravelIdx('lcb_bash_falador_tp', BASH_TRAVEL_FALADOR);
   if Self.HasNamedControl('lcb_bash_catherby_tp', '_combobox') then
-    BASHFarmConfig.CatherbyTP := Self.ReadComboIdx('lcb_bash_catherby_tp');
+    BASHFarmConfig.CatherbyTP := Self.ReadTravelIdx('lcb_bash_catherby_tp', BASH_TRAVEL_CATHERBY);
   BASHFarmConfig.PhasmatysTP := 0;
   if Self.HasNamedControl('lcb_bash_hosidius_tp', '_combobox') then
-    BASHFarmConfig.HosidiusTP := Self.ReadComboIdx('lcb_bash_hosidius_tp');
+    BASHFarmConfig.HosidiusTP := Self.ReadTravelIdx('lcb_bash_hosidius_tp', BASH_TRAVEL_HOSIDIUS);
   if Self.HasNamedControl('lcb_bash_ortus_tp', '_combobox') then
-    BASHFarmConfig.OrtusTP := Self.ReadComboIdx('lcb_bash_ortus_tp');
+    BASHFarmConfig.OrtusTP := Self.ReadTravelIdx('lcb_bash_ortus_tp', BASH_TRAVEL_ORTUS);
   if Self.HasNamedControl('lcb_bash_guild_tp', '_combobox') then
-    BASHFarmConfig.GuildTP := Self.ReadComboIdx('lcb_bash_guild_tp');
+    BASHFarmConfig.GuildTP := Self.ReadTravelIdx('lcb_bash_guild_tp', BASH_TRAVEL_GUILD);
 
   if Self.HasNamedControl('lcb_bash_treesapling', '_combobox') then
     BASHFarmConfig.TreeSaplingIdx := Self.ReadComboIdx('lcb_bash_treesapling');
   if Self.HasNamedControl('lcb_bash_fruitsapling', '_combobox') then
     BASHFarmConfig.FruitSaplingIdx := Self.ReadComboIdx('lcb_bash_fruitsapling');
   if Self.HasNamedControl('lcb_bash_lum_tree_tp', '_combobox') then
-    BASHFarmConfig.LumbridgeTreeTP := Self.ReadComboIdx('lcb_bash_lum_tree_tp');
+    BASHFarmConfig.LumbridgeTreeTP := Self.ReadTravelIdx('lcb_bash_lum_tree_tp', BASH_TRAVEL_LUMBRIDGE_TREE);
   if Self.HasNamedControl('lcb_bash_var_tree_tp', '_combobox') then
-    BASHFarmConfig.VarrockTreeTP := Self.ReadComboIdx('lcb_bash_var_tree_tp');
+    BASHFarmConfig.VarrockTreeTP := Self.ReadTravelIdx('lcb_bash_var_tree_tp', BASH_TRAVEL_VARROCK_TREE);
   if Self.HasNamedControl('lcb_bash_fally_tree_tp', '_combobox') then
-    BASHFarmConfig.FaladorTreeTP := Self.ReadComboIdx('lcb_bash_fally_tree_tp');
+    BASHFarmConfig.FaladorTreeTP := Self.ReadTravelIdx('lcb_bash_fally_tree_tp', BASH_TRAVEL_FALADOR_TREE);
   if Self.HasNamedControl('lcb_bash_tav_tree_tp', '_combobox') then
-    BASHFarmConfig.TaverleyTreeTP := Self.ReadComboIdx('lcb_bash_tav_tree_tp');
+    BASHFarmConfig.TaverleyTreeTP := Self.ReadTravelIdx('lcb_bash_tav_tree_tp', BASH_TRAVEL_TAVERLEY_TREE);
   if Self.HasNamedControl('lcb_bash_gnome_tree_tp', '_combobox') then
-    BASHFarmConfig.GnomeTreeTP := Self.ReadComboIdx('lcb_bash_gnome_tree_tp');
+    BASHFarmConfig.GnomeTreeTP := Self.ReadTravelIdx('lcb_bash_gnome_tree_tp', BASH_TRAVEL_GNOME_TREE);
   if Self.HasNamedControl('lcb_bash_gnome_fruit_tp', '_combobox') then
-    BASHFarmConfig.GnomeFruitTP := Self.ReadComboIdx('lcb_bash_gnome_fruit_tp');
+    BASHFarmConfig.GnomeFruitTP := Self.ReadTravelIdx('lcb_bash_gnome_fruit_tp', BASH_TRAVEL_GNOME_FRUIT);
   if Self.HasNamedControl('lcb_bash_gnome_village_tp', '_combobox') then
-    BASHFarmConfig.GnomeVillageFruitTP := Self.ReadComboIdx('lcb_bash_gnome_village_tp');
+    BASHFarmConfig.GnomeVillageFruitTP := Self.ReadTravelIdx('lcb_bash_gnome_village_tp', BASH_TRAVEL_GNOME_VILLAGE_FRUIT);
   if Self.HasNamedControl('lcb_bash_cath_fruit_tp', '_combobox') then
-    BASHFarmConfig.CatherbyFruitTP := Self.ReadComboIdx('lcb_bash_cath_fruit_tp');
+    BASHFarmConfig.CatherbyFruitTP := Self.ReadTravelIdx('lcb_bash_cath_fruit_tp', BASH_TRAVEL_CATHERBY_FRUIT);
   if Self.HasNamedControl('lcb_bash_brim_fruit_tp', '_combobox') then
-    BASHFarmConfig.BrimhavenFruitTP := Self.ReadComboIdx('lcb_bash_brim_fruit_tp');
+    BASHFarmConfig.BrimhavenFruitTP := Self.ReadTravelIdx('lcb_bash_brim_fruit_tp', BASH_TRAVEL_BRIMHAVEN_FRUIT);
   if Self.HasNamedControl('lcb_bash_lletya_fruit_tp', '_combobox') then
-    BASHFarmConfig.LletyaFruitTP := Self.ReadComboIdx('lcb_bash_lletya_fruit_tp');
+    BASHFarmConfig.LletyaFruitTP := Self.ReadTravelIdx('lcb_bash_lletya_fruit_tp', BASH_TRAVEL_LLETYA_FRUIT);
 
   if Self.HasNamedControl('cb_bash_barbdibber', '_checkbox') then
     BASHFarmConfig.BarbDibber := Self.ReadCheck('cb_bash_barbdibber');
