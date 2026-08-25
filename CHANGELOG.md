@@ -1,3 +1,12 @@
+## [8.5.5](https://github.com/BigWaspBackup/BashLib/compare/v8.5.4...v8.5.5) (2026-08-25)
+
+
+### Bug Fixes
+
+* BETA Handler for Genie Random event now enabled, Moved BASH GUI code to the include. ([907f881](https://github.com/BigWaspBackup/BashLib/commit/907f88138fb7b289b2a98cfe3642643609218b5d))
+
+
+
 ## [8.5.4](https://github.com/BigWaspBackup/BashLib/compare/v8.5.3...v8.5.4) (2026-08-24)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Antiban improvements to all scripts, Randomised order gametabs are opened on start of script. ([bf53eb9](https://github.com/BigWaspBackup/BashLib/commit/bf53eb9a6e7689c0ee35889e197dc9e2b29dc060))
-
-
-
-# [8.5.0](https://github.com/BigWaspBackup/BashLib/compare/v8.4.15...v8.5.0) (2026-08-18)
-
-
-### Features
-
-* started work on random events handler, Removed all legacy wasp API calls, AI Chatbot improvements, world hopper improvements ([7a65c9b](https://github.com/BigWaspBackup/BashLib/commit/7a65c9b6446047129a3a5e4f78e2b86b3f280c99))
 
 
 
