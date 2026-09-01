@@ -99,21 +99,22 @@ procedure RewriteCredentials();
     i, j: Int32;
     match: Boolean;
   begin
+    Result := [];
     for i := 0 to High(players) do
     begin
+      match := False;
       for j := 0 to High(Result) do
       begin
-        match := LowerCase(players[i].User) = LowerCase(Result[j].User);
-        if match then
+        if LowerCase(players[i].User) = LowerCase(Result[j].User) then
+        begin
+          match := True;
           Break;
+        end;
       end;
 
       if not match then
         Result += players[i];
     end;
-
-    if match then
-      Login.PlayerIndex := j;
   end;
 
   function _BuildCredentials(): String;
@@ -141,6 +142,11 @@ procedure RewriteCredentials();
 
 begin
   Login.Players := _FilterDuplicatePlayers(Login.Players);
+
+  if Login.Players = [] then
+    Login.PlayerIndex := 0
+  else if (Login.PlayerIndex < 0) or (Login.PlayerIndex > High(Login.Players)) then
+    Login.PlayerIndex := High(Login.Players);
 
   try
     WriteFileContents(CREDENTIALS_FILE, _BuildCredentials());
@@ -1293,7 +1299,9 @@ end;
 
 (*
 ## TScriptForm.SyncAccountManager
-Writes the current Account Manager fields into Login.Players and credentials.simba.
+Writes the current Account Manager fields into the selected Login.Players slot and credentials.simba.
+Only updates when the username still matches the selected account. A different username is treated
+as composing a new account (Add Account), so the old entry is left alone.
 Called automatically when fields change, after world selection, when the script starts,
 and when the form closes (so Start saves worlds even if a script overrides StartScript
 without calling inherited).
@@ -1329,6 +1337,9 @@ begin
     Exit;
 
   if user.IsEmpty() then
+    Exit;
+
+  if LowerCase(user.GetText()) <> LowerCase(Login.Players[i].User) then
     Exit;
 
   if (jagex <> nil) and jagex.IsChecked() then
@@ -1454,7 +1465,11 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
       selector.getItems().Add(player.User);
 
     if hasPlayers then
+    begin
+      if (Login.PlayerIndex < 0) or (Login.PlayerIndex > High(Login.Players)) then
+        Login.PlayerIndex := 0;
       selector.SetItemIndex(Login.PlayerIndex);
+    end;
   end;
 
   procedure TScriptForm._SelectorOnChange(sender: TObject);
@@ -1507,7 +1522,8 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
     worlds: TMemo;
     jagex: TCheckBox;
     worldsArray: TIntegerArray;
-    password: String;
+    password, userName: String;
+    i, found: Int32;
   begin
     selector := Self.Form.GetChild('am_selector_combobox');
     user := Self.Form.GetChild('am_user_edit');
@@ -1522,6 +1538,8 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
       Exit;
     end;
 
+    userName := user.GetText();
+
     if (jagex <> nil) and jagex.IsChecked() then
       password := ''
     else
@@ -1529,15 +1547,35 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
 
     worldsArray := worlds.GetIntegerArray(301, 700);
 
-    Login.Players += [user.GetText(), password, pin.GetText(), worldsArray];
-    Login.PlayerIndex := High(Login.Players);
+    found := -1;
+    for i := 0 to High(Login.Players) do
+    begin
+      if LowerCase(Login.Players[i].User) = LowerCase(userName) then
+      begin
+        found := i;
+        Break;
+      end;
+    end;
+
+    if found >= 0 then
+    begin
+      Login.Players[found].Password := password;
+      Login.Players[found].Pin := pin.GetText();
+      Login.Players[found].Worlds := worldsArray;
+      Login.PlayerIndex := found;
+    end
+    else
+    begin
+      Login.AddPlayer(userName, password, pin.GetText(), worldsArray);
+      Login.PlayerIndex := High(Login.Players);
+    end;
 
     RewriteCredentials();
     Self._ReloadSelector(selector);
     Self._SelectorOnChange(selector);
   end;
 
-  procedure TScriptForm._OnDeleteClick(sender: TObject);
+  procedure TScriptForm._OnDeleteClick({$H-}sender: TObject);{$H+}
   var
     selector: TComboBox;
     i: Int32;
@@ -1545,13 +1583,17 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
     selector := Self.Form.GetChild('am_selector_combobox');
     i := selector.getItemIndex();
 
-    if i > High(Login.Players) then
+    if (i < 0) or (i > High(Login.Players)) then
       Exit;
 
     Delete(Login.Players, i, 1);
-    Login.PlayerIndex -= 1;
 
-    Self._ClearInputs(sender);
+    if Login.Players = [] then
+      Login.PlayerIndex := 0
+    else if i > High(Login.Players) then
+      Login.PlayerIndex := High(Login.Players)
+    else
+      Login.PlayerIndex := i;
 
     RewriteCredentials();
     Self._ReloadSelector(selector);
@@ -1690,7 +1732,7 @@ begin
     Create(Result);
     SetCaption('Add Account');
     SetName('am_add_button');
-    SetTooltip('Adds the currently input information into the credentials file if not already existing.');
+    SetTooltip('Creates a new account from the fields below. Does not replace the selected account.');
     SetLeft(worlds.GetLeft());
     SetWidth(btnW);
     SetHeight(TControl.AdjustToDPI(27));
