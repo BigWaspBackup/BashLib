@@ -1,3 +1,12 @@
+## [8.5.7](https://github.com/BigWaspBackup/BashLib/compare/v8.5.6...v8.5.7) (2026-09-01)
+
+
+### Bug Fixes
+
+* Account manager add profile fixes ([3c27f3f](https://github.com/BigWaspBackup/BashLib/commit/3c27f3f947a804cd20f910c6da037a2090e79ff7))
+
+
+
 ## [8.5.6](https://github.com/BigWaspBackup/BashLib/compare/v8.5.5...v8.5.6) (2026-09-01)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Initial support for tracking farming/birdhouse loot ([385a0e9](https://github.com/BigWaspBackup/BashLib/commit/385a0e9166368c66116dbbec259e40a6d1b81454))
-
-
-
-## [8.5.2](https://github.com/BigWaspBackup/BashLib/compare/v8.5.1...v8.5.2) (2026-08-20)
-
-
-### Bug Fixes
-
-* BioHash and Antiban now supports reporting break time/length ([936fae1](https://github.com/BigWaspBackup/BashLib/commit/936fae1ef91549bbcba249529e0b1f504d9e2d25))
 
 
 
