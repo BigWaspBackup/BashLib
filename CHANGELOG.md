@@ -1,3 +1,12 @@
+## [8.5.6](https://github.com/BigWaspBackup/BashLib/compare/v8.5.5...v8.5.6) (2026-09-01)
+
+
+### Bug Fixes
+
+* Stop At Level no longer saves to profile, now session only. ([0defcbf](https://github.com/BigWaspBackup/BashLib/commit/0defcbffd5719dcb8a3952ecdec1744f5285a731))
+
+
+
 ## [8.5.5](https://github.com/BigWaspBackup/BashLib/compare/v8.5.4...v8.5.5) (2026-08-25)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * BioHash and Antiban now supports reporting break time/length ([936fae1](https://github.com/BigWaspBackup/BashLib/commit/936fae1ef91549bbcba249529e0b1f504d9e2d25))
-
-
-
-## [8.5.1](https://github.com/BigWaspBackup/BashLib/compare/v8.5.0...v8.5.1) (2026-08-19)
-
-
-### Bug Fixes
-
-* Antiban improvements to all scripts, Randomised order gametabs are opened on start of script. ([bf53eb9](https://github.com/BigWaspBackup/BashLib/commit/bf53eb9a6e7689c0ee35889e197dc9e2b29dc060))
 
 
 
