@@ -697,7 +697,7 @@ begin
   if WLSettings.GetObject('antiban').getJSONObject('tasks').getBoolean('mouse') then
     Self.AddTask(10 * ONE_MINUTE, @Self.LoseFocus, 0.33);
 
-  Self.AddTask(11 * ONE_MINUTE, @Self.RandomKeyboard, 0.33);
+  // Self.AddTask(11 * ONE_MINUTE, @Self.RandomKeyboard, 0.33);
 
   if WLSettings.GetObject('antiban').getJSONObject('tasks').getBoolean('gametabs') then
     Self.AddTask(12 * ONE_MINUTE, @Self.RandomGameTabTask, 0.33);
