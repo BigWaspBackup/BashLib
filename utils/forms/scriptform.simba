@@ -72,6 +72,7 @@ Global constant that points to the location of credentials.simba which is Simba'
 
 var
   _WL_WarmedThisProcess: Boolean = False;
+  _BashUpdatePromptCurrent, _BashUpdatePromptLatest: String;
 
 (*
 ## RewriteCredentials
@@ -2916,16 +2917,40 @@ begin
   Result := StrToIntDef(Trim(revStr), -1);
 end;
 
+procedure TScriptForm._ShowUpdatePrompt();
+var
+  choice: Int32;
+begin
+  choice := MessageDlg(
+    'Script Update Available',
+    'A newer version of the script is available!' + LineEnding + LineEnding +
+    'Current version: ' + _BashUpdatePromptCurrent + LineEnding +
+    'Latest version: ' + _BashUpdatePromptLatest + LineEnding + LineEnding +
+    'Please update your script from the B.A.S.H Launcher.' + LineEnding + LineEnding +
+    'Do you want to continue with the current version?',
+    TMsgDlgType.mtWarning,
+    [mbYes, mbNo]
+  );
+
+  if choice <> mrYes then
+  begin
+    WriteLn('User chose to stop script');
+    TerminateScript('Script update available - please update from the B.A.S.H Launcher');
+  end;
+end;
+
 (*
 ## BashPromptIfUpdateAvailable
 ```pascal
-procedure BashPromptIfUpdateAvailable();
+procedure TScriptForm.BashPromptIfUpdateAvailable();
 ```
 Compares `SCRIPT_REVISION` to the B.A.S.H catalog revision.
 If newer, warns the user to update via the B.A.S.H Launcher and asks whether
 to continue on the current revision. Soft-fails on network errors.
+The continue/stop dialog is synced to the main thread so the Yes/No result is
+reliable. Choosing anything other than Yes stops the script.
 *)
-procedure BashPromptIfUpdateAvailable();
+procedure TScriptForm.BashPromptIfUpdateAvailable();
 var
   latest, current: Int32;
 begin
@@ -2938,28 +2963,19 @@ begin
     if (current < 0) or (latest <= current) then
       Exit;
 
-    WriteLn('========================================');
-    WriteLn('SCRIPT UPDATE AVAILABLE!');
-    WriteLn('Current version: ' + {$MACRO SCRIPT_REVISION});
-    WriteLn('Latest version: ' + ToStr(latest));
-    WriteLn('========================================');
-
-    if MessageDlg(
-      'Script Update Available',
-      'A newer version of the script is available!' + LineEnding + LineEnding +
-      'Current version: ' + {$MACRO SCRIPT_REVISION} + LineEnding +
-      'Latest version: ' + ToStr(latest) + LineEnding + LineEnding +
-      'Please update your script from the B.A.S.H Launcher.' + LineEnding + LineEnding +
-      'Do you want to continue with the current version?',
-      TMsgDlgType.mtWarning,
-      [mbYes, mbNo]
-    ) = 7 then
-    begin
-      WriteLn('User chose to stop script');
-      TerminateScript('Script update available - please update from the B.A.S.H Launcher');
-    end;
+    _BashUpdatePromptCurrent := {$MACRO SCRIPT_REVISION};
+    _BashUpdatePromptLatest := ToStr(latest);
   except
+    Exit;
   end;
+
+  WriteLn('========================================');
+  WriteLn('SCRIPT UPDATE AVAILABLE!');
+  WriteLn('Current version: ' + _BashUpdatePromptCurrent);
+  WriteLn('Latest version: ' + _BashUpdatePromptLatest);
+  WriteLn('========================================');
+
+  Sync(@Self._ShowUpdatePrompt);
 end;
 
 procedure TScriptForm._WarmBuildCache();

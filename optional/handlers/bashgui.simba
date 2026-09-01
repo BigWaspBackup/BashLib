@@ -1460,10 +1460,9 @@ begin
   begin
     if Length(Self.StopAtLevelSkills) > 0 then
       StopAtLevel.SetAvailableSkills(Self.StopAtLevelSkills);
-    StopAtLevel.Load(Self.Username);
   end;
 
-  BashPromptIfUpdateAvailable();
+  Self.BashPromptIfUpdateAvailable();
   Self.Setup(Self.WindowTitle, [BASH_GUI_W, BASH_GUI_H], False);
   Self.BuildShell();
   if (@Self.FnAfterBuildShell <> nil) then

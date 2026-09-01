@@ -20,6 +20,9 @@ const
   RANDOM_EVENT_EARLY_SCAN_MS = 60 * 1000;
   GENIE_MAX_TRIES = 3;
   GENIE_GONE_MS = 10 * 1000;
+  GENIE_OTHER_PLAYER_REASON =
+    'This Genie belongs to another player. Random events have been disabled. ' +
+    'Use the BASH profile, or enable Entity Hider with Hide others random events.';
   BASH_RANDOM_EVENT_MODES: TStringArray = ['Ignore', 'Interact'];
   BASH_LAMP_SKILL_KEYS: TStringArray = [
     'agility', 'attack', 'construction', 'cooking', 'crafting',
@@ -248,6 +251,32 @@ begin
   Result := Self.Genie.SelectOption(['Dismiss']);
 end;
 
+function TRSRandomEvents.IsOtherPlayersGenie(): Boolean;
+var
+  text: String;
+begin
+  text := Chat.GetChat().Lower();
+  Result := 'ignoring' in text;
+end;
+
+procedure TRSRandomEvents.DisableRandomEvents(reason: String);
+var
+  json: TJSONObject;
+begin
+  Self.DebugLn(reason);
+  WriteLn('[RandomEvents] ', reason);
+
+  Self.Mode := ERandomEventMode.OFF;
+  json := Self.GetConfig();
+  json.Put('genie', False);
+  json.Put('genie_action', 'ignore');
+  json.Put('mode', 'off');
+  WLSettings.SaveConfig();
+
+  if Chat.HasContinue() then
+    Chat.ClickContinue(True);
+end;
+
 function TRSRandomEvents.AdvanceGenieChat(): Boolean;
 var
   timeout: TCountdown;
@@ -255,9 +284,21 @@ var
 begin
   WaitUntil(Chat.HasContinue() or LampHandler.HasLamp(lamp), 100, 5000);
 
+  if Self.IsOtherPlayersGenie() then
+  begin
+    Self.DisableRandomEvents(GENIE_OTHER_PLAYER_REASON);
+    Exit(False);
+  end;
+
   timeout.Init(12000);
   while (not timeout.IsFinished()) and Chat.HasContinue() do
   begin
+    if Self.IsOtherPlayersGenie() then
+    begin
+      Self.DisableRandomEvents(GENIE_OTHER_PLAYER_REASON);
+      Exit(False);
+    end;
+
     Chat.ClickContinue(True);
     Wait(60, 1500, wdLeft);
   end;
@@ -386,6 +427,8 @@ begin
           Exit(False);
 
         Result := Self.InteractGenie(attempted);
+        if Self.Mode <> ERandomEventMode.INTERACT then
+          Exit(False);
         if Result then
         begin
           Self.ResetGenieInstance();

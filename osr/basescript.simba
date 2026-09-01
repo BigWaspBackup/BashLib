@@ -298,7 +298,6 @@ begin
 
   Antiban.Setup();
 
-  StopAtLevel.LoadCurrentAccount();
   if StopAtLevel.HasActiveGoals() then
   begin
     Stats.CacheAll();

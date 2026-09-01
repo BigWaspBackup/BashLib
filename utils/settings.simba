@@ -103,19 +103,10 @@ begin
     modified := True;
   end;
 
-  if not Self.Has('stop_at_level') then
-  begin
-    json.Init();
-    Self.Put('stop_at_level', json);
-    modified := True;
-  end;
-
-  if not Self.GetObject('stop_at_level').has('accounts') then
-  begin
-    json.Init();
-    Self.GetObject('stop_at_level').Put('accounts', json);
-    modified := True;
-  end;
+  // Stop-at-level used to persist per account and leak into other scripts.
+  // Goals are session-only now; wipe any leftover stored values.
+  if Self.Has('stop_at_level') then
+    Self.Remove('stop_at_level');
 
   //ANTIBAN
   if not Self.Has('antiban') then
