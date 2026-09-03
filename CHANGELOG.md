@@ -1,3 +1,12 @@
+## [8.5.9](https://github.com/BigWaspBackup/BashLib/compare/v8.5.8...v8.5.9) (2026-09-03)
+
+
+### Bug Fixes
+
+* Gearhandler tweaks for assets ([02afe76](https://github.com/BigWaspBackup/BashLib/commit/02afe760e35d15e46922ef0373ae6a7d09b2404f))
+
+
+
 ## [8.5.8](https://github.com/BigWaspBackup/BashLib/compare/v8.5.7...v8.5.8) (2026-09-01)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * BETA Handler for Genie Random event now enabled, Moved BASH GUI code to the include. ([907f881](https://github.com/BigWaspBackup/BashLib/commit/907f88138fb7b289b2a98cfe3642643609218b5d))
-
-
-
-## [8.5.4](https://github.com/BigWaspBackup/BashLib/compare/v8.5.3...v8.5.4) (2026-08-24)
-
-
-### Bug Fixes
-
-* Added support for trimmed farming cape; Added inital code for solving random events and using lamps ([bc447b1](https://github.com/BigWaspBackup/BashLib/commit/bc447b1a7ddebb1186e1d784c74af3ff2f4e584a))
 
 
 
