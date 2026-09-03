@@ -543,6 +543,16 @@ begin
 end;
 
 
+function TScriptForm.GearFormCachePath(): String;
+begin
+  Result := ItemFinder.IMAGES_PATH.Replace('itemfinder', 'forms' + DirectorySeparator + 'gear');
+  if Result = '' then
+    Result := CACHE_DIR + 'forms' + DirectorySeparator + 'gear' + DirectorySeparator;
+
+  if not ForceDirectories(Result) then
+    TerminateScript('Failed to create gear form cache path: ' + Result);
+end;
+
 procedure TScriptForm._OnGearChange(sender: TObject);
 var
   combobox: TComboBox;
@@ -566,12 +576,11 @@ begin
   img.setVisible(True);
 
   id := ItemFinder.GetItemIDs(combobox.getText())[0];
-  path := ItemFinder.IMAGES_PATH.Replace('itemfinder', 'forms' + DirectorySeparator + 'gear');
-
+  path := Self.GearFormCachePath();
 
   if FileExists(path + id + '.png') then
   begin
-    img.GetPicture().LoadFromFile(PATH + id + '.png');
+    img.GetPicture().LoadFromFile(path + id + '.png');
     Exit;
   end;
 
@@ -1059,8 +1068,7 @@ procedure TScriptForm.CreateEquipmentManager();
 var
   tab: TTabSheet;
 begin
-  if not ForceDirectories(ItemFinder.IMAGES_PATH.Replace('itemfinder', 'forms' + DirectorySeparator + 'gear')) then
-    TerminateScript('Failed to create cache paths: ' + CACHE_DIR + 'forms' + DirectorySeparator + 'gear');
+  Self.GearFormCachePath();
 
   Self.AddTab('Equipment Manager');
   tab := Self.Tabs[High(Self.Tabs)];
