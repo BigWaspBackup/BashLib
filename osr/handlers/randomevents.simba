@@ -15,13 +15,24 @@ const
   GENIE_BODY_COLOR: TCTS2Color = [14189363, 23, 0.08, 1.26];  // CTS2(14189363, 23, 0.08, 1.26)
   GENIE_PAIR_DIST = 20;
   GENIE_CLUSTER_DISTANCE = 8;
+  COUNT_CHECK_COLOR: TCTS2Color = [1776416, 1, 0.01, 0.01];     // CTS2(1776416, 1, 0.01, 0.01) black shirt + pants
+  COUNT_CHECK_CAPE_COLOR: TCTS2Color = [596588, 9, 0.20, 1.92]; // CTS2(596588, 9, 0.20, 1.92) cape/collar
+  COUNT_CHECK_PAIR_DIST = 20;
+  COUNT_CHECK_CLUSTER_DISTANCE = 8;
+  RANDOM_NPC_SHAPE: Vector3 = [1, 1, 7];
+  RANDOM_NPC_DOT_MIN_DIST = 4;
+  RANDOM_NPC_DOT_RADIUS = 10;
+  RANDOM_NPC_MIN_PIXELS = 20;
+  RANDOM_NPC_MIN_WIDTH = 8;
+  RANDOM_NPC_MIN_HEIGHT = 10;
+  RANDOM_NPC_SCAN_PAD = 12;
   RANDOM_EVENT_MIN_SEC = 60 * 60;
   RANDOM_EVENT_MAX_SEC = 120 * 60;
   RANDOM_EVENT_EARLY_SCAN_MS = 60 * 1000;
-  GENIE_MAX_TRIES = 3;
-  GENIE_GONE_MS = 10 * 1000;
-  GENIE_OTHER_PLAYER_REASON =
-    'This Genie belongs to another player. Random events have been disabled. ' +
+  RANDOM_NPC_MAX_TRIES = 3;
+  RANDOM_NPC_GONE_MS = 10 * 1000;
+  RANDOM_EVENT_OTHER_PLAYER_REASON =
+    'This random event belongs to another player. Random events have been disabled. ' +
     'Use the BASH profile, or enable Entity Hider with Hide others random events.';
   BASH_RANDOM_EVENT_MODES: TStringArray = ['Ignore', 'Interact'];
   BASH_LAMP_SKILL_KEYS: TStringArray = [
@@ -47,11 +58,17 @@ type
     SupportGenie: Boolean;
     Skill: ERSLampSkill;
     Genie: TRSNPC;
+    CountCheck: TRSNPC;
+    GenieMode: ERandomEventMode;
+    CountCheckMode: ERandomEventMode;
     LastEventUnix: Int64;
     NextEarlyScan: UInt64;
     GenieTries: Int32;
     IgnoreGenie: Boolean;
     LastGenieSeen: UInt64;
+    CountCheckTries: Int32;
+    IgnoreCountCheck: Boolean;
+    LastCountCheckSeen: UInt64;
   end;
 
 function ERSLampSkill.ToKey(): String; constref;
@@ -87,9 +104,11 @@ begin
     Filter.Skip := False;
     SetupUpText(['Genie']);
     Filter.Walker := False;
-    Filter.MinimapDot := False;
+    Filter.MinimapDot := True;
     Filter.Finder := True;
     Filter.UpText := True;
+    SetLength(ShapeArray, 1);
+    ShapeArray.SetShape(RANDOM_NPC_SHAPE);
     Finder := [];
     Finder.ColorClusters += [
       GENIE_BODY_COLOR,
@@ -100,9 +119,174 @@ begin
   end;
 end;
 
+procedure TRSRandomEvents.SetupCountCheck();
+begin
+  with Self.CountCheck do
+  begin
+    Filter.Skip := False;
+    SetupUpText(['Count Check']);
+    Filter.Walker := False;
+    Filter.MinimapDot := True;
+    Filter.Finder := True;
+    Filter.UpText := True;
+    SetLength(ShapeArray, 1);
+    ShapeArray.SetShape(RANDOM_NPC_SHAPE);
+    Finder := [];
+    Finder.ColorClusters += [
+      COUNT_CHECK_COLOR,
+      COUNT_CHECK_CAPE_COLOR,
+      COUNT_CHECK_PAIR_DIST
+    ];
+    Finder.ClusterDistance := COUNT_CHECK_CLUSTER_DISTANCE;
+  end;
+end;
+
 procedure TRSRandomEvents.EnableGenie();
 begin
   Self.SupportGenie := True;
+end;
+
+function TRSRandomEvents.NearbyNPCDots(): TPointArray;
+var
+  dots: TPointArray;
+  origin, p: TPoint;
+  dist: Double;
+begin
+  origin := Minimap.Center;
+  dots := Minimap.GetDots(ERSMinimapDot.NPC);
+  for p in dots do
+  begin
+    dist := p.Offset(2, 2).DistanceTo(origin);
+    if (dist > RANDOM_NPC_DOT_MIN_DIST) and (dist <= RANDOM_NPC_DOT_RADIUS) then
+      Result += p;
+  end;
+end;
+
+function TRSRandomEvents.HasNearbyNPCDot(): Boolean;
+begin
+  Result := Self.NearbyNPCDots() <> [];
+end;
+
+function TRSRandomEvents.NPCName(constref npc: TRSNPC): String;
+begin
+  if npc.UpText <> [] then
+    Result := npc.UpText[0]
+  else
+    Result := 'NPC';
+end;
+
+function TRSRandomEvents.KeepEventClusters(var atpa: T2DPointArray): Boolean;
+var
+  i: Int32;
+  box: TBox;
+begin
+  atpa.FilterSize(RANDOM_NPC_MIN_PIXELS, EComparator.__GT__);
+  for i := High(atpa) downto 0 do
+  begin
+    box := atpa[i].Bounds();
+    if (box.Width() < RANDOM_NPC_MIN_WIDTH) or (box.Height() < RANDOM_NPC_MIN_HEIGHT) then
+      Delete(atpa, i, 1);
+  end;
+
+  if atpa <> [] then
+    atpa.SortByArea(False);
+
+  Result := atpa <> [];
+end;
+
+function TRSRandomEvents.EventScanBox(): TBox;
+var
+  playerBox: TBox;
+  expand: Int32;
+begin
+  MM2MS.SetupZoom();
+  playerBox := MainScreen.GetPlayerBox();
+  expand := Max(playerBox.Width(), playerBox.Height()) + MainScreen.NormalizeDistance(RANDOM_NPC_SCAN_PAD);
+  Result := playerBox.Expand(expand, MainScreen.Bounds);
+end;
+
+function TRSRandomEvents.FindEventNPC(var npc: TRSNPC; out atpa: T2DPointArray): Boolean;
+var
+  dots: TPointArray;
+  scan: TBox;
+  p: TPoint;
+  dists: String;
+begin
+  atpa := [];
+  dots := Self.NearbyNPCDots();
+  if dots = [] then
+    Exit(False);
+
+  scan := Self.EventScanBox();
+  atpa := MainScreen.FindObject(npc.Finder, scan);
+  if not Self.KeepEventClusters(atpa) then
+    Exit(False);
+
+  atpa := atpa.SortFrom(MainScreen.GetPlayerBox().Center());
+
+  dists := '';
+  for p in dots do
+  begin
+    if dists <> '' then
+      dists += ', ';
+    dists += ToStr(Round(p.Offset(2, 2).DistanceTo(Minimap.Center)));
+  end;
+
+  Self.DebugLn(
+    Self.NPCName(npc) + ' found with ' + IntToStr(Length(dots)) +
+    ' nearby NPC dot(s) at px ' + dists +
+    '  scan=' + ToStr(scan) +
+    '  cluster=' + ToStr(atpa[0].Bounds()) +
+    ' pixels=' + IntToStr(Length(atpa[0]))
+  );
+  Result := True;
+end;
+
+function TRSRandomEvents.HoverEventNPC(var npc: TRSNPC; atpa: T2DPointArray): Boolean;
+var
+  upText: String;
+begin
+  if atpa = [] then
+    Exit(False);
+
+  Mouse.Move(atpa[0].Mean());
+  if MainScreen.IsUpText(npc.UpText, 1200) then
+    Exit(True);
+
+  upText := MainScreen.GetUpText();
+  Self.DebugLn(Self.NPCName(npc) + ' hover uptext was "' + upText + '", expected ' + Self.NPCName(npc));
+  Result := False;
+end;
+
+function TRSRandomEvents.ClickEventNPC(var npc: TRSNPC; atpa: T2DPointArray): Boolean;
+begin
+  Result := Self.HoverEventNPC(npc, atpa);
+  if Result then
+    Mouse.Click(MOUSE_LEFT);
+end;
+
+function TRSRandomEvents.ActionToMode(action: String): ERandomEventMode;
+begin
+  if action.Lower() = 'interact' then
+    Result := ERandomEventMode.INTERACT
+  else
+    Result := ERandomEventMode.OFF;
+end;
+
+function TRSRandomEvents.ModeToAction(mode: ERandomEventMode): String;
+begin
+  if mode = ERandomEventMode.INTERACT then
+    Result := 'interact'
+  else
+    Result := 'ignore';
+end;
+
+function TRSRandomEvents.ActionIndex(mode: ERandomEventMode): Int32;
+begin
+  if mode = ERandomEventMode.INTERACT then
+    Result := 1
+  else
+    Result := 0;
 end;
 
 function TRSRandomEvents.GetConfig(): TJSONObject;
@@ -128,34 +312,37 @@ end;
 procedure TRSRandomEvents.LoadSettings();
 var
   json: TJSONObject;
-  mode, action: String;
+  mode: String;
 begin
   if not Self.SupportGenie then
   begin
     Self.Mode := ERandomEventMode.OFF;
+    Self.GenieMode := ERandomEventMode.OFF;
+    Self.CountCheckMode := ERandomEventMode.OFF;
     Exit;
   end;
 
   json := Self.GetConfig();
-  Self.Mode := ERandomEventMode.OFF;
-
-  if json.has('genie') then
-  begin
-    if json.getBoolean('genie') then
-    begin
-      action := 'ignore';
-      if json.has('genie_action') then
-        action := json.getString('genie_action').Lower();
-      if action = 'interact' then
-        Self.Mode := ERandomEventMode.INTERACT;
-    end;
-  end
-  else
-  begin
+  mode := '';
+  if json.has('mode') then
     mode := json.getString('mode').Lower();
-    if mode = 'interact' then
-      Self.Mode := ERandomEventMode.INTERACT;
-  end;
+
+  if json.has('genie_action') then
+    Self.GenieMode := Self.ActionToMode(json.getString('genie_action'))
+  else if mode = 'interact' then
+    Self.GenieMode := ERandomEventMode.INTERACT
+  else
+    Self.GenieMode := ERandomEventMode.OFF;
+
+  if json.has('count_check_action') then
+    Self.CountCheckMode := Self.ActionToMode(json.getString('count_check_action'))
+  else
+    Self.CountCheckMode := ERandomEventMode.OFF;
+
+  if (Self.GenieMode = ERandomEventMode.INTERACT) or (Self.CountCheckMode = ERandomEventMode.INTERACT) then
+    Self.Mode := ERandomEventMode.INTERACT
+  else
+    Self.Mode := ERandomEventMode.OFF;
 
   Self.Skill := ERSLampSkill.FromKey(json.getString('skill'));
   LampHandler.Skill := Self.Skill;
@@ -244,19 +431,29 @@ function TRSRandomEvents.DismissGenie(): Boolean;
 var
   atpa: T2DPointArray;
 begin
-  if not Self.Genie.Find(atpa) then
+  if not Self.FindEventNPC(Self.Genie, atpa) then
     Exit(False);
 
   Self.DebugRandom();
-  Result := Self.Genie.SelectOption(['Dismiss']);
+  Result := Self.HoverEventNPC(Self.Genie, atpa) and ChooseOption.Select('Dismiss');
 end;
 
-function TRSRandomEvents.IsOtherPlayersGenie(): Boolean;
+function TRSRandomEvents.IsOtherPlayersEvent(): Boolean;
 var
   text: String;
 begin
   text := Chat.GetChat().Lower();
-  Result := 'ignoring' in text;
+  Result := ('ignoring' in text) or ('not you' in text);
+end;
+
+function TRSRandomEvents.ChatHasCountCheckFail(): Boolean;
+var
+  text: String;
+begin
+  text := Chat.GetChat().Lower();
+  Result := ('fail my checks' in text) or
+            ('do not have a bank pin' in text) or
+            ('do not have a jagex account' in text);
 end;
 
 procedure TRSRandomEvents.DisableRandomEvents(reason: String);
@@ -267,9 +464,13 @@ begin
   WriteLn('[RandomEvents] ', reason);
 
   Self.Mode := ERandomEventMode.OFF;
+  Self.GenieMode := ERandomEventMode.OFF;
+  Self.CountCheckMode := ERandomEventMode.OFF;
   json := Self.GetConfig();
   json.Put('genie', False);
   json.Put('genie_action', 'ignore');
+  json.Put('count_check', False);
+  json.Put('count_check_action', 'ignore');
   json.Put('mode', 'off');
   WLSettings.SaveConfig();
 
@@ -284,18 +485,18 @@ var
 begin
   WaitUntil(Chat.HasContinue() or LampHandler.HasLamp(lamp), 100, 5000);
 
-  if Self.IsOtherPlayersGenie() then
+  if Self.IsOtherPlayersEvent() then
   begin
-    Self.DisableRandomEvents(GENIE_OTHER_PLAYER_REASON);
+    Self.DisableRandomEvents(RANDOM_EVENT_OTHER_PLAYER_REASON);
     Exit(False);
   end;
 
   timeout.Init(12000);
   while (not timeout.IsFinished()) and Chat.HasContinue() do
   begin
-    if Self.IsOtherPlayersGenie() then
+    if Self.IsOtherPlayersEvent() then
     begin
-      Self.DisableRandomEvents(GENIE_OTHER_PLAYER_REASON);
+      Self.DisableRandomEvents(RANDOM_EVENT_OTHER_PLAYER_REASON);
       Exit(False);
     end;
 
@@ -332,13 +533,13 @@ begin
   if not Self.IgnoreGenie then
     Exit(False);
 
-  if Self.Genie.Find(atpa) then
+  if Self.FindEventNPC(Self.Genie, atpa) then
   begin
     Self.LastGenieSeen := GetTickCount();
     Exit(True);
   end;
 
-  if (Self.LastGenieSeen > 0) and (GetTickCount() - Self.LastGenieSeen < GENIE_GONE_MS) then
+  if (Self.LastGenieSeen > 0) and (GetTickCount() - Self.LastGenieSeen < RANDOM_NPC_GONE_MS) then
     Exit(True);
 
   Self.ResetGenieInstance();
@@ -349,11 +550,11 @@ procedure TRSRandomEvents.NoteGenieFail();
 begin
   Inc(Self.GenieTries);
   Self.LastGenieSeen := GetTickCount();
-  Self.DebugLn('Genie interact failed (' + IntToStr(Self.GenieTries) + '/' + IntToStr(GENIE_MAX_TRIES) + ')');
-  if Self.GenieTries >= GENIE_MAX_TRIES then
+  Self.DebugLn('Genie interact failed (' + IntToStr(Self.GenieTries) + '/' + IntToStr(RANDOM_NPC_MAX_TRIES) + ')');
+  if Self.GenieTries >= RANDOM_NPC_MAX_TRIES then
   begin
     Self.IgnoreGenie := True;
-    Self.DebugLn('Ignoring this Genie after ' + IntToStr(GENIE_MAX_TRIES) + ' failed tries');
+    Self.DebugLn('Ignoring this Genie after ' + IntToStr(RANDOM_NPC_MAX_TRIES) + ' failed tries');
   end;
 end;
 
@@ -365,17 +566,15 @@ begin
   if not Self.HasInventorySpace() then
     Exit(False);
 
-  if not Self.Genie.Find(atpa) then
+  if not Self.FindEventNPC(Self.Genie, atpa) then
+    Exit(False);
+
+  Self.DebugRandom();
+
+  if not Self.ClickEventNPC(Self.Genie, atpa) then
     Exit(False);
 
   attempted := True;
-  Self.DebugRandom();
-
-  if not Self.Genie.Click() then
-  begin
-    Self.DebugLn('Genie click failed');
-    Exit(False);
-  end;
 
   if not Self.AdvanceGenieChat() then
     Exit(False);
@@ -390,6 +589,132 @@ begin
   Result := Self.InteractGenie(attempted);
 end;
 
+function TRSRandomEvents.DismissCountCheck(): Boolean;
+var
+  atpa: T2DPointArray;
+begin
+  if not Self.FindEventNPC(Self.CountCheck, atpa) then
+    Exit(False);
+
+  Self.DebugRandom();
+  Result := Self.HoverEventNPC(Self.CountCheck, atpa) and ChooseOption.Select('Dismiss');
+end;
+
+procedure TRSRandomEvents.ResetCountCheckInstance();
+begin
+  Self.CountCheckTries := 0;
+  Self.IgnoreCountCheck := False;
+  Self.LastCountCheckSeen := 0;
+end;
+
+function TRSRandomEvents.ShouldIgnoreCountCheck(): Boolean;
+var
+  atpa: T2DPointArray;
+begin
+  Result := False;
+  if not Self.IgnoreCountCheck then
+    Exit(False);
+
+  if Self.FindEventNPC(Self.CountCheck, atpa) then
+  begin
+    Self.LastCountCheckSeen := GetTickCount();
+    Exit(True);
+  end;
+
+  if (Self.LastCountCheckSeen > 0) and (GetTickCount() - Self.LastCountCheckSeen < RANDOM_NPC_GONE_MS) then
+    Exit(True);
+
+  Self.ResetCountCheckInstance();
+  Self.DebugLn('Previous Count Check instance gone. Ready for the next one');
+end;
+
+procedure TRSRandomEvents.NoteCountCheckFail();
+begin
+  Inc(Self.CountCheckTries);
+  Self.LastCountCheckSeen := GetTickCount();
+  Self.DebugLn('Count Check interact failed (' + IntToStr(Self.CountCheckTries) + '/' + IntToStr(RANDOM_NPC_MAX_TRIES) + ')');
+  if Self.CountCheckTries >= RANDOM_NPC_MAX_TRIES then
+  begin
+    Self.IgnoreCountCheck := True;
+    Self.DebugLn('Ignoring this Count Check after ' + IntToStr(RANDOM_NPC_MAX_TRIES) + ' failed tries');
+  end;
+end;
+
+function TRSRandomEvents.AdvanceCountCheckChat(out gotLamp: Boolean): Boolean;
+var
+  timeout: TCountdown;
+  lamp: TRSItem;
+  failed: Boolean;
+begin
+  gotLamp := False;
+  failed := False;
+
+  WaitUntil(Chat.HasContinue() or LampHandler.HasLamp(lamp), 100, 5000);
+
+  if Self.IsOtherPlayersEvent() then
+  begin
+    Self.DisableRandomEvents(RANDOM_EVENT_OTHER_PLAYER_REASON);
+    Exit(False);
+  end;
+
+  timeout.Init(12000);
+  while (not timeout.IsFinished()) and Chat.HasContinue() do
+  begin
+    if Self.IsOtherPlayersEvent() then
+    begin
+      Self.DisableRandomEvents(RANDOM_EVENT_OTHER_PLAYER_REASON);
+      Exit(False);
+    end;
+
+    if Self.ChatHasCountCheckFail() then
+      failed := True;
+
+    Chat.ClickContinue(True);
+    Wait(60, 1500, wdLeft);
+  end;
+
+  gotLamp := WaitUntil(LampHandler.HasLamp(lamp), 100, 4000);
+  if failed and (not gotLamp) then
+    Self.DebugLn('Count Check: account failed security checks, no lamp');
+
+  Result := gotLamp or failed;
+end;
+
+function TRSRandomEvents.InteractCountCheck(out attempted: Boolean): Boolean; overload;
+var
+  atpa: T2DPointArray;
+  gotLamp: Boolean;
+begin
+  attempted := False;
+  if not Self.HasInventorySpace() then
+    Exit(False);
+
+  if not Self.FindEventNPC(Self.CountCheck, atpa) then
+    Exit(False);
+
+  Self.DebugRandom();
+
+  if not Self.ClickEventNPC(Self.CountCheck, atpa) then
+    Exit(False);
+
+  attempted := True;
+
+  if not Self.AdvanceCountCheckChat(gotLamp) then
+    Exit(False);
+
+  if gotLamp then
+    Result := Self.UseLamp()
+  else
+    Result := True;
+end;
+
+function TRSRandomEvents.InteractCountCheck(): Boolean; overload;
+var
+  attempted: Boolean;
+begin
+  Result := Self.InteractCountCheck(attempted);
+end;
+
 function TRSRandomEvents.Handle(): Boolean;
 var
   lamp: TRSItem;
@@ -400,43 +725,56 @@ begin
 
   Self.LoadSettings();
 
-  case Self.Mode of
-    ERandomEventMode.OFF:
+  if LampHandler.HasLamp(lamp) then
+    Exit(Self.UseLamp());
+
+  if Self.Mode = ERandomEventMode.OFF then
+    Exit(False);
+
+  if not Self.ShouldScan() then
+    Exit(False);
+
+  if Self.Mode = ERandomEventMode.DISMISS then
+  begin
+    Result := Self.DismissGenie() or Self.DismissCountCheck();
+    if Result then
+      Self.MarkEventHandled();
+    Exit;
+  end;
+
+  if (Self.GenieMode = ERandomEventMode.INTERACT) and (not Self.ShouldIgnoreGenie()) then
+  begin
+    if Self.HasInventorySpace() then
+    begin
+      Result := Self.InteractGenie(attempted);
+      if Self.GenieMode <> ERandomEventMode.INTERACT then
+        Exit(False);
+      if Result then
+      begin
+        Self.ResetGenieInstance();
+        Self.MarkEventHandled();
+        Exit;
+      end
+      else if attempted then
+        Self.NoteGenieFail();
+    end;
+  end;
+
+  if (Self.CountCheckMode = ERandomEventMode.INTERACT) and (not Self.ShouldIgnoreCountCheck()) then
+  begin
+    if not Self.HasInventorySpace() then
       Exit(False);
-    ERandomEventMode.DISMISS:
-      begin
-        if not Self.ShouldScan() then
-          Exit(False);
 
-        Result := Self.DismissGenie();
-        if Result then
-          Self.MarkEventHandled();
-      end;
-    ERandomEventMode.INTERACT:
-      begin
-        if LampHandler.HasLamp(lamp) then
-          Exit(Self.UseLamp());
-
-        if Self.ShouldIgnoreGenie() then
-          Exit(False);
-
-        if not Self.ShouldScan() then
-          Exit(False);
-
-        if not Self.HasInventorySpace() then
-          Exit(False);
-
-        Result := Self.InteractGenie(attempted);
-        if Self.Mode <> ERandomEventMode.INTERACT then
-          Exit(False);
-        if Result then
-        begin
-          Self.ResetGenieInstance();
-          Self.MarkEventHandled();
-        end
-        else if attempted then
-          Self.NoteGenieFail();
-      end;
+    Result := Self.InteractCountCheck(attempted);
+    if Self.CountCheckMode <> ERandomEventMode.INTERACT then
+      Exit(False);
+    if Result then
+    begin
+      Self.ResetCountCheckInstance();
+      Self.MarkEventHandled();
+    end
+    else if attempted then
+      Self.NoteCountCheckFail();
   end;
 end;
 
@@ -528,45 +866,31 @@ var
   json: TJSONObject;
   form: TForm;
   title, subtitle: TLabel;
-  genieCheck, countCheck: TCheckBox;
   genieAction, countAction, lampSkill: TLabeledComboBox;
   closeButton: TButton;
-  genieEnabled: Boolean;
-  genieActionIdx, skillIdx: Int32;
-  mode: String;
+  genieMode, countMode: ERandomEventMode;
+  skillIdx: Int32;
 begin
   Self.ShowWarningIfNeeded();
 
   json := Self.GetConfig();
-  genieEnabled := False;
-  genieActionIdx := 0;
+  genieMode := ERandomEventMode.OFF;
+  countMode := ERandomEventMode.OFF;
   skillIdx := Self.SkillIndexFromKey(json.getString('skill'));
 
-  if json.has('genie') then
-  begin
-    genieEnabled := json.getBoolean('genie');
-    if json.has('genie_action') and (json.getString('genie_action').Lower() = 'interact') then
-      genieActionIdx := 1;
-  end
-  else
-  begin
-    mode := json.getString('mode').Lower();
-    case mode of
-      'dismiss':
-        genieEnabled := True;
-      'interact':
-        begin
-          genieEnabled := True;
-          genieActionIdx := 1;
-        end;
-    end;
-  end;
+  if json.has('genie_action') then
+    genieMode := Self.ActionToMode(json.getString('genie_action'))
+  else if json.has('mode') and (json.getString('mode').Lower() = 'interact') then
+    genieMode := ERandomEventMode.INTERACT;
+
+  if json.has('count_check_action') then
+    countMode := Self.ActionToMode(json.getString('count_check_action'));
 
   with form do
   begin
     Init(nil);
     SetCaption('Random Events');
-    SetBounds(0, 0, TControl.AdjustToDPI(560), TControl.AdjustToDPI(340));
+    SetBounds(0, 0, TControl.AdjustToDPI(560), TControl.AdjustToDPI(280));
     SetPosition(poScreenCenter);
   end;
 
@@ -588,22 +912,16 @@ begin
     SetLeft(TControl.AdjustToDPI(20));
     SetTop(TControl.AdjustToDPI(40));
     SetWidth(TControl.AdjustToDPI(520));
-    SetCaption('Tick the events you want the script to handle.');
+    SetCaption('Ignore leaves the NPC alone. Interact talks to them and uses any lamp they give.');
   end;
 
-  genieCheck.Create(form, 'Genie', 'Leave the NPC alone or talk to them.', [20, 72], [200, 22], True);
-  genieCheck.SetChecked(genieEnabled);
+  Self.SetupFormCombo(genieAction, form, 'Genie', 20, 72, 240, BASH_RANDOM_EVENT_MODES, Self.ActionIndex(genieMode), True);
+  genieAction.SetTooltip('Ignore does nothing. Interact talks to the Genie and rubs the lamp.');
+  Self.SetupFormCombo(lampSkill, form, 'Lamp XP skill', 280, 72, 240, BASH_LAMP_SKILL_LABELS, skillIdx, True);
+  lampSkill.SetTooltip('Skill used when a Genie or Count Check lamp is rubbed.');
 
-  Self.SetupFormCombo(genieAction, form, 'Action', 20, 98, 240, BASH_RANDOM_EVENT_MODES, genieActionIdx, True);
-  genieAction.SetTooltip('Ignore does nothing to the NPC. Interact talks to them and uses the lamp.');
-  Self.SetupFormCombo(lampSkill, form, 'Lamp XP skill', 280, 98, 240, BASH_LAMP_SKILL_LABELS, skillIdx, True);
-  lampSkill.SetTooltip('Skill used when a Genie lamp is rubbed.');
-
-  countCheck.Create(form, 'Count Check (coming soon)', '', [20, 172], [280, 22], True);
-  countCheck.SetChecked(False);
-  countCheck.SetEnabled(False);
-
-  Self.SetupFormCombo(countAction, form, 'Action', 20, 198, 240, BASH_RANDOM_EVENT_MODES, 0, False);
+  Self.SetupFormCombo(countAction, form, 'Count Check', 20, 146, 240, BASH_RANDOM_EVENT_MODES, Self.ActionIndex(countMode), True);
+  countAction.SetTooltip('Ignore does nothing. Interact talks to Count Check. A lamp is only given if the account has a Jagex Account and Bank PIN.');
 
   with closeButton do
   begin
@@ -613,24 +931,28 @@ begin
     SetWidth(TControl.AdjustToDPI(120));
     SetHeight(TControl.AdjustToDPI(28));
     SetLeft((form.GetWidth() - TControl.AdjustToDPI(120)) div 2);
-    SetTop(TControl.AdjustToDPI(280));
+    SetTop(TControl.AdjustToDPI(220));
     SetOnClick(@RandomEventsFormCloseClicked);
   end;
 
   form.ShowModal();
 
-  json.Put('genie', genieCheck.IsChecked());
   if genieAction.GetItemIndex() = 1 then
     json.Put('genie_action', 'interact')
   else
     json.Put('genie_action', 'ignore');
-  json.Put('count_check', False);
-  json.Put('count_check_action', 'ignore');
+  json.Put('genie', genieAction.GetItemIndex() = 1);
+
+  if countAction.GetItemIndex() = 1 then
+    json.Put('count_check_action', 'interact')
+  else
+    json.Put('count_check_action', 'ignore');
+  json.Put('count_check', countAction.GetItemIndex() = 1);
 
   if (lampSkill.GetItemIndex() >= 0) and (lampSkill.GetItemIndex() <= High(BASH_LAMP_SKILL_KEYS)) then
     json.Put('skill', BASH_LAMP_SKILL_KEYS[lampSkill.GetItemIndex()]);
 
-  if genieCheck.IsChecked() and (genieAction.GetItemIndex() = 1) then
+  if (genieAction.GetItemIndex() = 1) or (countAction.GetItemIndex() = 1) then
     json.Put('mode', 'interact')
   else
     json.Put('mode', 'off');
@@ -644,9 +966,13 @@ begin
   Self.Name := 'RandomEvents';
   Self.Mode := ERandomEventMode.OFF;
   Self.SupportGenie := False;
+  Self.GenieMode := ERandomEventMode.OFF;
+  Self.CountCheckMode := ERandomEventMode.OFF;
   Self.Skill := ERSLampSkill.WOODCUTTING;
   Self.ResetGenieInstance();
+  Self.ResetCountCheckInstance();
   Self.SetupGenie();
+  Self.SetupCountCheck();
 end;
 
 var

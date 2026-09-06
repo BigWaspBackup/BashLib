@@ -80,7 +80,7 @@ end;
 
 procedure TAntiban.AdjustZoom(); override;
 var
-  zoom, newZoom, span, minDelta: Int32;
+  zoom, newZoom, span, minDelta, mode: Int32;
   attempts: Int32;
 begin
   if Self.MaxZoom = 0 then
@@ -95,7 +95,7 @@ begin
 
   if Self.MinZoom = Self.MaxZoom then
   begin
-    Self.DebugLn('Adjust zoom: ' + ToString(Self.MinZoom));
+    WriteLn('[ZOOM] Adjust zoom: ', Self.MinZoom);
     RSMouseZoom.SetZoomLevel(Self.MinZoom);
     Exit;
   end;
@@ -118,7 +118,10 @@ begin
 
     if zoom < 0 then
     begin
-      newZoom := SRL.SkewedRand((Self.MinZoom + Self.MaxZoom) div 2, Self.MinZoom, Self.MaxZoom);
+      newZoom := EnsureRange(
+        SRL.SkewedRand((Self.MinZoom + Self.MaxZoom) div 2, Self.MinZoom, Self.MaxZoom),
+        Self.MinZoom, Self.MaxZoom
+      );
       WriteLn('[ZOOM] Establishing via mouse wheel, target=', newZoom);
       RSMouseZoom.SetZoomLevel(newZoom);
       Exit;
@@ -131,6 +134,11 @@ begin
     end;
   end;
 
+  if InRange(zoom, Self.MinZoom, Self.MaxZoom) then
+    mode := zoom
+  else
+    mode := (Self.MinZoom + Self.MaxZoom) div 2;
+
   repeat
     Inc(attempts);
     if attempts > 100 then
@@ -139,10 +147,10 @@ begin
       Break;
     end;
 
-    newZoom := SRL.SkewedRand(zoom, Self.MinZoom, Self.MaxZoom);
+    newZoom := EnsureRange(SRL.SkewedRand(mode, Self.MinZoom, Self.MaxZoom), Self.MinZoom, Self.MaxZoom);
   until (not InRange(zoom, Self.MinZoom, Self.MaxZoom)) or (Abs(zoom - newZoom) >= minDelta);
 
-  Self.DebugLn('Adjust zoom: ' + ToString(newZoom));
+  WriteLn('[ZOOM] Adjust zoom: target=', newZoom, ' from=', zoom, ' range=', Self.MinZoom, '-', Self.MaxZoom);
   RSMouseZoom.SetZoomLevel(newZoom);
 end;
 

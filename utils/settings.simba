@@ -247,6 +247,12 @@ begin
     modified := True;
   end;
 
+  if not Self.GetObject('antiban').getJSONObject('random_events').has('count_check_action') then
+  begin
+    Self.GetObject('antiban').getJSONObject('random_events').Put('count_check_action', 'ignore');
+    modified := True;
+  end;
+
 
   if not Self.Has('reports') then
   begin
