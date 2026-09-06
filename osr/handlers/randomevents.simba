@@ -55,7 +55,7 @@ type
 
   TRSRandomEvents = record(TSRLBaseRecord)
     Mode: ERandomEventMode;
-    SupportGenie: Boolean;
+    Enabled: Boolean;
     Skill: ERSLampSkill;
     Genie: TRSNPC;
     CountCheck: TRSNPC;
@@ -141,9 +141,14 @@ begin
   end;
 end;
 
+procedure TRSRandomEvents.Enable();
+begin
+  Self.Enabled := True;
+end;
+
 procedure TRSRandomEvents.EnableGenie();
 begin
-  Self.SupportGenie := True;
+  Self.Enable();
 end;
 
 function TRSRandomEvents.NearbyNPCDots(): TPointArray;
@@ -314,7 +319,7 @@ var
   json: TJSONObject;
   mode: String;
 begin
-  if not Self.SupportGenie then
+  if not Self.Enabled then
   begin
     Self.Mode := ERandomEventMode.OFF;
     Self.GenieMode := ERandomEventMode.OFF;
@@ -720,7 +725,7 @@ var
   lamp: TRSItem;
   attempted: Boolean;
 begin
-  if not Self.SupportGenie then
+  if not Self.Enabled then
     Exit(False);
 
   Self.LoadSettings();
@@ -965,7 +970,7 @@ procedure TRSRandomEvents.Setup();
 begin
   Self.Name := 'RandomEvents';
   Self.Mode := ERandomEventMode.OFF;
-  Self.SupportGenie := False;
+  Self.Enabled := False;
   Self.GenieMode := ERandomEventMode.OFF;
   Self.CountCheckMode := ERandomEventMode.OFF;
   Self.Skill := ERSLampSkill.WOODCUTTING;
@@ -980,7 +985,7 @@ var
 
 function TAntiban.DismissRandom(): Boolean; override;
 begin
-  if not RandomEvents.SupportGenie then
+  if not RandomEvents.Enabled then
     Exit(False);
 
   Result := RandomEvents.Handle();

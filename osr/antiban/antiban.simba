@@ -95,7 +95,7 @@ begin
 
   if Self.MinZoom = Self.MaxZoom then
   begin
-    WriteLn('[ZOOM] Adjust zoom: ', Self.MinZoom);
+    Self.DebugLn('Adjust zoom: ' + ToString(Self.MinZoom));
     RSMouseZoom.SetZoomLevel(Self.MinZoom);
     Exit;
   end;
@@ -150,7 +150,7 @@ begin
     newZoom := EnsureRange(SRL.SkewedRand(mode, Self.MinZoom, Self.MaxZoom), Self.MinZoom, Self.MaxZoom);
   until (not InRange(zoom, Self.MinZoom, Self.MaxZoom)) or (Abs(zoom - newZoom) >= minDelta);
 
-  WriteLn('[ZOOM] Adjust zoom: target=', newZoom, ' from=', zoom, ' range=', Self.MinZoom, '-', Self.MaxZoom);
+  Self.DebugLn('Adjust zoom: ' + ToString(newZoom));
   RSMouseZoom.SetZoomLevel(newZoom);
 end;
 
