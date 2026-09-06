@@ -1,3 +1,13 @@
+# [8.6.0](https://github.com/BigWaspBackup/BashLib/compare/v8.5.9...v8.6.0) (2026-09-06)
+
+
+### Features
+
+* Random Event Handler for count check added, fixes for zoom ([22a56a9](https://github.com/BigWaspBackup/BashLib/commit/22a56a9d8db6918f08082aef447888082dc194cd))
+* Random event handler for Genie/Count Check enabled on supported scripts, Zoom fixes ([672fd37](https://github.com/BigWaspBackup/BashLib/commit/672fd37cbf7480ebfc58a65b537d9d4e90ff9e32))
+
+
+
 ## [8.5.9](https://github.com/BigWaspBackup/BashLib/compare/v8.5.8...v8.5.9) (2026-09-03)
 
 
@@ -31,15 +41,6 @@
 ### Bug Fixes
 
 * Stop At Level no longer saves to profile, now session only. ([0defcbf](https://github.com/BigWaspBackup/BashLib/commit/0defcbffd5719dcb8a3952ecdec1744f5285a731))
-
-
-
-## [8.5.5](https://github.com/BigWaspBackup/BashLib/compare/v8.5.4...v8.5.5) (2026-08-25)
-
-
-### Bug Fixes
-
-* BETA Handler for Genie Random event now enabled, Moved BASH GUI code to the include. ([907f881](https://github.com/BigWaspBackup/BashLib/commit/907f88138fb7b289b2a98cfe3642643609218b5d))
 
 
 
