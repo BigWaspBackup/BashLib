@@ -136,6 +136,7 @@ type RSTeleportsV2 = record(TSRLBaseRecord) class var
     KARAMJA_GLOVES_GEM_MINE: TTeleportLocation;
     KARAMJA_GLOVES_DURADEL: TTeleportLocation;
     FALADOR_FARM_PATCH: TTeleportLocation;
+    BURGH_DE_ROTT: TTeleportLocation;
     AIQ_MUDSKIPPER_POINT: TTeleportLocation;
     AIR_ISLAND_SOUTHEAST_OF_ARDOUGNE: TTeleportLocation;
     AIS_VARLAMORE_AUBURN_VALLEY: TTeleportLocation;
@@ -452,6 +453,7 @@ begin
   RSTeleportsV2.KARAMJA_GLOVES_GEM_MINE := setupTeleportLocation(ETeleportType.DIARY_ITEM, "Karamja Gloves", "Gem Mine", [4212, 39122]);
   RSTeleportsV2.KARAMJA_GLOVES_DURADEL := setupTeleportLocation(ETeleportType.DIARY_ITEM, "Karamja Gloves", "Duradel", []);
   RSTeleportsV2.FALADOR_FARM_PATCH := setupTeleportLocation(ETeleportType.DIARY_ITEM, "Explorer's Ring", "Teleport", [8116, 37210]);
+  RSTeleportsV2.BURGH_DE_ROTT := setupTeleportLocation(ETeleportType.DIARY_ITEM, "Morytania legs", "Burgh de Rott", [9828, 37506]);
   RSTeleportsV2.AIQ_MUDSKIPPER_POINT := setupTeleportLocation(ETeleportType.FAIRY_RING, "AIQ", [7890, 37374]);
   RSTeleportsV2.AIS_VARLAMORE_AUBURN_VALLEY := setupTeleportLocation(ETeleportType.FAIRY_RING, "AIS", [1620,37134]);
   RSTeleportsV2.AIR_ISLAND_SOUTHEAST_OF_ARDOUGNE := setupTeleportLocation(ETeleportType.FAIRY_RING, "AIR", [6706, 37442]);
@@ -651,6 +653,7 @@ begin
     RSTeleportsV2.KARAMJA_GLOVES_GEM_MINE,
     RSTeleportsV2.KARAMJA_GLOVES_DURADEL,
     RSTeleportsV2.FALADOR_FARM_PATCH,
+    RSTeleportsV2.BURGH_DE_ROTT,
     RSTeleportsV2.AIQ_MUDSKIPPER_POINT,
     RSTeleportsV2.AIR_ISLAND_SOUTHEAST_OF_ARDOUGNE,
     RSTeleportsV2.AIS_VARLAMORE_AUBURN_VALLEY,

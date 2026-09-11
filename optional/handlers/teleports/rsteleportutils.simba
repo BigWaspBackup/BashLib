@@ -132,7 +132,8 @@ begin
   Result := [
     setupDiaryTeleportItem('ardougne cloak'),
     setupDiaryTeleportItem('karamja gloves'),
-    setupDiaryTeleportItem("explorer's ring")
+    setupDiaryTeleportItem("explorer's ring"),
+    setupDiaryTeleportItem('morytania legs')
   ];
 end;
 

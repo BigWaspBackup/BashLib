@@ -533,7 +533,7 @@ begin
   Self.WebhookTestPrefix := 'Test message from BASH';
   Self.HasFarm := False;
   Self.HasAIChat := False;
-  Self.HasWorldHopping := True;
+  Self.HasWorldHopping := True; // Antiban tab. Runtime: WorldHopper.SetupTimedHopping(ENABLEWORLDHOPPING, WORLDHOPINTERVAL)
   Self.HasMaxActions := True;
   Self.HasStopAtLevel := False;
   Self.HasRandomEvents := False;
@@ -1255,7 +1255,7 @@ begin
     Self.AddCheck(Self.AntibanSection, Self.EnableWorldHoppingCheckBox, 'cb_bash_worldhop',
       'Enable world hopping', 24, y,
       StrToBoolDef(Self.ReadAntibanINI('EnableWorldHopping', 'false'), False));
-    Self.EnableWorldHoppingCheckBox.SetTooltip('Hop worlds on a timer. Needs at least 2 worlds saved on the account.');
+    Self.EnableWorldHoppingCheckBox.SetTooltip('Hop worlds every X minutes with ±10% variance. Needs at least 2 worlds saved on the account.');
     Self.EnableWorldHoppingCheckBox.CheckBox.SetOnChange(@Self.WorldHoppingCheckboxChanged);
     y += 28;
     Self.AddEdit(Self.AntibanSection, Self.WorldHopIntervalInput, 'le_bash_hop_interval',

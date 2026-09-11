@@ -17,15 +17,30 @@ type
 type
   TRSWorldHopper = record(TRSInterface)
     SILVER, YELLOW: Int32;
-    ReadyTime: UInt64;
+    ServerMessageBox: TBox;
+    Cooldown: TCountDown;
+    TimedHopEnabled: Boolean;
+    TimedHopInterval: Int32;
+    TimedHopVariation: Int32;
+    NextTimedHopTime: UInt64;
+    LastTimedHopTime: UInt64;
+    TimedHopsCompleted: Int32;
   end;
 ```
-WorldHopper record.
+WorldHopper record. Timed hop fields are used by **SetupTimedHopping** / **DoTimedHop**.
+Call **TryHopOnBreak** from `TBaseScript.DoAntiban` when both break and sleep checks are allowed.
 *)
   TRSWorldHopper = record(TRSInterface)
     SILVER, YELLOW: Int32;
     ServerMessageBox: TBox;
     Cooldown: TCountDown;
+    TimedHopEnabled: Boolean;
+    TimedHopInterval: Int32;
+    TimedHopVariation: Int32;
+    NextTimedHopTime: UInt64;
+    LastTimedHopTime: UInt64;
+    TimedHopsCompleted: Int32;
+    JustHopped: Boolean;
   end;
 
 (*
@@ -44,6 +59,8 @@ begin
   Self.YELLOW := $00F0F0;
 
   Self.Cooldown.Setup(8000);
+  Self.TimedHopInterval := 45;
+  Self.TimedHopVariation := 10;
 end;
 
 procedure TRSWorldHopper.SetupAlignment(); overload;
@@ -367,6 +384,220 @@ begin
 
   Self.DebugLn('Timed out (timeOut=' + ToStr(timeOut) + 'ms)');
   targetWorlds.Remove(next);
+end;
+
+(*
+## TRSWorldHopper.SetupTimedHopping
+```pascal
+procedure TRSWorldHopper.SetupTimedHopping(enabled: Boolean; intervalMinutes: Int32 = 45; variationPercent: Int32 = 10);
+```
+Timer-based world hopping for the Antiban GUI. Call once after login, then
+**TryHopOnBreak** from `TBaseScript.DoAntiban` so hops only fire at the same
+safe points as breaks and sleeps.
+
+Needs at least 2 worlds on the account. Interval is minutes, with ±variationPercent.
+
+Example:
+```pascal
+Self.HasWorldHopping := True; // default in TBASHPremiumGUI.InitGUI
+WorldHopper.SetupTimedHopping(ENABLEWORLDHOPPING, WORLDHOPINTERVAL);
+
+procedure TMyScript.DoAntiban(checkBreaks, checkSleeps: Boolean); override;
+begin
+  WorldHopper.TryHopOnBreak(checkBreaks, checkSleeps);
+  inherited;
+end;
+```
+*)
+function TRSWorldHopper.GetRandomTimedHopDelay(): UInt64;
+var
+  baseInterval: UInt64;
+  variation: Int32;
+begin
+  if Self.TimedHopInterval < 1 then
+    Self.TimedHopInterval := 45;
+
+  variation := Self.TimedHopVariation;
+  if variation < 0 then
+    variation := 10;
+
+  baseInterval := UInt64(Self.TimedHopInterval) * ONE_MINUTE;
+  Result := baseInterval + Round(baseInterval * (Random(-variation, variation) / 100.0));
+  if Result < ONE_MINUTE then
+    Result := ONE_MINUTE;
+end;
+
+procedure TRSWorldHopper.ScheduleNextTimedHop();
+begin
+  Self.NextTimedHopTime := GetTickCount() + Self.GetRandomTimedHopDelay();
+end;
+
+procedure TRSWorldHopper.ScheduleTimedHopRetry();
+begin
+  Self.NextTimedHopTime := GetTickCount() + (2 * ONE_MINUTE);
+end;
+
+function TRSWorldHopper.GetTimedHopRange(): String;
+var
+  variation, minTime, maxTime: Int32;
+begin
+  variation := Self.TimedHopVariation;
+  if variation <= 0 then
+    variation := 10;
+  minTime := Round(Self.TimedHopInterval * (100 - variation) / 100.0);
+  maxTime := Round(Self.TimedHopInterval * (100 + variation) / 100.0);
+  Result := IntToStr(minTime) + '-' + IntToStr(maxTime) + ' min';
+end;
+
+function TRSWorldHopper.TimeUntilTimedHop(): String;
+begin
+  if (not Self.TimedHopEnabled) or (Self.NextTimedHopTime = 0) then
+    Exit('disabled');
+  if GetTickCount() >= Self.NextTimedHopTime then
+    Exit('ready');
+  Result := SRL.MsToTime(Self.NextTimedHopTime - GetTickCount(), Time_Short);
+end;
+
+procedure TRSWorldHopper.SetupTimedHopping(enabled: Boolean; intervalMinutes: Int32 = 45; variationPercent: Int32 = 10);
+begin
+  Self.TimedHopEnabled := enabled;
+  Self.TimedHopInterval := intervalMinutes;
+  Self.TimedHopVariation := variationPercent;
+  Self.TimedHopsCompleted := 0;
+  Self.LastTimedHopTime := 0;
+  Self.NextTimedHopTime := 0;
+
+  WriteLn('[WORLDHOP] Setting up world hopping...');
+  if not Self.TimedHopEnabled then
+  begin
+    WriteLn('[WORLDHOP] World hopping is disabled');
+    Exit;
+  end;
+
+  if Length(Login.GetPlayer().Worlds) < 2 then
+  begin
+    WriteLn('[WORLDHOP] Need at least 2 worlds in player setup or disable world hopping');
+    Logout.ClickLogout();
+    TerminateScript('Configure at least 2 worlds or disable world hopping.');
+  end;
+
+  Self.ScheduleNextTimedHop();
+  WriteLn('[WORLDHOP] Enabled. Next hop in: ' + Self.TimeUntilTimedHop());
+end;
+
+function TRSWorldHopper.ShouldTimedHop(): Boolean;
+begin
+  Result := Self.TimedHopEnabled and (Self.NextTimedHopTime > 0) and
+            (GetTickCount() >= Self.NextTimedHopTime);
+end;
+
+procedure TRSWorldHopper.CloseInterfacesForHop();
+begin
+  if DepositBox.IsOpen() then
+    DepositBox.Close();
+  if Bank.IsOpen() then
+    Bank.Close();
+end;
+
+function TRSWorldHopper.HopToRandomPlayerWorld(): Boolean;
+var
+  currentWorld, targetWorld, i: Int32;
+  playerWorlds, availableWorlds: TIntegerArray;
+begin
+  Result := False;
+  Self.CloseInterfacesForHop();
+
+  playerWorlds := Self.FilterValidWorlds(Login.GetPlayer().Worlds);
+  if Length(playerWorlds) = 0 then
+  begin
+    WriteLn('[WORLDHOP] No valid player worlds to hop to');
+    Exit;
+  end;
+
+  if not Logout.Open() then
+  begin
+    WriteLn('[WORLDHOP] Failed to open logout menu');
+    Exit;
+  end;
+
+  if not Logout.IsWorldSwitcherOpen() then
+    Logout.GetButton(ERSLogoutButton.WORLD_SWITCHER).Click(MOUSE_LEFT);
+  WaitUntil((currentWorld := Self.GetCurrentWorld()) <> 0, 200, 12000);
+
+  availableWorlds := [];
+  for i := 0 to High(playerWorlds) do
+    if playerWorlds[i] <> currentWorld then
+      availableWorlds += playerWorlds[i];
+
+  if Length(availableWorlds) = 0 then
+  begin
+    WriteLn('[WORLDHOP] No other worlds available');
+    Exit;
+  end;
+
+  targetWorld := availableWorlds[Random(Length(availableWorlds))];
+  WriteLn('[WORLDHOP] Hopping to world ', targetWorld);
+  Result := Self.Hop([targetWorld]);
+  if Result then
+    WriteLn('[WORLDHOP] Hopped to world ', targetWorld)
+  else
+    WriteLn('[WORLDHOP] Hop to ', targetWorld, ' failed');
+end;
+
+function TRSWorldHopper.DoTimedHop(): Boolean;
+begin
+  Result := False;
+  Self.JustHopped := False;
+  if not Self.TimedHopEnabled then
+    Exit;
+
+  WriteLn('[WORLDHOP] Time to hop worlds');
+  Result := Self.HopToRandomPlayerWorld();
+  if Result then
+  begin
+    Inc(Self.TimedHopsCompleted);
+    Self.LastTimedHopTime := GetTickCount();
+    Self.JustHopped := True;
+    Self.ScheduleNextTimedHop();
+    WL.Activity.Restart();
+    WriteLn('[WORLDHOP] Next hop in: ' + Self.TimeUntilTimedHop());
+  end
+  else
+  begin
+    if Length(Self.FilterValidWorlds(Login.GetPlayer().Worlds)) < 2 then
+    begin
+      WriteLn('[WORLDHOP] No other worlds available, disabling world hopping');
+      Self.TimedHopEnabled := False;
+      Exit;
+    end;
+
+    Self.ScheduleTimedHopRetry();
+    WriteLn('[WORLDHOP] Retry in 2 minutes');
+  end;
+end;
+
+function TRSWorldHopper.TryTimedHop(): Boolean;
+begin
+  if not Self.ShouldTimedHop() then
+    Exit(False);
+  Result := Self.DoTimedHop();
+end;
+
+(*
+## TRSWorldHopper.TryHopOnBreak
+```pascal
+function TRSWorldHopper.TryHopOnBreak(checkBreaks, checkSleeps: Boolean): Boolean;
+```
+Hops when the timed hop is due **and** `DoAntiban` is allowing both breaks and
+sleeps (`DoAntiban(True, True)`). Call from a `DoAntiban` override before
+`inherited`. Combat / mid-action `DoAntiban(True, False)` skips the hop.
+*)
+function TRSWorldHopper.TryHopOnBreak(checkBreaks, checkSleeps: Boolean): Boolean;
+begin
+  Self.JustHopped := False;
+  if not (checkBreaks and checkSleeps) then
+    Exit(False);
+  Result := Self.TryTimedHop();
 end;
 
 var

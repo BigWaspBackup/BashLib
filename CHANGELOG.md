@@ -1,3 +1,11 @@
+# [Unreleased]
+
+### Features
+
+* Timed world hopping on the GameTabs `WorldHopper` include (`SetupTimedHopping`, `ShouldTimedHop`, `DoTimedHop`, `TryHopOnBreak`) so scripts can reuse the Antiban GUI interval + variance without copying hop logic
+* `TryHopOnBreak` hops from `DoAntiban(True, True)` at the same safe points as breaks/sleeps
+
+
 # [8.6.0](https://github.com/BigWaspBackup/BashLib/compare/v8.5.9...v8.6.0) (2026-09-06)
 
 
