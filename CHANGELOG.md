@@ -1,9 +1,10 @@
-# [Unreleased]
+## [8.6.1](https://github.com/BigWaspBackup/BashLib/compare/v8.6.0...v8.6.1) (2026-09-11)
 
-### Features
 
-* Timed world hopping on the GameTabs `WorldHopper` include (`SetupTimedHopping`, `ShouldTimedHop`, `DoTimedHop`, `TryHopOnBreak`) so scripts can reuse the Antiban GUI interval + variance without copying hop logic
-* `TryHopOnBreak` hops from `DoAntiban(True, True)` at the same safe points as breaks/sleeps
+### Bug Fixes
+
+* Updated latest game assets; Worldhopper Antiban now built into libs; added more teleport locations. ([6eba8de](https://github.com/BigWaspBackup/BashLib/commit/6eba8defa8a8e64a2ad7d93d0f511e9f841a3765))
+
 
 
 # [8.6.0](https://github.com/BigWaspBackup/BashLib/compare/v8.5.9...v8.6.0) (2026-09-06)
@@ -40,15 +41,6 @@
 ### Bug Fixes
 
 * Account manager add profile fixes ([3c27f3f](https://github.com/BigWaspBackup/BashLib/commit/3c27f3f947a804cd20f910c6da037a2090e79ff7))
-
-
-
-## [8.5.6](https://github.com/BigWaspBackup/BashLib/compare/v8.5.5...v8.5.6) (2026-09-01)
-
-
-### Bug Fixes
-
-* Stop At Level no longer saves to profile, now session only. ([0defcbf](https://github.com/BigWaspBackup/BashLib/commit/0defcbffd5719dcb8a3952ecdec1744f5285a731))
 
 
 
