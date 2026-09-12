@@ -1000,42 +1000,112 @@ begin
 end;
 
 (*
-## SettingsHandler.IsBashProfileActive()
+## SettingsHandler.HasBashPluginsEnabled()
 ```pascal
-function TSettingsHandler.IsBashProfileActive(out activeName: String): Boolean;
+function TSettingsHandler.HasBashPluginsEnabled(configContent: String): Boolean;
 ```
-Returns True when the currently active RuneLite profile is a BASH-installed
-profile. Accepts the current 10-character launcher name and the older
-8-character name, and confirms the profile file includes the BASH launcher
-fingerprint (`runelite.totemfletchingplugin=true` and/or
-`runelite.woodcuttingplugin=true`).
+Returns True when a profile properties file has the plugins the B.A.S.H
+Launcher enables: Woodcutting, Fishing, Vale Totems (Totem Fletching), and
+Agility.
 *)
-function TSettingsHandler.IsBashProfileActive(out activeName: String): Boolean;
+function TSettingsHandler.HasBashPluginsEnabled(configContent: String): Boolean;
+begin
+  Result := (Pos('runelite.woodcuttingplugin=true', configContent) > 0) and
+            (Pos('runelite.fishingplugin=true', configContent) > 0) and
+            (Pos('runelite.totemfletchingplugin=true', configContent) > 0) and
+            (Pos('runelite.agilityplugin=true', configContent) > 0);
+end;
+
+(*
+## SettingsHandler.IsBashProfileInstalled()
+```pascal
+function TSettingsHandler.IsBashProfileInstalled(out profileName: String): Boolean;
+```
+Returns True when a BASH launcher RuneLite profile is installed (8 or 10
+character name) and that profile has Woodcutting, Fishing, Vale Totems, and
+Agility enabled. Does not require the profile to be the currently active one.
+*)
+function TSettingsHandler.IsBashProfileInstalled(out profileName: String): Boolean;
 var
-  profileFile, fullPath, content: String;
+  path, jsonContent, idStr, profileFile, fullPath, content, name: String;
+  profilesJson: TJSONObject;
+  profilesArray: TJSONArray;
+  profileEntry: TJSONObject;
+  i, profileCount: Int32;
 begin
   Result := False;
-  activeName := '';
+  profileName := '';
 
   if Self.Name = '' then
     Self.Setup();
 
-  if not Self.GetActiveRuneLiteProfile(activeName, profileFile) then
+  path := Self.GetProfilesPath();
+  jsonContent := ReadFileContents(path + DirectorySeparator + 'profiles.json');
+  if jsonContent = '' then
     Exit;
 
-  if not Self.IsBashProfileName(activeName) then
+  try
+    profilesJson.Init(jsonContent);
+  except
     Exit;
+  end;
 
-  fullPath := Self.GetProfilesPath() + DirectorySeparator + profileFile;
-  content := ReadFileContents(fullPath);
-  if content = '' then
-    Exit;
+  try
+    try
+      profilesArray := profilesJson.getJSONArray('profiles');
+    except
+      Exit;
+    end;
 
-  if (Pos('runelite.totemfletchingplugin=true', content) = 0) and
-     (Pos('runelite.woodcuttingplugin=true', content) = 0) then
-    Exit;
+    profileCount := profilesArray.length();
+    for i := 0 to profileCount - 1 do
+    begin
+      try
+        profileEntry := profilesArray.getJSONObject(i);
+        name := profileEntry.getString('name');
+        if (Pos('$', name) > 0) or (not Self.IsBashProfileName(name)) then
+          Continue;
 
-  Result := True;
+        if profileName = '' then
+          profileName := name;
+
+        try
+          idStr := ToStr(profileEntry.getInt('id'));
+        except
+          idStr := profileEntry.getString('id');
+        end;
+
+        profileFile := name + '-' + idStr + '.properties';
+        fullPath := path + DirectorySeparator + profileFile;
+        if not FileExists(fullPath) then
+          Continue;
+
+        content := ReadFileContents(fullPath);
+        if not Self.HasBashPluginsEnabled(content) then
+          Continue;
+
+        profileName := name;
+        Self.ActiveProfile := name;
+        Self.ActiveProfileFile := profileFile;
+        Exit(True);
+      except
+      end;
+    end;
+  finally
+    profilesJson.Free();
+  end;
+end;
+
+(*
+## SettingsHandler.IsBashProfileActive()
+```pascal
+function TSettingsHandler.IsBashProfileActive(out activeName: String): Boolean;
+```
+Alias for `IsBashProfileInstalled`. Kept so existing callers keep working.
+*)
+function TSettingsHandler.IsBashProfileActive(out activeName: String): Boolean;
+begin
+  Result := Self.IsBashProfileInstalled(activeName);
 end;
 
 (*
@@ -1048,35 +1118,37 @@ directly; use `SettingsHandler.CheckBashProfileRequired()`.
 *)
 procedure TSettingsHandler._CheckBashProfileRequired();
 var
-  activeName: String;
+  profileName, detail: String;
   choice: Int32;
 begin
-  if Self.IsBashProfileActive(activeName) then
+  if Self.IsBashProfileInstalled(profileName) then
   begin
-    Self.DebugLn('_CheckBashProfileRequired -> BASH RuneLite profile OK: ' + activeName);
-    WriteLn('[BASH] BASH RuneLite profile OK: ', activeName);
+    Self.DebugLn('_CheckBashProfileRequired -> BASH RuneLite profile OK: ' + profileName);
+    WriteLn('[BASH] BASH RuneLite profile OK: ', profileName);
     Exit;
   end;
 
-  if activeName = '' then
-    activeName := '(unknown)';
+  if profileName <> '' then
+    detail := 'BASH profile "' + profileName + '" is installed, but the required plugins are not enabled.'
+  else
+    detail := 'BASH RuneLite profile is not installed.';
 
-  Self.DebugLn('_CheckBashProfileRequired -> Non-BASH RuneLite profile active: ' + activeName);
-  WriteLn('[BASH] Non-BASH RuneLite profile active: ', activeName);
+  Self.DebugLn('_CheckBashProfileRequired -> ' + detail);
+  WriteLn('[BASH] ', detail);
 
   choice := MessageDlg(
     'B.A.S.H',
-    'Non-BASH RuneLite profile detected.' + LineEnding + LineEnding +
-    'Active profile: "' + activeName + '"' + LineEnding + LineEnding +
-    'Please install/select the BASH RuneLite profile from the B.A.S.H Launcher' + LineEnding +
-    '(Install RuneLite Profile), then restart this script.' + LineEnding + LineEnding +
+    detail + LineEnding + LineEnding +
+    'Please install the BASH RuneLite profile from the B.A.S.H Launcher' + LineEnding +
+    '(Install RuneLite Profile) and leave Woodcutting, Fishing, Vale Totems,' + LineEnding +
+    'and Agility enabled, then restart this script.' + LineEnding + LineEnding +
     'Continue anyway?',
     TMsgDlgType.mtWarning,
     [mbYes, mbNo]
   );
 
   if choice <> mrYes then
-    TerminateScript('Non-BASH RuneLite profile detected: ' + activeName);
+    TerminateScript(detail);
 end;
 
 (*
@@ -1084,9 +1156,11 @@ end;
 ```pascal
 procedure TSettingsHandler.CheckBashProfileRequired();
 ```
-Confirms the active RuneLite profile is the BASH profile installed by the
-B.A.S.H Launcher. If it is not, shows a warning and lets the user continue
-or stop the script. Automatically synchronizes to the main thread.
+Confirms a BASH RuneLite profile is installed and Woodcutting, Fishing,
+Vale Totems, and Agility are enabled.
+Does not require that profile to be the currently selected one. If the check
+fails, shows a warning and lets the user continue or stop the script.
+Automatically synchronizes to the main thread.
 
 Example:
 ```pascal
@@ -1153,7 +1227,7 @@ procedure TSettingsHandler.RunDiagnostic();
 Standalone "settings searcher" entry point for users having client/setup problems.
 Requires the player to be logged in. Blocks real mouse/keyboard input, then
 checks display, in-game toggles, XP bar, magic filters, GPU plugin (any active
-RuneLite profile), and the BASH profile.
+RuneLite profile), and whether a BASH profile is installed with plugins enabled.
 
 If the client is switched to fixed mode, the diagnostic stops so the user can
 re-run it after RuneLite has resized.
