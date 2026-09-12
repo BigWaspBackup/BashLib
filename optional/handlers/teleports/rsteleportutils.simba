@@ -133,7 +133,8 @@ begin
     setupDiaryTeleportItem('ardougne cloak'),
     setupDiaryTeleportItem('karamja gloves'),
     setupDiaryTeleportItem("explorer's ring"),
-    setupDiaryTeleportItem('morytania legs')
+    setupDiaryTeleportItem('morytania legs'),
+    setupDiaryTeleportItem('western banner')
   ];
 end;
 
