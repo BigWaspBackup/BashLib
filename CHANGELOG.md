@@ -1,3 +1,12 @@
+## [8.6.2](https://github.com/BigWaspBackup/BashLib/compare/v8.6.1...v8.6.2) (2026-09-12)
+
+
+### Bug Fixes
+
+* Added new teleport options ([5ee66bb](https://github.com/BigWaspBackup/BashLib/commit/5ee66bb9fd1121838f92464564d5130fe2ec01d3))
+
+
+
 ## [8.6.1](https://github.com/BigWaspBackup/BashLib/compare/v8.6.0...v8.6.1) (2026-09-11)
 
 
@@ -32,15 +41,6 @@
 ### Bug Fixes
 
 * antiban tweaks ([b6a1753](https://github.com/BigWaspBackup/BashLib/commit/b6a1753e18bc6c288cda88767a323ea547ac3b35))
-
-
-
-## [8.5.7](https://github.com/BigWaspBackup/BashLib/compare/v8.5.6...v8.5.7) (2026-09-01)
-
-
-### Bug Fixes
-
-* Account manager add profile fixes ([3c27f3f](https://github.com/BigWaspBackup/BashLib/commit/3c27f3f947a804cd20f910c6da037a2090e79ff7))
 
 
 
