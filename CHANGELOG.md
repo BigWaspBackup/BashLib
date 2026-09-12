@@ -1,3 +1,12 @@
+## [8.6.3](https://github.com/BigWaspBackup/BashLib/compare/v8.6.2...v8.6.3) (2026-09-12)
+
+
+### Bug Fixes
+
+* Tweaks to settingshandler for identifying plugins being enabled ([73a2e5b](https://github.com/BigWaspBackup/BashLib/commit/73a2e5b934d5608f8bdaa62b18f565f2f5187de7))
+
+
+
 ## [8.6.2](https://github.com/BigWaspBackup/BashLib/compare/v8.6.1...v8.6.2) (2026-09-12)
 
 
@@ -32,15 +41,6 @@
 ### Bug Fixes
 
 * Gearhandler tweaks for assets ([02afe76](https://github.com/BigWaspBackup/BashLib/commit/02afe760e35d15e46922ef0373ae6a7d09b2404f))
-
-
-
-## [8.5.8](https://github.com/BigWaspBackup/BashLib/compare/v8.5.7...v8.5.8) (2026-09-01)
-
-
-### Bug Fixes
-
-* antiban tweaks ([b6a1753](https://github.com/BigWaspBackup/BashLib/commit/b6a1753e18bc6c288cda88767a323ea547ac3b35))
 
 
 
