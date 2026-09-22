@@ -354,6 +354,7 @@ begin
 
   if doSorting and not Self.SortWorlds() then Exit;
   Self.DebugLn('Current world: ' + ToStr(current));
+  WriteLn('[WORLDHOP] Hopper current world: ', current);
 
   if (targetWorlds.Len() = 1) and (current = targetWorlds[0]) then
     Exit(True);
@@ -364,6 +365,7 @@ begin
 
   next := targetWorlds[i+1];
   Self.DebugLn('Next world: ' + ToStr(next));
+  WriteLn('[WORLDHOP] Searching hopper for world ', next);
 
   timeOut.Init(12000);
   moveMouse := True;
@@ -374,6 +376,7 @@ begin
     i := visible.Find(next);
     if i > -1 then
     begin
+      WriteLn('[WORLDHOP] Clicking hopper OCR=', visible[i], ' from visible ', ToStr(visible));
       Mouse.Click(boxes[i], MOUSE_LEFT, True);
       Exit(Self.WaitForHop(next))
     end;
@@ -383,6 +386,7 @@ begin
   until timeOut.IsFinished();
 
   Self.DebugLn('Timed out (timeOut=' + ToStr(timeOut) + 'ms)');
+  WriteLn('[WORLDHOP] Could not find world ', next, ' in hopper. Last OCR worlds: ', ToStr(visible));
   targetWorlds.Remove(next);
 end;
 
@@ -482,6 +486,8 @@ begin
   end;
 
   Self.ScheduleNextTimedHop();
+  WriteLn('[WORLDHOP] Account: ', Login.GetPlayer().User);
+  WriteLn('[WORLDHOP] Configured worlds: ', ToStr(Login.GetPlayer().Worlds));
   WriteLn('[WORLDHOP] Enabled. Next hop in: ' + Self.TimeUntilTimedHop());
 end;
 
@@ -501,13 +507,27 @@ end;
 
 function TRSWorldHopper.HopToRandomPlayerWorld(): Boolean;
 var
-  currentWorld, targetWorld, i: Int32;
-  playerWorlds, availableWorlds: TIntegerArray;
+  currentWorld, targetWorld, landedWorld, i: Int32;
+  configuredWorlds, playerWorlds, availableWorlds, skippedWorlds: TIntegerArray;
 begin
   Result := False;
   Self.CloseInterfacesForHop();
 
-  playerWorlds := Self.FilterValidWorlds(Login.GetPlayer().Worlds);
+  configuredWorlds := Login.GetPlayer().Worlds;
+  WriteLn('[WORLDHOP] Account: ', Login.GetPlayer().User);
+  WriteLn('[WORLDHOP] Configured worlds: ', ToStr(configuredWorlds));
+
+  playerWorlds := Self.FilterValidWorlds(configuredWorlds);
+  if Length(playerWorlds) <> Length(configuredWorlds) then
+  begin
+    skippedWorlds := [];
+    for i := 0 to High(configuredWorlds) do
+      if not playerWorlds.Contains(configuredWorlds[i]) then
+        skippedWorlds += configuredWorlds[i];
+    WriteLn('[WORLDHOP] Removed worlds not on live list: ', ToStr(skippedWorlds));
+  end;
+  WriteLn('[WORLDHOP] Valid hop worlds: ', ToStr(playerWorlds));
+
   if Length(playerWorlds) = 0 then
   begin
     WriteLn('[WORLDHOP] No valid player worlds to hop to');
@@ -523,12 +543,14 @@ begin
   if not Logout.IsWorldSwitcherOpen() then
     Logout.GetButton(ERSLogoutButton.WORLD_SWITCHER).Click(MOUSE_LEFT);
   WaitUntil((currentWorld := Self.GetCurrentWorld()) <> 0, 200, 12000);
+  WriteLn('[WORLDHOP] Current world: ', currentWorld);
 
   availableWorlds := [];
   for i := 0 to High(playerWorlds) do
     if playerWorlds[i] <> currentWorld then
       availableWorlds += playerWorlds[i];
 
+  WriteLn('[WORLDHOP] Candidates (excluding current): ', ToStr(availableWorlds));
   if Length(availableWorlds) = 0 then
   begin
     WriteLn('[WORLDHOP] No other worlds available');
@@ -536,12 +558,24 @@ begin
   end;
 
   targetWorld := availableWorlds[Random(Length(availableWorlds))];
-  WriteLn('[WORLDHOP] Hopping to world ', targetWorld);
+  WriteLn('[WORLDHOP] Chosen world: ', targetWorld);
+  if not configuredWorlds.Contains(targetWorld) then
+    WriteLn('[WORLDHOP] WARNING: Chosen world ', targetWorld, ' is not in the account worlds list');
+
   Result := Self.Hop([targetWorld]);
+  landedWorld := Self.GetCurrentWorld();
   if Result then
-    WriteLn('[WORLDHOP] Hopped to world ', targetWorld)
+  begin
+    WriteLn('[WORLDHOP] Hopped to world ', landedWorld, ' (requested ', targetWorld, ')');
+    if (landedWorld <> 0) and (landedWorld <> targetWorld) then
+      WriteLn('[WORLDHOP] WARNING: landed on ', landedWorld, ' instead of requested ', targetWorld);
+  end
   else
-    WriteLn('[WORLDHOP] Hop to ', targetWorld, ' failed');
+  begin
+    WriteLn('[WORLDHOP] Hop to ', targetWorld, ' failed. Current world is now ', landedWorld);
+    if (landedWorld <> 0) and (not configuredWorlds.Contains(landedWorld)) then
+      WriteLn('[WORLDHOP] WARNING: current world ', landedWorld, ' is not in the account worlds list');
+  end;
 end;
 
 function TRSWorldHopper.DoTimedHop(): Boolean;

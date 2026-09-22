@@ -836,3 +836,135 @@ begin
 
   inherited(Bitmap);
 end;
+
+(*
+Index-out-of-range during object hover/click: retry 3 times, rotate the camera,
+then retry 2 more times before letting the script crash.
+Every BashLib script that clicks/hovers objects goes through these methods.
+*)
+var
+  RuntimeFails: Int32;
+  LastRuntimeError: String;
+
+function RecoverRuntimeError(err: String): Boolean;
+begin
+  LastRuntimeError := err;
+  if Pos('Index out of range', err) = 0 then
+    Exit(False);
+
+  RuntimeFails += 1;
+  WriteLn('[SAFE] ', err, ' (', RuntimeFails, '/5)');
+  if RuntimeFails = 3 then
+    Antiban.RandomRotate();
+  Result := RuntimeFails < 5;
+end;
+
+procedure ReraiseRuntimeError();
+begin
+  if LastRuntimeError <> '' then
+    RaiseException(LastRuntimeError)
+  else
+    RaiseException('Runtime error');
+end;
+
+function TRSMapObject.Hover(attempts: Int32 = 2): Boolean; override;
+var
+  fails: Int32;
+begin
+  for fails := 1 to 5 do
+  begin
+    try
+      Result := inherited;
+      RuntimeFails := 0;
+      Exit;
+    except
+      if not RecoverRuntimeError(GetExceptionMessage()) then
+        ReraiseRuntimeError();
+    end;
+  end;
+end;
+
+function TRSMapObject.WalkHover(attempts: Int32 = 2): Boolean; override;
+var
+  fails: Int32;
+begin
+  for fails := 1 to 5 do
+  begin
+    try
+      Result := inherited;
+      RuntimeFails := 0;
+      Exit;
+    except
+      if not RecoverRuntimeError(GetExceptionMessage()) then
+        ReraiseRuntimeError();
+    end;
+  end;
+end;
+
+function TRSObject.Hover(attempts: Int32 = 2; trackTarget: Boolean = TRACK_TARGET): Boolean; override;
+var
+  fails: Int32;
+begin
+  for fails := 1 to 5 do
+  begin
+    try
+      Result := inherited;
+      RuntimeFails := 0;
+      Exit;
+    except
+      if not RecoverRuntimeError(GetExceptionMessage()) then
+        ReraiseRuntimeError();
+    end;
+  end;
+end;
+
+function TRSObject.WalkHover(attempts: Int32 = 2; trackTarget: Boolean = TRACK_TARGET): Boolean; override;
+var
+  fails: Int32;
+begin
+  for fails := 1 to 5 do
+  begin
+    try
+      Result := inherited;
+      RuntimeFails := 0;
+      Exit;
+    except
+      if not RecoverRuntimeError(GetExceptionMessage()) then
+        ReraiseRuntimeError();
+    end;
+  end;
+end;
+
+function TRSMMDot.Hover(attempts: Int32 = 2; trackTarget: Boolean = TRACK_TARGET): Boolean; override;
+var
+  fails: Int32;
+begin
+  for fails := 1 to 5 do
+  begin
+    try
+      Result := inherited;
+      RuntimeFails := 0;
+      Exit;
+    except
+      if not RecoverRuntimeError(GetExceptionMessage()) then
+        ReraiseRuntimeError();
+    end;
+  end;
+end;
+
+function TRSMMDot.WalkHover(attempts: Int32 = 2; trackTarget: Boolean = TRACK_TARGET): Boolean; override;
+var
+  fails: Int32;
+begin
+  for fails := 1 to 5 do
+  begin
+    try
+      Result := inherited;
+      RuntimeFails := 0;
+      Exit;
+    except
+      if not RecoverRuntimeError(GetExceptionMessage()) then
+        ReraiseRuntimeError();
+    end;
+  end;
+end;
