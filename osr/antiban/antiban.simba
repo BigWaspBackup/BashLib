@@ -686,9 +686,72 @@ end;
 
 
 
+{$IFNDEF BASH_ANTIBAN_PROFILE}
+type
+  TBASHAntibanBreakSlot = record
+    Enabled: Boolean;
+    IntervalMin: Int32;
+    LengthMin: Int32;
+    Randomness: Double;
+    LogoutChance: Double;
+  end;
+
+  TBASHAntibanTaskSlot = record
+    Enabled: Boolean;
+    IntervalMin: Int32;
+    Randomness: Double;
+  end;
+
+  TBASHAntibanProfile = record
+    Ready: Boolean;
+    BreaksEnabled: Boolean;
+    Breaks: array[0..3] of TBASHAntibanBreakSlot;
+    SleepEnabled: Boolean;
+    SleepHour: String;
+    SleepLength: Double;
+    SleepRandomness: Double;
+    TasksEnabled: Boolean;
+    Tasks: array[0..7] of TBASHAntibanTaskSlot;
+  end;
+
+var
+  BASHAntibanProfile: TBASHAntibanProfile;
+{$DEFINE BASH_ANTIBAN_PROFILE}
+{$ENDIF}
+
+procedure TAntiban.AddProfileTask(index, minutes: Int32; randomness: Double);
+begin
+  if minutes < 1 then
+    minutes := 1;
+  if randomness < 0 then
+    randomness := 0;
+  case index of
+    0: Self.AddTask(minutes * ONE_MINUTE, @Self.AdjustZoom, randomness);
+    1: Self.AddTask(minutes * ONE_MINUTE, @Self.RandomPOVTask, randomness);
+    2: Self.AddTask(minutes * ONE_MINUTE, @Self.RandomMouseTask, randomness);
+    3: Self.AddTask(minutes * ONE_MINUTE, @Self.LoseFocus, randomness);
+    4: Self.AddTask(minutes * ONE_MINUTE, @Self.RandomChatTask, randomness);
+    5: Self.AddTask(minutes * ONE_MINUTE, @Self.RandomGameTabTask, randomness);
+    6: Self.AddTask(minutes * ONE_MINUTE, @Self.HoverSkills, randomness);
+    7: Self.AddTask(minutes * ONE_MINUTE, @Self.RandomBankTask, randomness);
+  end;
+end;
+
 procedure TAntiban.SetupTasks();
+var
+  i: Int32;
 begin
   if Self.Tasks <> [] then Exit;
+
+  if BASHAntibanProfile.Ready then
+  begin
+    if BASHAntibanProfile.TasksEnabled then
+      for i := 0 to 7 do
+        if BASHAntibanProfile.Tasks[i].Enabled then
+          Self.AddProfileTask(i, BASHAntibanProfile.Tasks[i].IntervalMin, BASHAntibanProfile.Tasks[i].Randomness);
+    Self.OnStartTask := @OnStartAntibanTask;
+    Exit;
+  end;
 
   if WLSettings.GetObject('antiban').getJSONObject('tasks').getBoolean('camera') then
   begin
@@ -720,8 +783,31 @@ begin
 end;
 
 procedure TAntiban.SetupBreaks();
+var
+  i, minutes, lengthMin: Int32;
+  slot: TBASHAntibanBreakSlot;
 begin
   if Self.Breaks <> [] then Exit;
+
+  if BASHAntibanProfile.Ready then
+  begin
+    if BASHAntibanProfile.BreaksEnabled then
+      for i := 0 to 3 do
+      begin
+        slot := BASHAntibanProfile.Breaks[i];
+        if not slot.Enabled then
+          Continue;
+        minutes := slot.IntervalMin;
+        lengthMin := slot.LengthMin;
+        if minutes < 1 then
+          minutes := 1;
+        if lengthMin < 1 then
+          lengthMin := 1;
+        Self.AddBreak(minutes * ONE_MINUTE, lengthMin * ONE_MINUTE, slot.Randomness, slot.LogoutChance);
+      end;
+    Self.OnBreaking := @OnBreakingTask;
+    Exit;
+  end;
 
   Self.AddBreak(30  * ONE_MINUTE, 2  * ONE_MINUTE, 0.33, 0.01);
   Self.AddBreak(45  * ONE_MINUTE, 5  * ONE_MINUTE, 0.33, 0.15);
@@ -732,8 +818,29 @@ begin
 end;
 
 procedure TAntiban.SetupSleep();
+var
+  lengthHours, randomness: Double;
+  hour: String;
 begin
   if Self.Sleeps <> [] then Exit;
+
+  if BASHAntibanProfile.Ready then
+  begin
+    if not BASHAntibanProfile.SleepEnabled then
+      Exit;
+    hour := BASHAntibanProfile.SleepHour;
+    if hour = '' then
+      hour := '23:00:00';
+    lengthHours := BASHAntibanProfile.SleepLength;
+    if lengthHours <= 0 then
+      lengthHours := 8;
+    randomness := BASHAntibanProfile.SleepRandomness;
+    if randomness < 0 then
+      randomness := 0.1;
+    Self.AddSleep(hour, lengthHours * ONE_HOUR, randomness, 0.8);
+    Self.OnSleeping := @OnSleepingTask;
+    Exit;
+  end;
 
   Self.AddSleep(Self.GetSleepHour(), Self.GetSleepLength() * ONE_HOUR, 0.1, 0.8 + BioHash);
   Self.OnSleeping := @OnSleepingTask;

@@ -589,9 +589,10 @@ end;
 procedure TSettingsHandler.CheckRegularSettings();
 ```
 Verifies and applies common in-game toggle settings such as shift drop,
-escape to close, roof removal, auto-equip from gravestone, and others.
-Food/potion death piles and world switcher are turned off. Toggle order is
-shuffled each run. Opens the settings interface and closes it when done.
+escape to close, roof removal, show mouseover text, auto-equip from
+gravestone, and others. Food/potion death piles and world switcher are
+turned off. Toggle order is shuffled each run. Opens the settings
+interface and closes it when done.
 *)
 procedure TSettingsHandler.CheckRegularSettings();
 type
@@ -614,6 +615,7 @@ begin
     [Copy('middle', 0, Random(3, 6)), True],
     ['tint', True],
     [Copy('roofs', 0, Random(3, 4)), True],
+    [Copy('mouseover', 0, Random(6, 10)), True],
     [Copy('auto-equip', 0, Random(5, 10)), True],
     [Copy('switcher', 0, Random(3, 5)), False],
     [Copy('modern menu interface', 0, Random(8, 10)), False],

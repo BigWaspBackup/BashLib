@@ -331,6 +331,10 @@ begin
 end;
 
 
+procedure TScriptForm.AccountSelectionChanged();
+begin
+end;
+
 procedure TScriptForm.OnClose({$H-}sender: TObject; var closeAction: TCloseAction);{$H+}
 begin
   TerminateScript();
@@ -1499,6 +1503,7 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
     end;
 
     Antiban.SetupBiometrics();
+    Self.AccountSelectionChanged();
   end;
 
   procedure TScriptForm._OnFieldDone({$H-}sender: TObject);{$H+}
@@ -1753,8 +1758,9 @@ begin
     setOnClick(@Self._OnDeleteClick);
   end;
 
-  if Result.GetHeight() < (Max(addButton.GetTop() + addButton.GetHeight(), generateButton.GetTop() + generateButton.GetHeight()) + TControl.AdjustToDPI(8)) then
-    Result.setHeight(Max(addButton.GetTop() + addButton.GetHeight(), generateButton.GetTop() + generateButton.GetHeight()) + TControl.AdjustToDPI(8));
+  Result.setHeight(
+    Max(addButton.GetTop() + addButton.GetHeight(), generateButton.GetTop() + generateButton.GetHeight())
+    + TControl.AdjustToDPI(8));
 
   Self.ApplyJagexAccountVisibility();
   Self._ReloadSelector(selector.ComboBox);

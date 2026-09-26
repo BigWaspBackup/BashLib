@@ -399,12 +399,12 @@ Timer-based world hopping for the Antiban GUI. Call once after login, then
 **TryHopOnBreak** from `TBaseScript.DoAntiban` so hops only fire at the same
 safe points as breaks and sleeps.
 
-Needs at least 2 worlds on the account. Interval is minutes, with ±variationPercent.
+Needs at least 2 worlds on the account. Interval is minutes. Variance is the percent each hop can land early or late.
 
 Example:
 ```pascal
 Self.HasWorldHopping := True; // default in TBASHPremiumGUI.InitGUI
-WorldHopper.SetupTimedHopping(ENABLEWORLDHOPPING, WORLDHOPINTERVAL);
+WorldHopper.SetupTimedHopping(ENABLEWORLDHOPPING, WORLDHOPINTERVAL, WORLDHOPVARIATION);
 
 procedure TMyScript.DoAntiban(checkBreaks, checkSleeps: Boolean); override;
 begin
