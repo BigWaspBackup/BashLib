@@ -1,3 +1,12 @@
+# [8.7.0](https://github.com/BigWaspBackup/BashLib/compare/v8.6.4...v8.7.0) (2026-09-26)
+
+
+### Features
+
+* Added new antiban profile tab to allow more fine tuning of antiban actions, Updated settingshandler to support new game options ([813833f](https://github.com/BigWaspBackup/BashLib/commit/813833f9a2e9884d886224278b02eee4b430fed4))
+
+
+
 ## [8.6.4](https://github.com/BigWaspBackup/BashLib/compare/v8.6.3...v8.6.4) (2026-09-22)
 
 
@@ -31,16 +40,6 @@
 ### Bug Fixes
 
 * Updated latest game assets; Worldhopper Antiban now built into libs; added more teleport locations. ([6eba8de](https://github.com/BigWaspBackup/BashLib/commit/6eba8defa8a8e64a2ad7d93d0f511e9f841a3765))
-
-
-
-# [8.6.0](https://github.com/BigWaspBackup/BashLib/compare/v8.5.9...v8.6.0) (2026-09-06)
-
-
-### Features
-
-* Random Event Handler for count check added, fixes for zoom ([22a56a9](https://github.com/BigWaspBackup/BashLib/commit/22a56a9d8db6918f08082aef447888082dc194cd))
-* Random event handler for Genie/Count Check enabled on supported scripts, Zoom fixes ([672fd37](https://github.com/BigWaspBackup/BashLib/commit/672fd37cbf7480ebfc58a65b537d9d4e90ff9e32))
 
 
 
