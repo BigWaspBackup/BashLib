@@ -226,10 +226,19 @@ var
   me, p: TPoint;
   mapObj: PRSMapObject;
   i, j: Int32;
+  bankObjs: TRSObjectV2Array;
+  bankNPCs: TRSNPCV2Array;
 begin
   Banks.MapObjects := [];
   Banks.ObjectsCache := [];
   Banks.NPCsCache := [];
+
+  bankObjs := Objects.GetAllByAction('Bank');
+  bankObjs += Objects.GetAll('Bank chest');
+  bankNPCs := NPCs.GetAllByAction('Bank');
+  if (Length(bankObjs) = 0) and (Length(bankNPCs) = 0) then
+    Exit;
+
   Banks._SetupMapObjects();
 
   me := Map.Position();
