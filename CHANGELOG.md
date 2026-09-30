@@ -1,3 +1,12 @@
+## [8.7.3](https://github.com/BigWaspBackup/BashLib/compare/v8.7.2...v8.7.3) (2026-09-30)
+
+
+### Bug Fixes
+
+* Improved withdrawing from farming lep, Removed portal nexus from farming locations until complete ([17c3acb](https://github.com/BigWaspBackup/BashLib/commit/17c3acbd1759a960f048a407b48d28c9852f7080))
+
+
+
 ## [8.7.2](https://github.com/BigWaspBackup/BashLib/compare/v8.7.1...v8.7.2) (2026-09-30)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Added debugging to world hopping, wrapped hover and click in try except to prevent some rare crashes ([bac0db6](https://github.com/BigWaspBackup/BashLib/commit/bac0db6441a94caa295baed92ef3a03d883a096c))
-
-
-
-## [8.6.3](https://github.com/BigWaspBackup/BashLib/compare/v8.6.2...v8.6.3) (2026-09-12)
-
-
-### Bug Fixes
-
-* Tweaks to settingshandler for identifying plugins being enabled ([73a2e5b](https://github.com/BigWaspBackup/BashLib/commit/73a2e5b934d5608f8bdaa62b18f565f2f5187de7))
 
 
 
