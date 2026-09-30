@@ -1,3 +1,12 @@
+## [8.7.1](https://github.com/BigWaspBackup/BashLib/compare/v8.7.0...v8.7.1) (2026-09-27)
+
+
+### Bug Fixes
+
+* Tweaks to bank loading ([33304a1](https://github.com/BigWaspBackup/BashLib/commit/33304a12c595cd294adcb79e438f1623c25655f2))
+
+
+
 # [8.7.0](https://github.com/BigWaspBackup/BashLib/compare/v8.6.4...v8.7.0) (2026-09-26)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Added new teleport options ([5ee66bb](https://github.com/BigWaspBackup/BashLib/commit/5ee66bb9fd1121838f92464564d5130fe2ec01d3))
-
-
-
-## [8.6.1](https://github.com/BigWaspBackup/BashLib/compare/v8.6.0...v8.6.1) (2026-09-11)
-
-
-### Bug Fixes
-
-* Updated latest game assets; Worldhopper Antiban now built into libs; added more teleport locations. ([6eba8de](https://github.com/BigWaspBackup/BashLib/commit/6eba8defa8a8e64a2ad7d93d0f511e9f841a3765))
 
 
 
