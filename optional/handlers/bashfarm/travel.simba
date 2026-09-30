@@ -1,31 +1,25 @@
 const
   BASH_TRAVEL_WEISS: TStringArray = [
-    'Icy basalt',
-    'Nexus Weiss'
+    'Icy basalt'
   ];
   BASH_TRAVEL_STRONGHOLD: TStringArray = [
-    'Stony basalt',
-    'Nexus Troll Stronghold'
+    'Stony basalt'
   ];
   BASH_TRAVEL_ARDOUGNE: TStringArray = [
     'Ardougne Cloak (Farm)',
     'Ardougne Spell',
-    'Ardougne Tablet',
-    'Nexus Ardougne'
+    'Ardougne Tablet'
   ];
   BASH_TRAVEL_FALADOR: TStringArray = [
     'Explorers Ring (Farm)',
     'Falador Spell',
-    'Falador Tablet',
-    'Nexus Falador'
+    'Falador Tablet'
   ];
   BASH_TRAVEL_CATHERBY: TStringArray = [
     'Lunar Catherby',
     'Camelot Spell',
     'Camelot Tablet',
-    'Catherby Tablet',
-    'Nexus Catherby',
-    'Nexus Camelot'
+    'Catherby Tablet'
   ];
   BASH_TRAVEL_PHASMATYS: TStringArray = [
     'Ectophial'
@@ -49,18 +43,15 @@ const
     'Farming Cape (t)'
   ];
   BASH_TRAVEL_LUMBRIDGE_TREE: TStringArray = [
-    'Lumbridge Spell',
-    'Nexus Lumbridge'
+    'Lumbridge Spell'
   ];
   BASH_TRAVEL_VARROCK_TREE: TStringArray = [
-    'Varrock Spell',
-    'Nexus Varrock'
+    'Varrock Spell'
   ];
   BASH_TRAVEL_FALADOR_TREE: TStringArray = [
     'Ring of Wealth (Falador Park)',
     'Falador Spell',
-    'Falador Tablet',
-    'Nexus Falador'
+    'Falador Tablet'
   ];
   BASH_TRAVEL_TAVERLEY_TREE: TStringArray = [
     'Taverley Tablet'
@@ -87,9 +78,7 @@ const
     'Lunar Catherby',
     'Camelot Spell',
     'Camelot Tablet',
-    'Catherby Tablet',
-    'Nexus Catherby',
-    'Nexus Camelot'
+    'Catherby Tablet'
   ];
 
 function BASHFarmTravelClamp(idx: Int32; options: TStringArray): Int32;
@@ -136,19 +125,13 @@ begin
   Result := BASHFarmTravelIdxFromName(options, sorted[BASHFarmTravelClamp(sortedIdx, sorted)]);
 end;
 
-function BASHFarmTravel_Weiss(idx: Int32): TTeleportLocation;
+function BASHFarmTravel_Weiss({$H-}idx: Int32): TTeleportLocation; {$H+}
 begin
-  case BASHFarmTravelClamp(idx, BASH_TRAVEL_WEISS) of
-    1: Exit(RSTeleportsV2.NEXUS_WEISS);
-  end;
   Result := RSTeleportsV2.WEISS;
 end;
 
-function BASHFarmTravel_Stronghold(idx: Int32): TTeleportLocation;
+function BASHFarmTravel_Stronghold({$H-}idx: Int32): TTeleportLocation; {$H+}
 begin
-  case BASHFarmTravelClamp(idx, BASH_TRAVEL_STRONGHOLD) of
-    1: Exit(RSTeleportsV2.NEXUS_TROLL_STRONGHOLD);
-  end;
   Result := RSTeleportsV2.TROLL_STRONGHOLD;
 end;
 
@@ -157,7 +140,6 @@ begin
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_ARDOUGNE) of
     1: Exit(RSTeleportsV2.ARDOUGNE);
     2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Ardougne teleport'], 'Break', [6565, 37207]));
-    3: Exit(RSTeleportsV2.NEXUS_ARDOUGNE);
   end;
   Result := RSTeleportsV2.ARDOUGNE_FARM_PATCH;
 end;
@@ -167,7 +149,6 @@ begin
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_FALADOR) of
     1: Exit(RSTeleportsV2.FALADOR);
     2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Falador teleport'], 'Break', [7769, 37211]));
-    3: Exit(RSTeleportsV2.NEXUS_FALADOR);
   end;
   Result := RSTeleportsV2.FALADOR_FARM_PATCH;
 end;
@@ -178,8 +159,6 @@ begin
     1: Exit(RSTeleportsV2.CAMELOT);
     2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Camelot teleport'], 'Break', [6933, 37963]));
     3: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Catherby teleport'], 'Break', [7164, 36566]));
-    4: Exit(RSTeleportsV2.NEXUS_CATHERBY);
-    5: Exit(RSTeleportsV2.NEXUS_CAMELOT);
   end;
   Result := RSTeleportsV2.CATHERBY;
 end;
@@ -263,19 +242,13 @@ begin
   Result := RSTeleportsV2.FARMING_GUILD;
 end;
 
-function BASHFarmTravel_LumbridgeTree(idx: Int32): TTeleportLocation;
+function BASHFarmTravel_LumbridgeTree({$H-}idx: Int32): TTeleportLocation; {$H+}
 begin
-  case BASHFarmTravelClamp(idx, BASH_TRAVEL_LUMBRIDGE_TREE) of
-    1: Exit(RSTeleportsV2.NEXUS_LUMBRIDGE);
-  end;
   Result := RSTeleportsV2.LUMBRIDGE;
 end;
 
-function BASHFarmTravel_VarrockTree(idx: Int32): TTeleportLocation;
+function BASHFarmTravel_VarrockTree({$H-}idx: Int32): TTeleportLocation; {$H+}
 begin
-  case BASHFarmTravelClamp(idx, BASH_TRAVEL_VARROCK_TREE) of
-    1: Exit(RSTeleportsV2.NEXUS_VARROCK);
-  end;
   Result := RSTeleportsV2.VARROCK;
 end;
 
@@ -284,7 +257,6 @@ begin
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_FALADOR_TREE) of
     1: Exit(RSTeleportsV2.FALADOR);
     2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Falador teleport'], 'Break', [7769, 37211]));
-    3: Exit(RSTeleportsV2.NEXUS_FALADOR);
   end;
   Result := RSTeleportsV2.FALADOR_PARK;
 end;

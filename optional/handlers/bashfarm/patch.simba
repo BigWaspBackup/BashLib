@@ -3551,10 +3551,153 @@ begin
   Result := False;
 end;
 
+function BASHFarmLepItemInUpText(const up, item: String): Boolean;
+var
+  hay, needle: String;
+begin
+  Result := False;
+  hay := LowerCase(up);
+  needle := LowerCase(Trim(item));
+  if (hay = '') or (needle = '') then
+    Exit;
+
+  case needle of
+    'bottomless compost bucket':
+      Result := ('bottomless' in hay) or ('ottomless' in hay);
+    'ultracompost':
+      Result := 'ultra' in hay;
+    'supercompost':
+      Result := ('super' in hay) and (not ('ultra' in hay));
+    'compost':
+      Result := ('compost' in hay) and (not ('ultra' in hay)) and
+                (not ('super' in hay)) and (not ('bottomless' in hay)) and
+                (not ('ottomless' in hay));
+    'magic secateurs':
+      Result := 'ecateur' in hay;
+    'seed dibber':
+      Result := 'ibber' in hay;
+    'spade':
+      Result := 'pade' in hay;
+    'rake':
+      Result := 'rake' in hay;
+  else
+    Result := needle in hay;
+  end;
+end;
+
+function BASHFarmLepUpTextFailReason(const up, item: String): String;
+var
+  hay, needle: String;
+begin
+  if Trim(up) = '' then
+    Exit('uptext empty, expected "' + item + '"');
+
+  hay := LowerCase(up);
+  needle := LowerCase(Trim(item));
+
+  if (('bottomless' in hay) or ('ottomless' in hay)) and (needle <> 'bottomless compost bucket') then
+    Exit('hovered bottomless compost bucket, expected "' + item + '"');
+  if ('ultra' in hay) and (needle <> 'ultracompost') then
+    Exit('hovered ultracompost, expected "' + item + '"');
+  if ('super' in hay) and (needle <> 'supercompost') then
+    Exit('hovered supercompost, expected "' + item + '"');
+  if ('compost' in hay) and (needle <> 'compost') and (needle <> 'supercompost') and
+     (needle <> 'ultracompost') and (needle <> 'bottomless compost bucket') then
+    Exit('hovered compost, expected "' + item + '"');
+
+  Result := 'uptext does not match "' + item + '"';
+end;
+
+function BASHFarmLepHoverPoint(box: TBox; attempt: Int32): TPoint;
+var
+  inner: TBox;
+  parts: TBoxArray;
+  idx: Int32;
+begin
+  inner := box;
+  if ((box.X2 - box.X1) > 12) and ((box.Y2 - box.Y1) > 12) then
+    inner := box.Expand(-2);
+
+  parts := inner.Partition(3, 3);
+  case attempt of
+    1: idx := 4;
+    2: idx := 0;
+    3: idx := 8;
+  else
+    idx := 4;
+  end;
+
+  if (idx < 0) or (idx > High(parts)) or (parts[idx].X2 < parts[idx].X1) or (parts[idx].Y2 < parts[idx].Y1) then
+    Exit(SRL.RandomPoint(inner));
+
+  Result.X := Random(parts[idx].X1, parts[idx].X2);
+  Result.Y := Random(parts[idx].Y1, parts[idx].Y2);
+end;
+
+function BASHFarmHoverLepStoreItem(box: TBox; const item, debugStep: String): Boolean;
+var
+  attempt: Int32;
+  up, why: String;
+  cursor, spot: TPoint;
+  matched: Boolean;
+  deadline: UInt64;
+begin
+  Result := False;
+
+  if (box.X2 <= box.X1) or (box.Y2 <= box.Y1) then
+  begin
+    WriteLn('[BASHFarm] ', debugStep, ' failed: store button box is empty for "', item, '"');
+    Exit;
+  end;
+
+  for attempt := 1 to 3 do
+  begin
+    if ChooseOption.IsOpen() then
+      ChooseOption.Close();
+
+    spot := BASHFarmLepHoverPoint(box, attempt);
+    Mouse.Move(spot);
+
+    up := '';
+    matched := False;
+    deadline := GetTickCount() + 600;
+    repeat
+      up := MainScreen.GetUpText();
+      if BASHFarmLepItemInUpText(up, item) then
+      begin
+        Wait(50);
+        up := MainScreen.GetUpText();
+        if BASHFarmLepItemInUpText(up, item) then
+        begin
+          matched := True;
+          Break;
+        end;
+      end;
+      Wait(25);
+    until GetTickCount() >= deadline;
+
+    cursor := Mouse.Position();
+    if matched and box.Contains(cursor) then
+      Exit(True);
+
+    why := BASHFarmLepUpTextFailReason(up, item);
+    if matched then
+      why := 'uptext matched "' + item + '" but cursor left the store button'
+    else if not box.Contains(cursor) then
+      why := 'cursor outside store button; ' + why;
+
+    WriteLn('[BASHFarm] ', debugStep, ' hover ', attempt, '/3 failed: ', why,
+            ' uptext="', up, '" cursor=(', cursor.X, ',', cursor.Y, ')',
+            ' aimed=(', spot.X, ',', spot.Y, ')');
+  end;
+
+  WriteLn('[BASHFarm] ', debugStep, ' failed after 3 hovers, expected "', item, '"');
+end;
+
 function TBASHFarmPatch.WithdrawLepCompost(qty: Int32 = 1; closeAfter: Boolean = True): Boolean;
 var
   slot, i, attempt, maxTries: Int32;
-  isBottomless: Boolean;
+  isBottomless, hoverFailed: Boolean;
 begin
   Result := False;
 
@@ -3568,6 +3711,7 @@ begin
   if isBottomless then
     qty := 1;
 
+  hoverFailed := False;
   slot := Self.CompostSlotIdx();
   if slot < 0 then
     Exit(False);
@@ -3609,8 +3753,13 @@ begin
     begin
       if not Self.LepInvSlotIsGreen(slot) then
       begin
-        Mouse.Move(_BASHLepStoreSlot(slot));
-        if not BASHFarmMenuSelect('Remove', False, 'WithdrawLepCompost Remove ' + Self.CompostItem + ' at ' + Self.Data.Name) then
+        if not BASHFarmHoverLepStoreItem(_BASHLepStoreSlot(slot), Self.CompostItem,
+             'WithdrawLepCompost ' + Self.CompostItem + ' at ' + Self.Data.Name) then
+        begin
+          Result := False;
+          hoverFailed := True;
+        end
+        else if not BASHFarmMenuSelect('Remove', False, 'WithdrawLepCompost Remove ' + Self.CompostItem + ' at ' + Self.Data.Name) then
           Result := False
         else
           Result := Self.WaitLepInvSlotGreen(slot, 5000);
@@ -3620,7 +3769,14 @@ begin
     begin
       for i := 1 to qty do
       begin
-        Mouse.Move(_BASHLepStoreSlot(slot));
+        if not BASHFarmHoverLepStoreItem(_BASHLepStoreSlot(slot), Self.CompostItem,
+             'WithdrawLepCompost ' + Self.CompostItem + ' at ' + Self.Data.Name) then
+        begin
+          Result := False;
+          hoverFailed := True;
+          Break;
+        end;
+
         if not BASHFarmMenuSelect('Remove-1', False, 'WithdrawLepCompost Remove-1 ' + Self.CompostItem + ' at ' + Self.Data.Name) then
         begin
           Result := False;
@@ -3636,6 +3792,16 @@ begin
         if i < qty then
           Wait(Random(60, 160));
       end;
+    end;
+
+    if hoverFailed then
+    begin
+      if closeAfter then
+      begin
+        BASHFarmCloseLepInterface();
+        _BASHLepClearSlots();
+      end;
+      Break;
     end;
 
     if not closeAfter then
@@ -3757,6 +3923,7 @@ function TBASHFarmPatch.WithdrawLepTool(
 ): Boolean;
 var
   attempt, maxTries: Int32;
+  expectedItem: String;
 begin
   Result := False;
 
@@ -3786,7 +3953,21 @@ begin
 
     if not Self.LepInvSlotIsGreen(slot) then
     begin
-      Mouse.Move(_BASHLepStoreSlot(slot));
+      expectedItem := labelName;
+      if Length(haveItems) > 0 then
+        expectedItem := ToStr(haveItems[0]);
+
+      if not BASHFarmHoverLepStoreItem(_BASHLepStoreSlot(slot), expectedItem,
+           'WithdrawLepTool ' + labelName + ' at ' + Self.Data.Name) then
+      begin
+        if closeAfter then
+        begin
+          BASHFarmCloseLepInterface();
+          _BASHLepClearSlots();
+        end;
+        Break;
+      end;
+
       if not BASHFarmMenuSelect(['Remove-1', 'Remove'], False, 'WithdrawLepTool ' + labelName + ' at ' + Self.Data.Name) then
       begin
         if closeAfter then
