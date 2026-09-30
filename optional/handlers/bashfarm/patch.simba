@@ -262,16 +262,24 @@ begin
     Result := 0;
 end;
 
-function BASHFarmMenuSelect(needles: TStringArray; caseSensitive: Boolean = False): Boolean; overload;
+function BASHFarmMenuSelect(needles: TStringArray; caseSensitive: Boolean = False; debugStep: String = ''): Boolean; overload;
 var
-  hay, n: String;
+  hay, n, up, opts: String;
   option: TRSChooseOption_Option;
   i: Int32;
 begin
   Result := False;
+  up := '';
+  if debugStep <> '' then
+    up := MainScreen.GetUpText();
+
   if not ChooseOption.IsOpen() then
     if not ChooseOption.Open() then
+    begin
+      if debugStep <> '' then
+        WriteLn('[BASHFarm] ', debugStep, ' menu did not open, uptext="', up, '"');
       Exit(False);
+    end;
 
   for option in ChooseOption.GetOptions() do
   begin
@@ -292,12 +300,24 @@ begin
     end;
   end;
 
+  if debugStep <> '' then
+  begin
+    opts := '';
+    for option in ChooseOption.GetOptions() do
+    begin
+      if opts <> '' then
+        opts += ' | ';
+      opts += option.Text;
+    end;
+    WriteLn('[BASHFarm] ', debugStep, ' option missing, uptext="', up, '" menu="', opts, '"');
+  end;
+
   ChooseOption.Close();
 end;
 
-function BASHFarmMenuSelect(needle: String; caseSensitive: Boolean = False): Boolean; overload;
+function BASHFarmMenuSelect(needle: String; caseSensitive: Boolean = False; debugStep: String = ''): Boolean; overload;
 begin
-  Result := BASHFarmMenuSelect([needle], caseSensitive);
+  Result := BASHFarmMenuSelect([needle], caseSensitive, debugStep);
 end;
 
 procedure BASHFarmCloseLepInterface();
@@ -2852,6 +2872,40 @@ begin
   Result := True;
 end;
 
+function BASHFarmGuildBetweenLeps(const patch: TBASHFarmPatch): Boolean;
+var
+  me: TPoint;
+  nearSW, nearSE, destSE: Boolean;
+begin
+  Result := False;
+  if not (patch.Id in [EBASHFarmPatch.GUILD_HERB, EBASHFarmPatch.GUILD_FLOWER]) then
+    Exit;
+
+  me := Map.Position();
+  nearSW := me.DistanceTo(BASH_GUILD_LEP_SW) <= 50;
+  nearSE := me.DistanceTo(BASH_GUILD_LEP_SE) <= 50;
+  destSE := patch.Data.LeprechaunCoords.DistanceTo(BASH_GUILD_LEP_SE) <= 8;
+  Result := (nearSW and destSE) or (nearSE and (not destSE));
+end;
+
+procedure BASHFarmSetMinimapWalk(minimapOnly: Boolean; var savedScreen, savedAdaptive: Boolean);
+begin
+  if not minimapOnly then
+    Exit;
+  savedScreen := Map.Walker.ScreenWalk;
+  savedAdaptive := Map.Walker.AdaptiveWalk;
+  Map.Walker.ScreenWalk := False;
+  Map.Walker.AdaptiveWalk := False;
+end;
+
+procedure BASHFarmRestoreMinimapWalk(minimapOnly: Boolean; savedScreen, savedAdaptive: Boolean);
+begin
+  if not minimapOnly then
+    Exit;
+  Map.Walker.ScreenWalk := savedScreen;
+  Map.Walker.AdaptiveWalk := savedAdaptive;
+end;
+
 function TBASHFarmPatch.WalkNearPatch(untilDist: Int32 = 8): Boolean;
 var
   me, dest: TPoint;
@@ -2859,6 +2913,7 @@ var
   targets: TPointArray;
   stopDist: Int32;
   bestDist, dist: Double;
+  minimapOnly, savedScreen, savedAdaptive: Boolean;
 
   function TryWebWalk(target: TPoint; stopAt: Int32): Boolean;
   begin
@@ -2873,6 +2928,9 @@ var
 begin
   Self.ApplyWalkDoorSolver();
   me := Map.Position();
+  minimapOnly := BASHFarmGuildBetweenLeps(Self);
+  BASHFarmSetMinimapWalk(minimapOnly, savedScreen, savedAdaptive);
+  try
 
   if Length(Self.Data.StandTiles) > 0 then
   begin
@@ -2970,6 +3028,9 @@ begin
   if not Result then
     WriteLn('[BASHFarm] Failed to walk near patch at ', Self.Data.Name,
             ' (dist=', Round(Map.Position().DistanceTo(Self.Data.Coords)), ')');
+  finally
+    BASHFarmRestoreMinimapWalk(minimapOnly, savedScreen, savedAdaptive);
+  end;
 end;
 
 function TBASHFarmPatch.WalkToFarmWork(keepOut: Int32 = 10): Boolean;
@@ -2992,6 +3053,7 @@ var
   attempt, maxAttempts: Int32;
   targets: TPointArray;
   untilDist: Int32;
+  minimapOnly, savedScreen, savedAdaptive: Boolean;
 
   function TryWebWalk(target: TPoint; stopDist: Int32): Boolean;
   begin
@@ -3015,6 +3077,9 @@ begin
   lep := Self.Data.LeprechaunCoords;
   me := Map.Position();
   dist := me.DistanceTo(lep);
+  minimapOnly := BASHFarmGuildBetweenLeps(Self);
+  BASHFarmSetMinimapWalk(minimapOnly, savedScreen, savedAdaptive);
+  try
 
   if NearLep() then
   begin
@@ -3086,6 +3151,9 @@ begin
   else
     WriteLn('[BASHFarm] Failed to walk near leprechaun at ', Self.Data.Name,
             ' (dist=', Round(Map.Position().DistanceTo(lep)), ')');
+  finally
+    BASHFarmRestoreMinimapWalk(minimapOnly, savedScreen, savedAdaptive);
+  end;
 end;
 
 function TBASHFarmPatch.FindLeprechaun(out lepPoints: TPointArray): Boolean;
@@ -3200,15 +3268,20 @@ var
   i: Int32;
   playerBox: TBox;
   under, me: TPoint;
+  misses: String;
 begin
   if not Self.FindLeprechaun(tpa) then
     Exit(False);
 
+  misses := '';
   for i := 0 to High(tpa) do
   begin
     Mouse.Move(SRL.RandomPoint(tpa[i], MainScreen.NormalizeDistance(6)));
     if MainScreen.IsUpText('Lepr') then
       Exit(True);
+    if misses <> '' then
+      misses += ' | ';
+    misses += '"' + MainScreen.GetUpText() + '"';
   end;
 
   if Minimap.HasDotUnder() then
@@ -3225,10 +3298,16 @@ begin
         WriteLn('[BASHFarm] Lep under player at ', Self.Data.Name, ' (minimap dot)');
         Exit(True);
       end;
+      if misses <> '' then
+        misses += ' | ';
+      misses += '"' + MainScreen.GetUpText() + '"';
     end;
   end;
 
   Result := MainScreen.IsUpText('Lepr');
+  if not Result then
+    WriteLn('[BASHFarm] HoverLeprechaun failed at ', Self.Data.Name,
+            ' expected "Lepr" uptext=', misses);
 end;
 
 function TBASHFarmPatch.ClickLeprechaun(): Boolean;
@@ -3237,15 +3316,20 @@ var
   i: Int32;
   playerBox: TBox;
   under, me: TPoint;
+  misses: String;
 begin
   if not Self.FindLeprechaun(tpa) then
     Exit(False);
 
+  misses := '';
   for i := 0 to High(tpa) do
   begin
     Mouse.Move(tpa[i]);
     if MainScreen.IsUpText('Lepr') then
       Break;
+    if misses <> '' then
+      misses += ' | ';
+    misses += '"' + MainScreen.GetUpText() + '"';
   end;
 
   if (not MainScreen.IsUpText('Lepr')) and Minimap.HasDotUnder() then
@@ -3258,14 +3342,24 @@ begin
       under := playerBox.Middle;
       Mouse.Move(under);
       if MainScreen.IsUpText('Lepr') then
-        WriteLn('[BASHFarm] Lep under player at ', Self.Data.Name, ' (minimap dot)');
+        WriteLn('[BASHFarm] Lep under player at ', Self.Data.Name, ' (minimap dot)')
+      else
+      begin
+        if misses <> '' then
+          misses += ' | ';
+        misses += '"' + MainScreen.GetUpText() + '"';
+      end;
     end;
   end;
 
   if MainScreen.IsUpText('Lepr') then
     Mouse.Click(MOUSE_LEFT)
   else
+  begin
+    WriteLn('[BASHFarm] ClickLeprechaun failed at ', Self.Data.Name,
+            ' expected "Lepr" uptext=', misses);
     Exit(ChooseOption.Select('Lepr'));
+  end;
 
   Result := True;
 end;
@@ -3441,7 +3535,7 @@ begin
     end;
 
     Mouse.Click(MOUSE_RIGHT);
-    if not BASHFarmMenuSelect('Exchange', False) then
+    if not BASHFarmMenuSelect('Exchange', False, 'OpenLepExchange Exchange at ' + Self.Data.Name) then
       Continue;
 
     if WaitUntil(RSInterface.IsOpen(), 35, 7500) then
@@ -3516,7 +3610,7 @@ begin
       if not Self.LepInvSlotIsGreen(slot) then
       begin
         Mouse.Move(_BASHLepStoreSlot(slot));
-        if not BASHFarmMenuSelect('Remove', False) then
+        if not BASHFarmMenuSelect('Remove', False, 'WithdrawLepCompost Remove ' + Self.CompostItem + ' at ' + Self.Data.Name) then
           Result := False
         else
           Result := Self.WaitLepInvSlotGreen(slot, 5000);
@@ -3527,7 +3621,7 @@ begin
       for i := 1 to qty do
       begin
         Mouse.Move(_BASHLepStoreSlot(slot));
-        if not BASHFarmMenuSelect('Remove-1', False) then
+        if not BASHFarmMenuSelect('Remove-1', False, 'WithdrawLepCompost Remove-1 ' + Self.CompostItem + ' at ' + Self.Data.Name) then
         begin
           Result := False;
           Break;
@@ -3693,9 +3787,8 @@ begin
     if not Self.LepInvSlotIsGreen(slot) then
     begin
       Mouse.Move(_BASHLepStoreSlot(slot));
-      if not BASHFarmMenuSelect(['Remove-1', 'Remove'], False) then
+      if not BASHFarmMenuSelect(['Remove-1', 'Remove'], False, 'WithdrawLepTool ' + labelName + ' at ' + Self.Data.Name) then
       begin
-        WriteLn('[BASHFarm] Lep store Remove failed for ', labelName, ' (', attempt, '/', maxTries, ')');
         if closeAfter then
         begin
           BASHFarmCloseLepInterface();
@@ -3940,15 +4033,22 @@ var
   slot, i, attempt, qty: Int32;
   item: TRSItem;
   items: TRSItemArray;
+  slots: TIntegerArray;
   tpa: TPointArray;
   noted: Boolean;
 begin
   Self.DropWeeds();
 
+  if Inventory.FindItems(['Cabbage'], slots) then
+  begin
+    WriteLn('[BASHFarm] Dropping ', Length(slots), ' cabbage slot(s)');
+    Inventory.ShiftDrop(slots);
+  end;
+
   for i := 0 to High(BASH_FARM_LEPRECHAUN_ITEMS) do
   begin
     item := BASH_FARM_LEPRECHAUN_ITEMS[i];
-    if ToStr(item) = 'Weeds' then
+    if (ToStr(item) = 'Weeds') or SameText(ToStr(item), 'Cabbage') then
       Continue;
     if Inventory.FindItem(item, slot) then
       items += item;

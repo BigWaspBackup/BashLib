@@ -481,7 +481,8 @@ type
     RandomEventsButton: TButton;
     AntibanProfileForm: TForm;
     AntibanProfilePages: TPageControl;
-    AntibanBreaksTab, AntibanTasksTab, AntibanScriptTab: TTabSheet;
+    AntibanBreaksTab, AntibanTasksTab, AntibanRandomTab, AntibanScriptTab: TTabSheet;
+    RandomGenieCombo, RandomCountCombo, RandomLampCombo: TLabeledComboBox;
     AntibanExtrasPanel: TPanel;
     ProfileUser: String;
     SleepRandomInput: TLabeledEdit;
@@ -804,6 +805,19 @@ begin
   Self.EnableBirdhouseRunsCheckBox.CheckBox.SetOnChange(@Self.OnBirdhouseEnableChanged);
 end;
 
+procedure TBASHPremiumGUI.SetLabeledEditEnabled(var box: TLabeledEdit; enabled: Boolean);
+var
+  color: Int32;
+begin
+  box.SetEnabled(enabled);
+  if enabled then
+    color := BASH_GUI_TEXT
+  else
+    color := BASH_GUI_MUTED;
+  box.Caption.GetFont().SetColor(color);
+  box.Edit.GetFont().SetColor(color);
+end;
+
 procedure TBASHPremiumGUI.OverrideBreaksCheckboxChanged({$H-}sender: TObject); {$H+}
 begin
   if not Assigned(Self.OverrideBreaksCheckBox) then
@@ -825,10 +839,10 @@ begin
   for i := 0 to High(Self.BreakOn) do
   begin
     Self.BreakOn[i].SetEnabled(enabled);
-    Self.BreakInterval[i].SetEnabled(enabled);
-    Self.BreakLength[i].SetEnabled(enabled);
-    Self.BreakRandom[i].SetEnabled(enabled);
-    Self.BreakLogout[i].SetEnabled(enabled);
+    Self.SetLabeledEditEnabled(Self.BreakInterval[i], enabled and Self.BreakOn[i].IsChecked());
+    Self.SetLabeledEditEnabled(Self.BreakLength[i], enabled and Self.BreakOn[i].IsChecked());
+    Self.SetLabeledEditEnabled(Self.BreakRandom[i], enabled and Self.BreakOn[i].IsChecked());
+    Self.SetLabeledEditEnabled(Self.BreakLogout[i], enabled and Self.BreakOn[i].IsChecked());
   end;
 end;
 
@@ -839,10 +853,10 @@ begin
   if not Assigned(Self.SleepBreaksCheckBox) then
     Exit;
   enabled := Self.SleepBreaksCheckBox.IsChecked();
-  Self.SleepHourInput.SetEnabled(enabled);
-  Self.SleepLengthInput.SetEnabled(enabled);
+  Self.SetLabeledEditEnabled(Self.SleepHourInput, enabled);
+  Self.SetLabeledEditEnabled(Self.SleepLengthInput, enabled);
   if Assigned(Self.SleepRandomInput) then
-    Self.SleepRandomInput.SetEnabled(enabled);
+    Self.SetLabeledEditEnabled(Self.SleepRandomInput, enabled);
 end;
 
 procedure TBASHPremiumGUI.TasksEnabledCheckboxChanged({$H-}sender: TObject); {$H+}
@@ -855,10 +869,10 @@ begin
   enabled := Self.TasksEnabledCheckBox.IsChecked();
   for i := 0 to High(Self.TaskOn) do
   begin
-    rowOn := enabled and (not Self.TaskRowLocked(i));
-    Self.TaskOn[i].SetEnabled(rowOn);
-    Self.TaskInterval[i].SetEnabled(rowOn);
-    Self.TaskRandom[i].SetEnabled(rowOn);
+    rowOn := enabled and Self.TaskOn[i].IsChecked() and (not Self.TaskRowLocked(i));
+    Self.TaskOn[i].SetEnabled(enabled and (not Self.TaskRowLocked(i)));
+    Self.SetLabeledEditEnabled(Self.TaskInterval[i], rowOn);
+    Self.SetLabeledEditEnabled(Self.TaskRandom[i], rowOn);
     if Self.TaskRowLocked(i) then
       Self.TaskOn[i].CheckBox.SetChecked(False);
   end;
@@ -878,11 +892,19 @@ procedure TBASHPremiumGUI.WorldHoppingCheckboxChanged({$H-}sender: TObject); {$H
 var
   showHop: Boolean;
 begin
+  if not Assigned(Self.EnableWorldHoppingCheckBox) then
+    Exit;
   showHop := Self.EnableWorldHoppingCheckBox.IsChecked();
   if Assigned(Self.WorldHopIntervalInput) then
-    Self.WorldHopIntervalInput.SetVisible(showHop);
+  begin
+    Self.WorldHopIntervalInput.SetVisible(True);
+    Self.SetLabeledEditEnabled(Self.WorldHopIntervalInput, showHop);
+  end;
   if Assigned(Self.WorldHopVariationInput) then
-    Self.WorldHopVariationInput.SetVisible(showHop);
+  begin
+    Self.WorldHopVariationInput.SetVisible(True);
+    Self.SetLabeledEditEnabled(Self.WorldHopVariationInput, showHop);
+  end;
 end;
 
 procedure TBASHPremiumGUI.RandomEventsClicked({$H-}sender: TObject); {$H+}

@@ -410,6 +410,7 @@ begin
     WriteINI(section, 'WorldHopVariation', IntToStr(BASHClampInt(StrToIntDef(Self.WorldHopVariationInput.GetText(), 10), 0, 100)), BASH_GUI_SETTINGS_FILE);
   end;
 
+  Self.StoreRandomEventCombos();
   Self.SaveRandomEventsProfile();
   Self.SaveSessionLimits();
   Self.SaveScriptAntiban();
@@ -511,6 +512,7 @@ begin
   Self.TasksEnabledCheckboxChanged(nil);
   if Self.HasWorldHopping and Assigned(Self.EnableWorldHoppingCheckBox) then
     Self.WorldHoppingCheckboxChanged(nil);
+  Self.FillRandomEventCombos();
 end;
 
 procedure TBASHPremiumGUI.ApplyAntibanProfileRuntime();
@@ -716,6 +718,10 @@ begin
   if Assigned(Self.AntibanProfileForm) then
   begin
     Self.AntibanProfileForm.SetCaption('Antiban - ' + Self.ProfileUser);
+    {$IFDEF BASH_RANDOM_EVENTS}
+    if Self.HasRandomEvents then
+      RandomEvents.ShowWarningIfNeeded();
+    {$ENDIF}
     Self.AntibanProfileForm.Show();
     Self.AntibanProfileForm.SetVisible(True);
   end;
@@ -777,6 +783,91 @@ begin
   Self.AntibanProfileCloseButton.SetOnClick(@Self.AntibanProfileCloseClick);
 end;
 
+procedure TBASHPremiumGUI.StoreRandomEventCombos();
+var
+  j: TJSONObject;
+  genieOn, countOn: Boolean;
+begin
+  {$IFDEF BASH_RANDOM_EVENTS}
+  if not Assigned(Self.RandomGenieCombo) then
+    Exit;
+  j := WLSettings.GetObject('antiban').getJSONObject('random_events');
+  genieOn := Self.RandomGenieCombo.GetItemIndex() = 1;
+  countOn := Self.RandomCountCombo.GetItemIndex() = 1;
+  if genieOn then
+    j.Put('genie_action', 'interact')
+  else
+    j.Put('genie_action', 'ignore');
+  j.Put('genie', genieOn);
+  if countOn then
+    j.Put('count_check_action', 'interact')
+  else
+    j.Put('count_check_action', 'ignore');
+  j.Put('count_check', countOn);
+  if (Self.RandomLampCombo.GetItemIndex() >= 0) and
+     (Self.RandomLampCombo.GetItemIndex() <= High(BASH_LAMP_SKILL_KEYS)) then
+    j.Put('skill', BASH_LAMP_SKILL_KEYS[Self.RandomLampCombo.GetItemIndex()]);
+  if genieOn or countOn then
+    j.Put('mode', 'interact')
+  else
+    j.Put('mode', 'off');
+  {$ENDIF}
+end;
+
+procedure TBASHPremiumGUI.FillRandomEventCombos();
+var
+  j: TJSONObject;
+  genieMode, countMode, skillKey: String;
+  skillIdx: Int32;
+begin
+  {$IFDEF BASH_RANDOM_EVENTS}
+  if not Assigned(Self.RandomGenieCombo) then
+    Exit;
+  j := WLSettings.GetObject('antiban').getJSONObject('random_events');
+  genieMode := 'ignore';
+  if j.has('genie_action') then
+    genieMode := j.getString('genie_action')
+  else if j.has('mode') and (j.getString('mode').Lower() = 'interact') then
+    genieMode := 'interact';
+  if genieMode.Lower() = 'interact' then
+    Self.RandomGenieCombo.SetItemIndex(1)
+  else
+    Self.RandomGenieCombo.SetItemIndex(0);
+
+  countMode := 'ignore';
+  if j.has('count_check_action') then
+    countMode := j.getString('count_check_action');
+  if countMode.Lower() = 'interact' then
+    Self.RandomCountCombo.SetItemIndex(1)
+  else
+    Self.RandomCountCombo.SetItemIndex(0);
+
+  skillKey := '';
+  if j.has('skill') then
+    skillKey := j.getString('skill');
+  skillIdx := RandomEvents.SkillIndexFromKey(skillKey);
+  if (skillIdx >= 0) and (skillIdx <= High(BASH_LAMP_SKILL_LABELS)) then
+    Self.RandomLampCombo.SetItemIndex(skillIdx);
+  {$ENDIF}
+end;
+
+procedure TBASHPremiumGUI.BuildRandomEventsTab();
+begin
+  {$IFDEF BASH_RANDOM_EVENTS}
+  if not Self.HasRandomEvents then
+    Exit;
+  RandomEvents.SetupFormCombo(Self.RandomGenieCombo, Self.AntibanRandomTab, 'Genie',
+    16, 16, 280, BASH_RANDOM_EVENT_MODES, 0, True);
+  Self.RandomGenieCombo.SetTooltip('Ignore does nothing. Interact talks to the Genie and rubs the lamp.');
+  RandomEvents.SetupFormCombo(Self.RandomLampCombo, Self.AntibanRandomTab, 'Lamp XP skill',
+    320, 16, 280, BASH_LAMP_SKILL_LABELS, RandomEvents.SkillIndexFromKey('agility'), True);
+  Self.RandomLampCombo.SetTooltip('Skill used when a Genie or Count Check lamp is rubbed.');
+  RandomEvents.SetupFormCombo(Self.RandomCountCombo, Self.AntibanRandomTab, 'Count Check',
+    16, 94, 280, BASH_RANDOM_EVENT_MODES, 0, True);
+  Self.RandomCountCombo.SetTooltip('Ignore does nothing. Interact talks to Count Check. A lamp is only given if the account has a Jagex Account and Bank PIN.');
+  {$ENDIF}
+end;
+
 procedure TBASHPremiumGUI.BuildBreakRows();
 var
   i, y: Int32;
@@ -786,6 +877,7 @@ begin
   begin
     Self.AddCheck(Self.AntibanBreaksTab, Self.BreakOn[i], 'cb_bash_break_' + IntToStr(i),
       'Break ' + IntToStr(i + 1), 16, y, True);
+    Self.BreakOn[i].CheckBox.SetOnChange(@Self.ShortBreaksCheckboxChanged);
     Self.AddEdit(Self.AntibanBreaksTab, Self.BreakInterval[i], 'le_bash_break_iv_' + IntToStr(i),
       'Interval (min)', IntToStr(BASH_BREAK_INTERVALS[i]), 200, y, 150);
     Self.BreakInterval[i].Edit.SetOnKeyPress(@Self.BreakInterval[i].Edit.NumberField);
@@ -811,6 +903,7 @@ begin
   begin
     Self.AddCheck(Self.AntibanTasksTab, Self.TaskOn[i], 'cb_bash_task_row_' + IntToStr(i),
       BASH_TASK_NAMES[i], 16, y + 16, True);
+    Self.TaskOn[i].CheckBox.SetOnChange(@Self.TasksEnabledCheckboxChanged);
     Self.AddEdit(Self.AntibanTasksTab, Self.TaskInterval[i], 'le_bash_task_iv_' + IntToStr(i),
       'Interval (min)', IntToStr(BASH_TASK_MINUTES[i]), 280, y, 160);
     Self.TaskInterval[i].Edit.SetOnKeyPress(@Self.TaskInterval[i].Edit.NumberField);
@@ -827,7 +920,7 @@ begin
       Self.TaskInterval[i].SetEnabled(False);
       Self.TaskRandom[i].SetEnabled(False);
     end;
-    y += 64;
+    y += 59;
   end;
 end;
 
@@ -868,6 +961,11 @@ begin
   Self.AntibanBreaksTab.SetCaption('Breaks');
   Self.AntibanTasksTab.Create(Self.AntibanProfilePages);
   Self.AntibanTasksTab.SetCaption('Tasks');
+  if Self.HasRandomEvents then
+  begin
+    Self.AntibanRandomTab.Create(Self.AntibanProfilePages);
+    Self.AntibanRandomTab.SetCaption('Random Events');
+  end;
 
   tasks := WLSettings.GetObject('antiban').getJSONObject('tasks');
   Self.AddCheck(Self.AntibanBreaksTab, Self.ShortBreaksCheckBox, 'cb_bash_short_breaks',
@@ -891,45 +989,31 @@ begin
     'Randomness %', '10', 430, y, 150);
   Self.SleepRandomInput.Edit.SetOnKeyPress(@Self.SleepRandomInput.Edit.NumberField);
 
-  y += 70;
-  if Self.HasWorldHopping then
-  begin
-    Self.AddCheck(Self.AntibanBreaksTab, Self.EnableWorldHoppingCheckBox, 'cb_bash_worldhop',
-      'Enable world hopping', 16, y,
-      StrToBoolDef(Self.ReadAntibanINI('EnableWorldHopping', 'false'), False));
-    Self.EnableWorldHoppingCheckBox.CheckBox.SetOnChange(@Self.WorldHoppingCheckboxChanged);
-    Self.EnableWorldHoppingCheckBox.SetTooltip('Hops to another saved world on a timer. Set the interval and variance below. Needs at least 2 worlds saved on the account.');
-    y += 28;
-    Self.AddEdit(Self.AntibanBreaksTab, Self.WorldHopIntervalInput, 'le_bash_hop_interval',
-      'World hop interval (minutes)', Self.ReadAntibanINI('WorldHopInterval', '45'), 16, y, 220);
-    Self.WorldHopIntervalInput.Edit.SetOnKeyPress(@Self.WorldHopIntervalInput.Edit.NumberField);
-    Self.AddEdit(Self.AntibanBreaksTab, Self.WorldHopVariationInput, 'le_bash_hop_variation',
-      'Variance %', Self.ReadAntibanINI('WorldHopVariation', '10'), 260, y, 140);
-    Self.WorldHopVariationInput.Edit.SetOnKeyPress(@Self.WorldHopVariationInput.Edit.NumberField);
-    Self.WorldHopVariationInput.SetTooltip('Percent each hop can land early or late. 10 on a 45 minute interval is about 40 to 50 minutes.');
-    Self.WorldHoppingCheckboxChanged(nil);
-    y += 70;
-  end;
-
-  if Self.HasRandomEvents then
-  begin
-    Self.MakeLabel(Self.AntibanBreaksTab, 'Random events', 16, y, 11, BASH_GUI_MUTED, True);
-    y += 22;
-    Self.RandomEventsButton.Create(Self.AntibanBreaksTab);
-    Self.RandomEventsButton.SetLeft(TControl.AdjustToDPI(16));
-    Self.RandomEventsButton.SetTop(TControl.AdjustToDPI(y));
-    Self.RandomEventsButton.SetWidth(TControl.AdjustToDPI(148));
-    Self.RandomEventsButton.SetHeight(TControl.AdjustToDPI(28));
-    Self.RandomEventsButton.SetCaption('Random Events');
-    Self.RandomEventsButton.SetTooltip('Choose which random events to ignore or interact with.');
-    Self.RandomEventsButton.SetOnClick(@Self.RandomEventsClicked);
-  end;
-
   Self.AddCheck(Self.AntibanTasksTab, Self.TasksEnabledCheckBox, 'cb_bash_tasks',
     'Enable antiban tasks', 16, 12, tasks.getBoolean('enabled'));
   Self.TasksEnabledCheckBox.CheckBox.SetOnChange(@Self.TasksEnabledCheckboxChanged);
   Self.TasksEnabledCheckBox.SetTooltip('Enables the scheduled antiban actions below.');
   Self.BuildTaskRows();
+
+  if Self.HasWorldHopping then
+  begin
+    y := 46 + (8 * 59);
+    Self.AddCheck(Self.AntibanTasksTab, Self.EnableWorldHoppingCheckBox, 'cb_bash_worldhop',
+      'World Hopping', 16, y + 16,
+      StrToBoolDef(Self.ReadAntibanINI('EnableWorldHopping', 'false'), False));
+    Self.EnableWorldHoppingCheckBox.CheckBox.SetOnChange(@Self.WorldHoppingCheckboxChanged);
+    Self.EnableWorldHoppingCheckBox.SetTooltip('Hops to another saved world on a timer. Set the interval and variance beside this. Needs at least 2 worlds saved on the account.');
+    Self.AddEdit(Self.AntibanTasksTab, Self.WorldHopIntervalInput, 'le_bash_hop_interval',
+      'World hop interval (minutes)', Self.ReadAntibanINI('WorldHopInterval', '45'), 280, y, 160);
+    Self.WorldHopIntervalInput.Edit.SetOnKeyPress(@Self.WorldHopIntervalInput.Edit.NumberField);
+    Self.AddEdit(Self.AntibanTasksTab, Self.WorldHopVariationInput, 'le_bash_hop_variation',
+      'Variance %', Self.ReadAntibanINI('WorldHopVariation', '10'), 470, y, 160);
+    Self.WorldHopVariationInput.Edit.SetOnKeyPress(@Self.WorldHopVariationInput.Edit.NumberField);
+    Self.WorldHopVariationInput.SetTooltip('Percent each hop can land early or late. 10 on a 45 minute interval is about 40 to 50 minutes.');
+    Self.WorldHoppingCheckboxChanged(nil);
+  end;
+
+  Self.BuildRandomEventsTab();
 
   Self.AddCheck(Self.AntibanTasksTab, Self.TaskCameraCheckBox, 'cb_bash_task_camera', 'Camera', 16, 560, True);
   Self.AddCheck(Self.AntibanTasksTab, Self.TaskMouseCheckBox, 'cb_bash_task_mouse', 'Mouse', 140, 560, True);

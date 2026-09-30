@@ -170,7 +170,7 @@ begin
 
   case Self.Item of
     // Special 2-tick food
-    'Cooked karambwan': Self.Timer := 1200;
+    'Cooked karambwan', 'Blighted karambwan': Self.Timer := 1200;
     // Else normal 3-tick food
     else Self.Timer := 1800;
   end;
@@ -192,14 +192,14 @@ begin
     'Tangled toad' 's legs', 'Chocolate bomb': Self.Points := 15;
     'Potato with cheese', 'Egg potato', 'Monkfish': Self.Points := 16;
     'Cooked kyatt': Self.Points := 17;
-    'Cooked karambwan': Self.Points := 18;
+    'Cooked karambwan', 'Blighted karambwan': Self.Points := 18;
     'Cooked pyre fox': Self.Points := 19;
     'Curry', 'Ugthanki kebab': Self.Points := 19;
     'Mushroom potato', 'Shark': Self.Points := 20;
     'Sea turtle', 'Cooked sunlight antelope': Self.Points := 21;
-    'Manta ray', 'Tuna potato', 'Dark crab': Self.Points := 22;
+    'Manta ray', 'Blighted manta ray', 'Tuna potato', 'Dark crab': Self.Points := 22;
     'Cooked dashing kebbit': Self.Points := 23;
-    'Anglerfish':
+    'Anglerfish', 'Blighted anglerfish':
       begin
         HPLevel := Stats.GetLevel(ERSSkill.HitPoints);
         case HPLevel of

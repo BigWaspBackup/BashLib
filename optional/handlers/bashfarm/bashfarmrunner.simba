@@ -36,6 +36,7 @@ type
 
     ExtraRuneNames: TRSItemArray;
     ExtraRuneQtys: TIntegerArray;
+    LeaveBankOpen: Boolean;
 
     EquippedScanDone: Boolean;
     EquippedTravelKeys: TStringArray;
@@ -267,9 +268,47 @@ begin
   Result := False;
 end;
 
+procedure BASHFarmReadInv(item: TRSItem; quant: Int32; out contains: Boolean; out haveItem, haveStack: Int32);
+begin
+  { While the bank is open the inventory panel is already visible.
+    Inventory.ContainsItem/CountItem call GameTabs.Open, which was
+    adding about a second per call before the next bank search. }
+  if Bank.IsOpen(False) then
+    contains := Inventory.Items.ContainsAny(item.GetArray())
+  else
+    contains := Inventory.ContainsItem(item);
+
+  if not contains then
+  begin
+    haveItem := 0;
+    haveStack := -1;
+    Exit;
+  end;
+
+  if (quant <= 1) or (quant = Bank.QUANTITY_ALL) then
+  begin
+    haveItem := 1;
+    haveStack := 1;
+    Exit;
+  end;
+
+  if Bank.IsOpen(False) then
+  begin
+    haveItem := Inventory.Items.Count(item);
+    haveStack := Inventory.Items.CountStack(item);
+  end
+  else
+  begin
+    haveItem := Inventory.CountItem(item);
+    haveStack := Inventory.CountItemStack(item);
+  end;
+end;
+
 function TBASHFarmRunner.FarmWithdrawHelper(item: TRSItem; quant: Int32): Boolean;
 var
-  attempt, have, need: Int32;
+  attempt, have, need, haveItem, haveStack: Int32;
+  contains, ok: Boolean;
+  deadline: UInt64;
 begin
   if item = '' then
     Exit(True);
@@ -277,11 +316,12 @@ begin
   if quant < 0 then
     quant := Bank.QUANTITY_ALL;
 
-  if Inventory.ContainsItem(item) then
+  BASHFarmReadInv(item, quant, contains, haveItem, haveStack);
+  if contains then
   begin
     if quant = Bank.QUANTITY_ALL then
       Exit(True);
-    if (Inventory.CountItem(item) >= quant) or (Inventory.CountItemStack(item) >= quant) then
+    if (haveItem >= quant) or (haveStack >= quant) then
       Exit(True);
   end;
 
@@ -295,8 +335,9 @@ begin
 
   for attempt := 1 to 5 do
   begin
-    have := Max(Inventory.CountItem(item), Inventory.CountItemStack(item));
-    if Inventory.ContainsItem(item) then
+    BASHFarmReadInv(item, quant, contains, haveItem, haveStack);
+    have := Max(haveItem, haveStack);
+    if contains then
     begin
       if (quant = Bank.QUANTITY_ALL) or (have >= quant) then
         Exit(True);
@@ -317,18 +358,21 @@ begin
     if not Bank.WithdrawItem([item, need, False], True) then
       WriteLn('[BASHFarm] WithdrawItem returned False for ', ToStr(item));
 
-    Result := WaitUntil(
-      Inventory.ContainsItem(item) and
-      ((quant = Bank.QUANTITY_ALL) or
-       (Inventory.CountItem(item) >= quant) or
-       (Inventory.CountItemStack(item) >= quant)),
-      35, 6000);
+    deadline := GetTickCount() + 6000;
+    Result := False;
+    repeat
+      BASHFarmReadInv(item, quant, contains, haveItem, haveStack);
+      ok := contains and ((quant = Bank.QUANTITY_ALL) or (haveItem >= quant) or (haveStack >= quant));
+      if ok then
+      begin
+        Result := True;
+        Break;
+      end;
+      Wait(35);
+    until GetTickCount() >= deadline;
 
     if Result then
-    begin
       Exit(True);
-    end;
-
   end;
 
   WriteLn('[BASHFarm] Failed to withdraw ', ToStr(item));
@@ -911,7 +955,7 @@ begin
       Break;
     end;
 
-  if Bank.IsOpen() then
+  if Bank.IsOpen() and (not Self.LeaveBankOpen) then
     Bank.Close();
   Result := True;
 end;
@@ -2236,10 +2280,60 @@ begin
   end;
 
   if BASHFarmAbortRun then
+    WriteLn('[BASHFarm] Depositing tools with the leprechaun before disabling farm runs');
+
+  Self.DepositLepBeforeFinish(i);
+
+  if BASHFarmAbortRun then
     Self.DisableFarmRuns(BASHFarmAbortReason);
+
+  Inc(Self.RunsComplete);
+  Self.Journal.Save();
+
+  Self.OnComplete();
+  Self.PrintReport();
+end;
+
+procedure TBASHFarmRunner.DepositLepBeforeFinish(patchIdx: Int32);
+var
+  k: Int32;
+  patch: TBASHFarmPatch;
+  deposited: Boolean;
+begin
+  deposited := False;
+
+  if (patchIdx >= 0) and (patchIdx <= High(Self.Patches)) then
+  begin
+    patch := Self.Patches[patchIdx];
+    if not patch.AtFarm() and
+       (Map.Position().DistanceTo(patch.Data.LeprechaunCoords) <= 80) then
+    begin
+      WriteLn('[BASHFarm] Walking to leprechaun at ', patch.Data.Name, ' to deposit tools');
+      patch.WalkNearLeprechaun(10);
+    end;
+
+    if patch.AtFarm() then
+    begin
+      patch.NoteItems();
+      if not patch.DepositLepTools() then
+      begin
+        if patch.HasStorableLepTools() and (not BASHFarmAbortRun) then
+          Self.DisableFarmRuns(
+            'Could not deposit tools to leprechaun at ' + patch.Data.Name
+          );
+      end;
+      deposited := not patch.HasStorableLepTools();
+      Self.Patches[patchIdx] := patch;
+    end;
+  end;
+
+  if deposited then
+    Exit;
 
   for k := High(Self.Patches) downto 0 do
   begin
+    if k = patchIdx then
+      Continue;
     if Self.Patches[k].Skip then
       Continue;
     if not Self.Patches[k].AtFarm() then
@@ -2248,19 +2342,13 @@ begin
     Self.Patches[k].NoteItems();
     if not Self.Patches[k].DepositLepTools() then
     begin
-      if Self.Patches[k].HasStorableLepTools() then
+      if Self.Patches[k].HasStorableLepTools() and (not BASHFarmAbortRun) then
         Self.DisableFarmRuns(
           'Could not deposit tools to leprechaun at ' + Self.Patches[k].Data.Name
         );
     end;
     Break;
   end;
-
-  Inc(Self.RunsComplete);
-  Self.Journal.Save();
-
-  Self.OnComplete();
-  Self.PrintReport();
 end;
 
 procedure TBASHFarmRunner.DisableFarmRuns(reason: String);

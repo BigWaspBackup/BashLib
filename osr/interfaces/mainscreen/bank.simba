@@ -10,7 +10,7 @@ Methods to extend and/or modify SRL's {ref}`Bank` interface.
 
 function TRSBank.FindItem(item: TRSItem; out box: TBox): Boolean; override;
 begin
-  if not Self.IsOpen() then
+  if not Self.IsOpen(False) then
     Exit;
 
   Result := Self.Items.Find(item.GetArray(), box);

@@ -228,6 +228,9 @@ end;
 // GameTabs antibans
 procedure TAntiban.RandomTab(); override;
 begin
+  if Bank.IsOpen(False) or DepositBox.IsOpen() or Store.IsOpen() then
+    Exit;
+
   Self.DebugLn('Random GameTab');
 
   if Random() < 0.80 then

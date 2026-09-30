@@ -27,16 +27,20 @@ end;
 
 //overriden to use Bank.Close with biohash.
 function TRSGameTabs.Open(tab: ERSGameTab): Boolean; override;
-  function _InventoryIterfaceIsOpen(): Boolean;
-  begin
-    Result := Bank.IsOpen(False) or DepositBox.IsOpen() or Store.IsOpen();
-  end;
-
+var
+  inventoryInterfaceOpen: Boolean;
 begin
   if Self.GetCurrentTab() = tab then
     Exit(True);
 
-  if RSInterface.IsOpen() and _InventoryIterfaceIsOpen() then
+  inventoryInterfaceOpen := Bank.IsOpen(False) or DepositBox.IsOpen() or Store.IsOpen();
+
+  { Bank already shows the inventory. Closing it here made every
+    ContainsItem/CountItem while banking pay for a close attempt. }
+  if (tab = ERSGameTab.INVENTORY) and inventoryInterfaceOpen then
+    Exit(True);
+
+  if RSInterface.IsOpen() and inventoryInterfaceOpen then
     RSInterface.Close();
 
   Result := inherited(tab);

@@ -113,7 +113,7 @@ begin
       end;
 
       if didTeleport then
-        Exit(WaitUntil(not TransportMap.position.inrange(startPosition, 10), 200, 10000));
+        Exit(WaitUntil((not TransportMap.Position().InRange(startPosition, 10)) or (TransportMap.Similarity < 0.50), 200, 4000));
     end;
   end;
 
@@ -129,7 +129,7 @@ begin
         if WaitUntil(Chat.ClickOption('Okay, teleport to level 41 Wilderness.'), 200, 3000) then
           Writeln 'Teleporting to wilderness';
 
-        Exit(WaitUntil(not TransportMap.position.inrange(startPosition, 10), 200, 10000));
+        Exit(WaitUntil((not TransportMap.Position().InRange(startPosition, 10)) or (TransportMap.Similarity < 0.50), 200, 4000));
       end;
     end;
   end;
@@ -187,7 +187,7 @@ begin
       didTeleport := WaitUntil(Inventory.ClickItem(numberedDiaryItem, teleportLocation.destination), 200, 10000);
 
       if didTeleport then
-        Exit(WaitUntil(not TransportMap.position.inrange(startPosition, 10), 200, 10000));
+        Exit(WaitUntil((not TransportMap.Position().InRange(startPosition, 10)) or (TransportMap.Similarity < 0.50), 200, 4000));
     end;
   end;
 
@@ -200,7 +200,7 @@ begin
       didTeleport := WaitUntil(Equipment.ClickItem(numberedDiaryItem, teleportLocation.destination), 200, 10000);
 
       if didTeleport then
-        Exit(WaitUntil(not TransportMap.position.inrange(startPosition, 10), 200, 10000));
+        Exit(WaitUntil((not TransportMap.Position().InRange(startPosition, 10)) or (TransportMap.Similarity < 0.50), 200, 4000));
     end;
   end;
 end;
@@ -213,9 +213,26 @@ begin
     Result := WaitUntil(not TransportMap.position.inrange(startPosition, 10), 200, 23000);
 end;
 
-function TUniversalTransportV2.withdrawTeleportItem(constref teleportLocation: TTeleportLocation): Boolean;
+function TransportInvContains(item: TRSItem): Boolean;
+begin
+  if Bank.IsOpen(False) then
+    Result := Inventory.Items.ContainsAny(item.GetArray())
+  else
+    Result := Inventory.ContainsItem(item);
+end;
+
+function TransportTimedWithdraw(item: TRSItem; quantity, timeout: Int32): Boolean;
 var
   bankItem: TRSBankItem;
+begin
+  bankItem := bankItem.Setup(item, quantity, False);
+  Result := Bank.WithdrawItem(bankItem, False);
+  if Result and (timeout > 0) then
+    Result := WaitUntil(TransportInvContains(item), 200, timeout);
+end;
+
+function TUniversalTransportV2.withdrawTeleportItem(constref teleportLocation: TTeleportLocation): Boolean;
+var
   chargedJewellery: TRSItem;
   chargedVariants: TRSItemArray;
   teleportTabName: String;
@@ -225,7 +242,9 @@ var
 begin
   Result := False;
   Self.DebugLn('Trying to withdraw');
-  if not Bank.IsOpen(2000, 200) then Exit(False);
+  if not Bank.IsOpen(False) then
+    if not Bank.IsOpen(2000, 50) then
+      Exit(False);
   Self.DebugLn('bank is open');
   case teleportLocation.teleportType of
     ETeleportType.JEWELLERY:
@@ -233,14 +252,12 @@ begin
       chargedVariants := getChargedJewelleryNames(teleportLocation.item);
       for chargedJewellery in chargedVariants do
       begin
-        if Inventory.ContainsItem(chargedJewellery) then
+        if TransportInvContains(chargedJewellery) then
           Exit(True);
 
         Self.DebugLn('Withdrawing ' + ToStr(chargedJewellery));
-        bankItem := bankItem.Setup(chargedJewellery, 1, False);
-        if Bank.WithdrawItem(bankItem, False)
-          and WaitUntil(Inventory.ContainsItem(chargedJewellery), 200, 2200) then
-            Exit(True);
+        if TransportTimedWithdraw(chargedJewellery, 1, 2200) then
+          Exit(True);
       end;
     end;
     ETeleportType.ANCIENT_MAGICKS,
@@ -249,12 +266,11 @@ begin
     ETeleportType.NORMAL_MAGIC:
     begin
       teleportTabName := teleportLocation.destination.Lower() + " teleport";
-      if Inventory.ContainsItem(teleportTabName) then
+      if TransportInvContains(teleportTabName) then
         Exit(True);
 
       Self.DebugLn('Withdrawing: ' + teleportTabName);
-      bankItem := bankItem.Setup(teleportTabName);
-      if Bank.WithdrawItem(bankItem, False) then
+      if TransportTimedWithdraw(teleportTabName, -1, 0) then
         Exit(True);
     end;
     ETeleportType.OTHER, ETeleportType.SCROLL:
@@ -265,25 +281,21 @@ begin
         if teleportItem = '' then
           Continue;
 
-        if Inventory.ContainsItem(teleportItem) then
+        if TransportInvContains(teleportItem) then
           Exit(True);
 
         Self.DebugLn('Withdrawing OTHER/SCROLL: ' + ToStr(teleportItem));
-        bankItem := bankItem.Setup(teleportItem, 1, False);
-        if Bank.WithdrawItem(bankItem, False)
-          and WaitUntil(Inventory.ContainsItem(teleportItem), 200, 3000) then
-            Exit(True);
+        if TransportTimedWithdraw(teleportItem, 1, 3000) then
+          Exit(True);
       end;
 
       if teleportLocation.item <> '' then
       begin
-        if Inventory.ContainsItem(teleportLocation.item) then
+        if TransportInvContains(teleportLocation.item) then
           Exit(True);
 
         Self.DebugLn('Withdrawing OTHER item: ' + ToStr(teleportLocation.item));
-        bankItem := bankItem.Setup(teleportLocation.item, 1, False);
-        if Bank.WithdrawItem(bankItem, False)
-          and WaitUntil(Inventory.ContainsItem(teleportLocation.item), 200, 3000) then
+        if TransportTimedWithdraw(teleportLocation.item, 1, 3000) then
           Exit(True);
       end;
     end;
@@ -294,14 +306,12 @@ begin
         Exit(False);
 
       teleportItem := numberedItems[0];
-      if Inventory.ContainsItem(teleportItem) then
+      if TransportInvContains(teleportItem) then
         Exit(True);
 
       Self.DebugLn('Withdrawing diary: ' + ToStr(teleportItem));
-      bankItem := bankItem.Setup(teleportItem, 1, False);
-      if Bank.WithdrawItem(bankItem, False)
-        and WaitUntil(Inventory.ContainsItem(teleportItem), 200, 2200) then
-          Exit(True);
+      if TransportTimedWithdraw(teleportItem, 1, 2200) then
+        Exit(True);
     end;
   end;
 end;
