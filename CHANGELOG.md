@@ -1,3 +1,12 @@
+## [8.7.4](https://github.com/BigWaspBackup/BashLib/compare/v8.7.3...v8.7.4) (2026-10-01)
+
+
+### Bug Fixes
+
+* Fixes for hunter cape and hunters guild - Untested ([dad5db5](https://github.com/BigWaspBackup/BashLib/commit/dad5db520460b8a52e8d7bf882e9adeb70da3af7))
+
+
+
 ## [8.7.3](https://github.com/BigWaspBackup/BashLib/compare/v8.7.2...v8.7.3) (2026-09-30)
 
 
@@ -31,15 +40,6 @@
 ### Features
 
 * Added new antiban profile tab to allow more fine tuning of antiban actions, Updated settingshandler to support new game options ([813833f](https://github.com/BigWaspBackup/BashLib/commit/813833f9a2e9884d886224278b02eee4b430fed4))
-
-
-
-## [8.6.4](https://github.com/BigWaspBackup/BashLib/compare/v8.6.3...v8.6.4) (2026-09-22)
-
-
-### Bug Fixes
-
-* Added debugging to world hopping, wrapped hover and click in try except to prevent some rare crashes ([bac0db6](https://github.com/BigWaspBackup/BashLib/commit/bac0db6441a94caa295baed92ef3a03d883a096c))
 
 
 
