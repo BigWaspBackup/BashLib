@@ -1476,6 +1476,21 @@ begin
   end;
 end;
 
+function BASHFarmOrtusGuildSettled(pos: TPoint): Boolean;
+begin
+  Result := pos.InBox(BASH_ORTUS_HUNTER_CAPE_LANDING) or
+            pos.InBox(BASH_ORTUS_MAP) or
+            (pos.DistanceTo(BASH_ORTUS_HUNTER_LANDING) <= 120);
+
+  if Result then
+    Exit;
+
+  Result := (pos.X >= BASH_ORTUS_HUNTER_CAPE_LANDING.X1) and
+            (pos.X <= BASH_ORTUS_MAP.X2) and
+            (pos.Y >= BASH_ORTUS_MAP.Y1) and
+            (pos.Y <= BASH_ORTUS_HUNTER_CAPE_LANDING.Y2);
+end;
+
 function TBASHFarmRunner.OrtusWalkNorthToFarm(): Boolean;
 var
   me, lep, dest: TPoint;
@@ -1493,10 +1508,10 @@ begin
     if dist <= 14 then
       Exit(True);
 
-    if me.DistanceTo(BASH_ORTUS_HUNTER_LANDING) > 120 then
+    if not BASHFarmOrtusGuildSettled(me) then
     begin
       WriteLn('[BASHFarm] Ortus: waiting to settle near Hunter Guild (pos ', me, ')');
-      if not WaitUntil(Map.Position().DistanceTo(BASH_ORTUS_HUNTER_LANDING) <= 120, 50, 8000) then
+      if not WaitUntil(BASHFarmOrtusGuildSettled(Map.Position()), 50, 8000) then
         Wait(Random(400, 900));
       Continue;
     end;
@@ -1527,37 +1542,82 @@ begin
   Result := Quetzal.TravelFromWhistle(EQuetzalLanding.HUNTER_GUILD, True);
 end;
 
+function TBASHFarmRunner.OrtusChooseHunterGuild(const item: TRSItem; equipped: Boolean): Boolean;
+var
+  opt: TRSChooseOption_Option;
+begin
+  Result := False;
+
+  if equipped then
+  begin
+    if not Equipment.HoverItem(item) then
+      Exit;
+  end
+  else if not Inventory.MouseItem(item) then
+    Exit;
+
+  Mouse.Click(MOUSE_RIGHT);
+  if not WaitUntil(ChooseOption.IsOpen(), 50, 2000) then
+    Exit;
+
+  if ChooseOption.Hover('Teleport', False, False) and
+     WaitUntil(ChooseOption.IsSubOpen(), 40, 1500) and
+     ChooseOption.HasSubOption(['Hunter Guild'], opt, False, False) then
+  begin
+    WriteLn('[BASHFarm] Ortus: Hunter cape submenu -> Hunter Guild');
+    ChooseOption.SelectSubOption(opt);
+    Exit(True);
+  end;
+
+  if not ChooseOption.IsOpen() then
+    Exit;
+
+  if not ChooseOption.Select('Teleport', MOUSE_LEFT, False, False) then
+  begin
+    ChooseOption.Close();
+    Exit;
+  end;
+
+  if not WaitUntil(Chat.FindOption('Hunter Guild', [CHAT_COLOR_BLACK, CHAT_COLOR_WHITE]), 35, 4000) then
+    Exit;
+
+  WriteLn('[BASHFarm] Ortus: Hunter cape chat -> Hunter Guild');
+  Result := Chat.ClickOption('Hunter Guild');
+end;
+
 function TBASHFarmRunner.OrtusUseHunterCape(): Boolean;
 var
   item: TRSItem;
   capes: TRSItemArray;
+  startPos: TPoint;
+  opened: Boolean;
 begin
   Result := False;
   capes := ['Hunter cape(t)', 'Hunter cape'];
 
   for item in capes do
   begin
-    if Inventory.ContainsItem(item) then
-    begin
-      if Inventory.ClickItem(item, 'Teleport') then
-      begin
-        if WaitUntil(Chat.FindOption('Hunter Guild'), 35, 4000) then
-          Chat.ClickOption('Hunter Guild');
-        Result := WaitUntil(Minimap.PercentBlack() < 25, 35, 5000);
-        if Result then
-          Exit;
-      end;
-    end;
+    opened := False;
+    startPos := Map.Position();
 
-    if Equipment.ContainsItem(item) then
-    begin
-      if Equipment.ClickItem(item, 'Hunter Guild') then
-      begin
-        Result := WaitUntil(Minimap.PercentBlack() < 25, 35, 5000);
-        if Result then
-          Exit;
-      end;
-    end;
+    if Inventory.ContainsItem(item) then
+      opened := Self.OrtusChooseHunterGuild(item, False);
+
+    if (not opened) and Equipment.ContainsItem(item) then
+      opened := Self.OrtusChooseHunterGuild(item, True);
+
+    if not opened then
+      Continue;
+
+    if not WaitUntil((Minimap.PercentBlack() < 25) and
+                     (not Map.Position().InRange(startPos, 8)), 40, 8000) then
+      Continue;
+
+    Result := WaitUntil(Map.Position().InBox(BASH_ORTUS_HUNTER_CAPE_LANDING), 50, 8000);
+    if Result then
+      Exit;
+
+    WriteLn('[BASHFarm] Ortus: Hunter cape missed guild box (pos ', Map.Position(), ')');
   end;
 end;
 
