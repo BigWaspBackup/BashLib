@@ -1,3 +1,12 @@
+## [8.7.5](https://github.com/BigWaspBackup/BashLib/compare/v8.7.4...v8.7.5) (2026-10-06)
+
+
+### Bug Fixes
+
+* Activity Antiban settings are now saved, Xeric's Talisman added as travel method, farm run tweaks ([57a4d51](https://github.com/BigWaspBackup/BashLib/commit/57a4d51522dac482b460c2849fed08e632e74ef0))
+
+
+
 ## [8.7.4](https://github.com/BigWaspBackup/BashLib/compare/v8.7.3...v8.7.4) (2026-10-01)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Tweaks to bank loading ([33304a1](https://github.com/BigWaspBackup/BashLib/commit/33304a12c595cd294adcb79e438f1623c25655f2))
-
-
-
-# [8.7.0](https://github.com/BigWaspBackup/BashLib/compare/v8.6.4...v8.7.0) (2026-09-26)
-
-
-### Features
-
-* Added new antiban profile tab to allow more fine tuning of antiban actions, Updated settingshandler to support new game options ([813833f](https://github.com/BigWaspBackup/BashLib/commit/813833f9a2e9884d886224278b02eee4b430fed4))
 
 
 
