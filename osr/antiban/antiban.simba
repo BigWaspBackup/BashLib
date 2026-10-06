@@ -946,7 +946,8 @@ begin
   if WLSettings.GetObject('antiban').getJSONObject('tasks').getBoolean('enabled') then
     Self.SetupTasks();
 
-  if WLSettings.GetObject('antiban').getBoolean('breaks') then
+  if WLSettings.GetObject('antiban').getBoolean('breaks') or
+     (BASHAntibanProfile.Ready and BASHAntibanProfile.BreaksEnabled) then
     Self.SetupBreaks();
 
   if WLSettings.GetObject('antiban').getJSONObject('sleep').getBoolean('enabled') then

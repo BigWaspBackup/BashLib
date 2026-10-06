@@ -28,7 +28,8 @@ const
     'Kharedst Lunch (Hosidius)',
     'Hosidius Tablet',
     'House Spell',
-    'House Tablet'
+    'House Tablet',
+    'Xeric''s Talisman'
   ];
   BASH_TRAVEL_ORTUS: TStringArray = [
     'Hunter Guild (Hunters Cape)',
@@ -174,6 +175,12 @@ begin
     1: Exit(RSTeleportsV2.HOSIDIUS_PORTAL);
     2: Exit(RSTeleportsV2.HOUSE);
     3: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Teleport to house'], 'Outside', [2868, 36222]));
+    4: Exit(setupTeleportLocation(
+         ETeleportType.OTHER,
+         ['Xeric''s talisman'],
+         'Xeric''s Glade',
+         RSTeleportsV2.XERICS_GLADE.worldPoint
+       ));
   end;
   Result := RSTeleportsV2.LUNCH_BY_THE_LANCALLIUMS_HOSIDIUS;
 end;

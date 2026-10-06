@@ -448,7 +448,7 @@ type
   TBASHPremiumGUI = record(TBASHGUIBase)
     BrandTitle, WindowTitle, Username: String;
     LegacyAntibanSection, WebhookTestPrefix: String;
-    HasFarm, HasAIChat, HasWorldHopping, HasMaxActions, HasStopAtLevel, HasRandomEvents: Boolean;
+    HasFarm, HasAIChat, HasWorldHopping, HasMaxActions, HasStopAtLevel, HasRandomEvents, HasWebhooks: Boolean;
     LockCameraTask, LockChatTask, LockMouseTask, LockGameTabsTask, LockBankTask: Boolean;
     StopAtLevelSkills: array of ERSSkill;
 
@@ -496,6 +496,7 @@ type
     FnBuildAccountsExtras, FnApplyActionSettings, FnAfterBuildShell: TBASHGUIProc;
     FnConfigureAntibanTasks, FnSetupAIChat, FnRefreshNavLayout: TBASHGUIProc;
     FnBuildAntibanExtras: TBASHGUIExtrasProc;
+    FnSaveScriptAntiban, FnLoadScriptAntiban: TBASHGUIProc;
     FnStartScript, FnOnFarmEnableChanged, FnOnBirdhouseEnableChanged, FnWebhooksCheckboxChanged: TBASHGUISenderProc;
 
     {$IFDEF BASH_FARM_RUNNER}
@@ -550,6 +551,7 @@ begin
   Self.HasMaxActions := True;
   Self.HasStopAtLevel := False;
   Self.HasRandomEvents := False;
+  Self.HasWebhooks := True;
 end;
 
 procedure TBASHPremiumGUI.LoadActionSettings();
@@ -1034,10 +1036,16 @@ var
   savedEnable: Boolean;
   child: TControl;
 begin
-  savedURL := Self.ReadINIKey(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'WebhookURL', '');
-  savedEnable := StrToBoolDef(Self.ReadINIKey(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'EnableWebhooks', 'false'), False);
-
-  Self.AddHeader(Self.AccountsSection, 'Accounts', 'Login account, antiban profile, and optional Discord webhook notifications.');
+  savedURL := '';
+  savedEnable := False;
+  if Self.HasWebhooks then
+  begin
+    savedURL := Self.ReadINIKey(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'WebhookURL', '');
+    savedEnable := StrToBoolDef(Self.ReadINIKey(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'EnableWebhooks', 'false'), False);
+    Self.AddHeader(Self.AccountsSection, 'Accounts', 'Login account, antiban profile, and optional Discord webhook notifications.');
+  end
+  else
+    Self.AddHeader(Self.AccountsSection, 'Accounts', 'Login account and antiban profile.');
 
   am := Self.CreateAccountManager(Self.AccountsSection);
   am.SetLeft(TControl.AdjustToDPI(16));
@@ -1125,39 +1133,42 @@ begin
   Self.PaintRoundChip(Self.AntibanProfileChip, 'Antiban profile', BASH_GUI_NAV_IDLE, BASH_GUI_BG, False, True);
   Self.AntibanProfileChip.SetTooltip('Breaks, sleeps, standard tasks, and activity antiban for the selected account.');
 
-  hookTop := profileTop + chipH + TControl.AdjustToDPI(20);
-  Self.AddCheck(Self.AccountsSection, Self.EnableWebhooksCheckBox, 'cb_bash_webhooks',
-    'Discord notifications', 24, 350, savedEnable);
-  Self.EnableWebhooksCheckBox.SetTooltip('Send progress and session messages to your Discord webhook.');
-  Self.EnableWebhooksCheckBox.CheckBox.SetOnChange(@Self.WebhooksCheckboxChanged);
+  if Self.HasWebhooks then
+  begin
+    hookTop := profileTop + chipH + TControl.AdjustToDPI(20);
+    Self.AddCheck(Self.AccountsSection, Self.EnableWebhooksCheckBox, 'cb_bash_webhooks',
+      'Discord notifications', 24, 350, savedEnable);
+    Self.EnableWebhooksCheckBox.SetTooltip('Send progress and session messages to your Discord webhook.');
+    Self.EnableWebhooksCheckBox.CheckBox.SetOnChange(@Self.WebhooksCheckboxChanged);
 
-  Self.WebhookInfo := Self.MakeLabel(Self.AccountsSection,
-    'Click here to learn how to generate a Discord webhook URL', 24, 390, 10, BASH_GUI_LINK, False);
-  Self.WebhookInfo.SetOnClick(@Self.OpenWebhookHelp);
-  Self.WebhookInfo.SetCursor(crHandPoint);
-  Self.WebhookInfo.SetTooltip('Opens a guide for creating a Discord webhook URL.');
+    Self.WebhookInfo := Self.MakeLabel(Self.AccountsSection,
+      'Click here to learn how to generate a Discord webhook URL', 24, 390, 10, BASH_GUI_LINK, False);
+    Self.WebhookInfo.SetOnClick(@Self.OpenWebhookHelp);
+    Self.WebhookInfo.SetCursor(crHandPoint);
+    Self.WebhookInfo.SetTooltip('Opens a guide for creating a Discord webhook URL.');
 
-  Self.AddEdit(Self.AccountsSection, Self.WebHookInput, 'le_bash_webhook', 'Webhook URL', savedURL, 24, 420, 520);
-  Self.WebHookInput.SetPasswordChar('*');
-  Self.WebHookInput.SetTooltip('Paste your Discord webhook URL here. Kept hidden while typing.');
+    Self.AddEdit(Self.AccountsSection, Self.WebHookInput, 'le_bash_webhook', 'Webhook URL', savedURL, 24, 420, 520);
+    Self.WebHookInput.SetPasswordChar('*');
+    Self.WebHookInput.SetTooltip('Paste your Discord webhook URL here. Kept hidden while typing.');
 
-  Self.TestButton.Create(Self.AccountsSection);
-  Self.TestButton.SetLeft(TControl.AdjustToDPI(560));
-  Self.TestButton.SetTop(TControl.AdjustToDPI(438));
-  Self.TestButton.SetWidth(TControl.AdjustToDPI(80));
-  Self.TestButton.SetHeight(TControl.AdjustToDPI(28));
-  Self.TestButton.SetCaption('Test');
-  Self.TestButton.SetTooltip('Sends a test Discord message using the webhook URL above.');
-  Self.TestButton.SetOnClick(@Self.TestButtonClick);
-  Self.EnableWebhooksCheckBox.SetTop(hookTop);
-  Self.WebhookInfo.SetTop(hookTop + TControl.AdjustToDPI(40));
-  Self.WebHookInput.SetTop(hookTop + TControl.AdjustToDPI(70));
-  Self.TestButton.SetTop(hookTop + TControl.AdjustToDPI(88));
+    Self.TestButton.Create(Self.AccountsSection);
+    Self.TestButton.SetLeft(TControl.AdjustToDPI(560));
+    Self.TestButton.SetTop(TControl.AdjustToDPI(438));
+    Self.TestButton.SetWidth(TControl.AdjustToDPI(80));
+    Self.TestButton.SetHeight(TControl.AdjustToDPI(28));
+    Self.TestButton.SetCaption('Test');
+    Self.TestButton.SetTooltip('Sends a test Discord message using the webhook URL above.');
+    Self.TestButton.SetOnClick(@Self.TestButtonClick);
+    Self.EnableWebhooksCheckBox.SetTop(hookTop);
+    Self.WebhookInfo.SetTop(hookTop + TControl.AdjustToDPI(40));
+    Self.WebHookInput.SetTop(hookTop + TControl.AdjustToDPI(70));
+    Self.TestButton.SetTop(hookTop + TControl.AdjustToDPI(88));
 
-  if (@Self.FnWebhooksCheckboxChanged <> nil) then
-    Self.FnWebhooksCheckboxChanged(nil)
-  else
-    Self.WebhooksCheckboxChanged(nil);
+    if (@Self.FnWebhooksCheckboxChanged <> nil) then
+      Self.FnWebhooksCheckboxChanged(nil)
+    else
+      Self.WebhooksCheckboxChanged(nil);
+  end;
   if (@Self.FnBuildAccountsExtras <> nil) then
     Self.FnBuildAccountsExtras()
   else
@@ -1364,15 +1375,23 @@ begin
         WORLDHOPVARIATION := 100;
     end;
 
-    WEBHOOKURL := Self.WebHookInput.GetText();
-    ENABLEWEBHOOKS := Self.EnableWebhooksCheckBox.IsChecked();
-    WriteINI(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'WebhookURL', WEBHOOKURL, BASH_GUI_SETTINGS_FILE);
-    WriteINI(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'EnableWebhooks',
-      BoolToStr(ENABLEWEBHOOKS, 'true', 'false'), BASH_GUI_SETTINGS_FILE);
+    if Self.HasWebhooks and Assigned(Self.WebHookInput) and Assigned(Self.EnableWebhooksCheckBox) then
+    begin
+      WEBHOOKURL := Self.WebHookInput.GetText();
+      ENABLEWEBHOOKS := Self.EnableWebhooksCheckBox.IsChecked();
+      WriteINI(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'WebhookURL', WEBHOOKURL, BASH_GUI_SETTINGS_FILE);
+      WriteINI(Self.Username + BASH_GUI_WEBHOOK_SECTION, 'EnableWebhooks',
+        BoolToStr(ENABLEWEBHOOKS, 'true', 'false'), BASH_GUI_SETTINGS_FILE);
+      Self.ApplyDiscordWebhook();
+    end
+    else
+    begin
+      WEBHOOKURL := '';
+      ENABLEWEBHOOKS := False;
+    end;
 
     Self.ApplyAntibanFromGUI();
     Self.ApplyRandomEventsFromGUI();
-    Self.ApplyDiscordWebhook();
 
     {$IFDEF WL_AICHAT_INCLUDED}
     if Self.HasAIChat then

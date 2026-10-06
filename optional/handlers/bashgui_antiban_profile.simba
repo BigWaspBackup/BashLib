@@ -413,7 +413,10 @@ begin
   Self.StoreRandomEventCombos();
   Self.SaveRandomEventsProfile();
   Self.SaveSessionLimits();
-  Self.SaveScriptAntiban();
+  if (@Self.FnSaveScriptAntiban <> nil) then
+    Self.FnSaveScriptAntiban()
+  else
+    Self.SaveScriptAntiban();
 end;
 
 procedure TBASHPremiumGUI.LoadAntibanProfile();
@@ -505,7 +508,10 @@ begin
   end;
 
   Self.LoadSessionLimits();
-  Self.LoadScriptAntiban();
+  if (@Self.FnLoadScriptAntiban <> nil) then
+    Self.FnLoadScriptAntiban()
+  else
+    Self.LoadScriptAntiban();
   Self.SyncLegacyAntibanChecks();
   Self.ShortBreaksCheckboxChanged(nil);
   Self.SleepBreaksCheckboxChanged(nil);

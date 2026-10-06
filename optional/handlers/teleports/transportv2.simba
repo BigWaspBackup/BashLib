@@ -224,11 +224,18 @@ end;
 function TransportTimedWithdraw(item: TRSItem; quantity, timeout: Int32): Boolean;
 var
   bankItem: TRSBankItem;
+  bankWasOpen: Boolean;
 begin
+  bankWasOpen := Bank.IsOpen(False);
   bankItem := bankItem.Setup(item, quantity, False);
   Result := Bank.WithdrawItem(bankItem, False);
   if Result and (timeout > 0) then
-    Result := WaitUntil(TransportInvContains(item), 200, timeout);
+  begin
+    if bankWasOpen then
+      Result := WaitUntil(Inventory.Items.ContainsAny(item.GetArray()), 200, timeout)
+    else
+      Result := WaitUntil(TransportInvContains(item), 200, timeout);
+  end;
 end;
 
 function TUniversalTransportV2.withdrawTeleportItem(constref teleportLocation: TTeleportLocation): Boolean;

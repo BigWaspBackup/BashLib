@@ -557,7 +557,7 @@ begin
   lcb.SetTooltip('How to travel to Catherby patches. Enabled when any Catherby patch is selected.');
 
   Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_hosidius_tp', 'Hosidius', BASH_GUI_COMBO_COL3, 178, BASH_TRAVEL_HOSIDIUS, BASHFarmConfig.HosidiusTP);
-  lcb.SetTooltip('How to travel to Hosidius patches. Enabled when any Hosidius patch is selected.');
+  lcb.SetTooltip('How to travel to Hosidius patches. Xeric''s Talisman rubs to Xeric''s Glade, just north of the patch. Enabled when any Hosidius patch is selected.');
   Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_ortus_tp', 'Civitas illa Fortis', 24, 240, BASH_TRAVEL_ORTUS, BASHFarmConfig.OrtusTP);
   lcb.SetTooltip('How to travel to Civitas illa Fortis patches. Enabled when any Ortus patch is selected.');
   Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_guild_tp', 'Farming Guild', BASH_GUI_COMBO_COL2, 240, BASH_TRAVEL_GUILD, BASHFarmConfig.GuildTP);
