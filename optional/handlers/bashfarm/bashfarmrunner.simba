@@ -453,7 +453,7 @@ begin
   qtys += amount;
 end;
 
-procedure BASHFarmAddMagicRuneCost(var names: TRSItemArray; var qtys: TIntegerArray; travel: TTeleportLocation);
+procedure BASHFarmAddMagicRuneCost(var names: TRSItemArray; var qtys: TIntegerArray; constref travel: TTeleportLocation);
 var
   dest: String;
 begin
