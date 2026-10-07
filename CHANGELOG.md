@@ -1,3 +1,12 @@
+## [8.7.6](https://github.com/BigWaspBackup/BashLib/compare/v8.7.5...v8.7.6) (2026-10-07)
+
+
+### Bug Fixes
+
+* Fixes for spell withdrawing and farm runs ([c353f8f](https://github.com/BigWaspBackup/BashLib/commit/c353f8f135f0bf1e9a774f6c9fd1f77792159c41))
+
+
+
 ## [8.7.5](https://github.com/BigWaspBackup/BashLib/compare/v8.7.4...v8.7.5) (2026-10-06)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Moved random event handling to new antiban profile section, GUI Improvements to Antiban Profile GUI, Support for blighted food in consumem handler, Improvements to farm and birdhouse runs and additional debug added. ([cb5ca48](https://github.com/BigWaspBackup/BashLib/commit/cb5ca4852fc526f948e1f0a30b7cb60b2ecb431b))
-
-
-
-## [8.7.1](https://github.com/BigWaspBackup/BashLib/compare/v8.7.0...v8.7.1) (2026-09-27)
-
-
-### Bug Fixes
-
-* Tweaks to bank loading ([33304a1](https://github.com/BigWaspBackup/BashLib/commit/33304a12c595cd294adcb79e438f1623c25655f2))
 
 
 
