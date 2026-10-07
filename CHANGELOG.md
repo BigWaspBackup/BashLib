@@ -1,3 +1,12 @@
+## [8.7.7](https://github.com/BigWaspBackup/BashLib/compare/v8.7.6...v8.7.7) (2026-10-07)
+
+
+### Bug Fixes
+
+* Assets updated to support latest game version ([841ab9e](https://github.com/BigWaspBackup/BashLib/commit/841ab9e849fc67c981ba73d22664c14ddd5f19b4))
+
+
+
 ## [8.7.6](https://github.com/BigWaspBackup/BashLib/compare/v8.7.5...v8.7.6) (2026-10-07)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Improved withdrawing from farming lep, Removed portal nexus from farming locations until complete ([17c3acb](https://github.com/BigWaspBackup/BashLib/commit/17c3acbd1759a960f048a407b48d28c9852f7080))
-
-
-
-## [8.7.2](https://github.com/BigWaspBackup/BashLib/compare/v8.7.1...v8.7.2) (2026-09-30)
-
-
-### Bug Fixes
-
-* Moved random event handling to new antiban profile section, GUI Improvements to Antiban Profile GUI, Support for blighted food in consumem handler, Improvements to farm and birdhouse runs and additional debug added. ([cb5ca48](https://github.com/BigWaspBackup/BashLib/commit/cb5ca4852fc526f948e1f0a30b7cb60b2ecb431b))
 
 
 
