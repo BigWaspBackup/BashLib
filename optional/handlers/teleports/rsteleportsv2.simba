@@ -383,7 +383,7 @@ begin
   RSTeleportsV2.MINING_GUILD := setupTeleportLocation(ETeleportType.JEWELLERY, "Skills Necklace" , "Mining Guild", [3561, 43944]);
   RSTeleportsV2.CRAFTING_GUILD := setupTeleportLocation(ETeleportType.JEWELLERY, "Skills Necklace" , "Crafting Guild", [7641, 37252]);
   RSTeleportsV2.COOKING_GUILD := setupTeleportLocation(ETeleportType.JEWELLERY, "Skills Necklace" , "Cooking Guild", [8482, 36682]);
-  RSTeleportsV2.WOODCUTTING_GUILD := setupTeleportLocation(ETeleportType.JEWELLERY, "Skills Necklace" , "Woodcutting Guild", [2142, 36510]);
+  RSTeleportsV2.WOODCUTTING_GUILD := setupTeleportLocation(ETeleportType.JEWELLERY, "Skills Necklace" , "Woodcutting Guild", [2554, 36410]);
   RSTeleportsV2.EDGEVILLE := setupTeleportLocation(ETeleportType.JEWELLERY, "Amulet of Glory" , "Edgeville", [8252, 36460]);
   RSTeleportsV2.KARAMJA := setupTeleportLocation(ETeleportType.JEWELLERY, "Amulet of Glory" , "Karamja", [7576,37726]);
   RSTeleportsV2.DRAYNOR_VILLAGE := setupTeleportLocation(ETeleportType.JEWELLERY, "Amulet of Glory" , "Draynor Village", [8322, 37322]);
@@ -527,7 +527,7 @@ begin
   RSTeleportsV2.POH_MINING_GUILD := setupTeleportLocation(ETeleportType.JEWELLERY_BOX, "Mining Guild", 0, [3561, 43944], "F");
   RSTeleportsV2.POH_CRAFTING_GUILD := setupTeleportLocation(ETeleportType.JEWELLERY_BOX, "Crafting Guild", 0, [7641, 37252], "G");
   RSTeleportsV2.POH_COOKING_GUILD := setupTeleportLocation(ETeleportType.JEWELLERY_BOX, "Cooking Guild", 0, [8482, 36682], "H");
-  RSTeleportsV2.POH_WOODCUTTING_GUILD := setupTeleportLocation(ETeleportType.JEWELLERY_BOX, "Woodcutting Guild", 0, [2142, 36510], "I");
+  RSTeleportsV2.POH_WOODCUTTING_GUILD := setupTeleportLocation(ETeleportType.JEWELLERY_BOX, "Woodcutting Guild", 0, [2554, 36410], "I");
   RSTeleportsV2.POH_FARMING_GUILD := setupTeleportLocation(ETeleportType.JEWELLERY_BOX, "Farming Guild", 0, [900, 35572], "J");
   RSTeleportsV2.POH_EDGEVILLE := setupTeleportLocation(ETeleportType.JEWELLERY_BOX, "Edgeville", 0, [8252, 36460], "O");
   RSTeleportsV2.POH_KARAMJA := setupTeleportLocation(ETeleportType.JEWELLERY_BOX, "Karamja", 0, [7576,37726], "P");

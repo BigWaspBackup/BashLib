@@ -238,6 +238,49 @@ begin
   end;
 end;
 
+function TRSWorldHopper.ReadNumberInRow(row: TBox): Int32;
+var
+  tpa: TPointArray;
+  clusters: TBoxArray;
+  area: TBox;
+begin
+  area := row;
+  area.X2 := Min(row.X2, row.X1 + 90);
+  if SRL.FindColors(tpa, [Self.SILVER, Self.YELLOW], area) = 0 then
+    Exit;
+
+  clusters := tpa.Cluster(5, 1).ToTBA();
+  if Length(clusters) = 0 then
+    Exit;
+
+  clusters.SortByX();
+  Result := OCR.RecognizeNumber(
+    clusters[0],
+    TOCRColorFilter.Create([Self.SILVER, Self.YELLOW]),
+    RS_FONT_PLAIN_12
+  );
+end;
+
+function TRSWorldHopper.ConfirmListedWorld(row: TBox; world: Int32): Boolean;
+var
+  first, second: Int32;
+begin
+  first := Self.ReadNumberInRow(row);
+  second := Self.ReadNumberInRow(row);
+  Result := (world <> 0) and (first = world) and (second = world);
+  if not Result then
+    WriteLn('[WORLDHOP] Not clicking ', world, '. Fresh list reads were ', first, ' and ', second);
+end;
+
+function TRSWorldHopper.CurrentWorldMatches(world: Int32): Boolean;
+var
+  first, second: Int32;
+begin
+  first := Self.GetCurrentWorld();
+  second := Self.GetCurrentWorld();
+  Result := (world <> 0) and (first = world) and (second = world);
+end;
+
 (*
 ## TRSWorldHopper.WaitForHop
 ```pascal
@@ -264,7 +307,7 @@ begin
     Exit;
   end;
 
-  Result := WaitUntil(Self.GetCurrentWorld() = world, 200, 10000);
+  Result := WaitUntil(Self.CurrentWorldMatches(world), 200, 10000);
 
   if not Result then Self.DebugLn("Timed out");
 end;
@@ -373,12 +416,16 @@ begin
   repeat
     visible := Self.ReadWorlds(boxes);
 
-    i := visible.Find(next);
-    if i > -1 then
+    for i := 0 to High(visible) do
     begin
-      WriteLn('[WORLDHOP] Clicking hopper OCR=', visible[i], ' from visible ', ToStr(visible));
+      if visible[i] <> next then
+        Continue;
+      if not Self.ConfirmListedWorld(boxes[i], next) then
+        Continue;
+
+      WriteLn('[WORLDHOP] Clicking hopper OCR=', visible[i], ' confirmed ', next, ' from visible ', ToStr(visible));
       Mouse.Click(boxes[i], MOUSE_LEFT, True);
-      Exit(Self.WaitForHop(next))
+      Exit(Self.WaitForHop(next));
     end;
 
     Self.Scroll(visible.Min() < next, moveMouse);
@@ -563,19 +610,27 @@ begin
     WriteLn('[WORLDHOP] WARNING: Chosen world ', targetWorld, ' is not in the account worlds list');
 
   Result := Self.Hop([targetWorld]);
-  landedWorld := Self.GetCurrentWorld();
-  if Result then
+  if Self.CurrentWorldMatches(targetWorld) then
   begin
-    WriteLn('[WORLDHOP] Hopped to world ', landedWorld, ' (requested ', targetWorld, ')');
-    if (landedWorld <> 0) and (landedWorld <> targetWorld) then
-      WriteLn('[WORLDHOP] WARNING: landed on ', landedWorld, ' instead of requested ', targetWorld);
-  end
-  else
-  begin
-    WriteLn('[WORLDHOP] Hop to ', targetWorld, ' failed. Current world is now ', landedWorld);
-    if (landedWorld <> 0) and (not configuredWorlds.Contains(landedWorld)) then
-      WriteLn('[WORLDHOP] WARNING: current world ', landedWorld, ' is not in the account worlds list');
+    WriteLn('[WORLDHOP] Hopped to world ', targetWorld);
+    Exit(True);
   end;
+
+  landedWorld := Self.GetCurrentWorld();
+  if Self.GetCurrentWorld() <> landedWorld then
+    landedWorld := 0;
+
+  Result := False;
+  WriteLn('[WORLDHOP] Hop to ', targetWorld, ' did not confirm. Header reads ', landedWorld);
+  if (landedWorld <> 0) and (not playerWorlds.Contains(landedWorld)) then
+  begin
+    WriteLn('[WORLDHOP] Landed on ', landedWorld, ', which is not in the configured worlds. Trying ', targetWorld, ' again');
+    Result := Self.Hop([targetWorld]) and Self.CurrentWorldMatches(targetWorld);
+    if not Result then
+      WriteLn('[WORLDHOP] Still not on ', targetWorld, '. Current header read is ', Self.GetCurrentWorld());
+  end
+  else if (landedWorld <> 0) and (landedWorld <> targetWorld) then
+    WriteLn('[WORLDHOP] Staying on configured world ', landedWorld, ' instead of ', targetWorld);
 end;
 
 function TRSWorldHopper.DoTimedHop(): Boolean;

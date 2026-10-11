@@ -2430,59 +2430,83 @@ end;
 
 procedure TBASHFarmRunner.DepositLepBeforeFinish(patchIdx: Int32);
 var
-  k: Int32;
+  k, best: Int32;
+  bestDist, dist: Double;
   patch: TBASHFarmPatch;
-  deposited: Boolean;
 begin
-  deposited := False;
-
-  if (patchIdx >= 0) and (patchIdx <= High(Self.Patches)) then
-  begin
-    patch := Self.Patches[patchIdx];
-    if not patch.AtFarm() and
-       (Map.Position().DistanceTo(patch.Data.LeprechaunCoords) <= 80) then
-    begin
-      WriteLn('[BASHFarm] Walking to leprechaun at ', patch.Data.Name, ' to deposit tools');
-      patch.WalkNearLeprechaun(10);
-    end;
-
-    if patch.AtFarm() then
-    begin
-      patch.NoteItems();
-      if not patch.DepositLepTools() then
-      begin
-        if patch.HasStorableLepTools() and (not BASHFarmAbortRun) then
-          Self.DisableFarmRuns(
-            'Could not deposit tools to leprechaun at ' + patch.Data.Name
-          );
-      end;
-      deposited := not patch.HasStorableLepTools();
-      Self.Patches[patchIdx] := patch;
-    end;
-  end;
-
-  if deposited then
+  if Length(Self.Patches) < 1 then
     Exit;
 
-  for k := High(Self.Patches) downto 0 do
+  if (not Self.Patches[0].HasStorableLepTools()) and
+     (not Inventory.ContainsAny(BASH_FARM_LEPRECHAUN_ITEMS)) then
+    Exit;
+
+  best := -1;
+  bestDist := 0;
+
+  if (patchIdx >= 0) and (patchIdx <= High(Self.Patches)) and
+     Self.Patches[patchIdx].AtFarm() then
   begin
-    if k = patchIdx then
-      Continue;
-    if Self.Patches[k].Skip then
-      Continue;
+    best := patchIdx;
+    bestDist := Map.Position().DistanceTo(Self.Patches[patchIdx].Data.LeprechaunCoords);
+  end;
+
+  for k := 0 to High(Self.Patches) do
+  begin
     if not Self.Patches[k].AtFarm() then
       Continue;
-
-    Self.Patches[k].NoteItems();
-    if not Self.Patches[k].DepositLepTools() then
+    dist := Map.Position().DistanceTo(Self.Patches[k].Data.LeprechaunCoords);
+    if (best < 0) or (dist < bestDist) then
     begin
-      if Self.Patches[k].HasStorableLepTools() and (not BASHFarmAbortRun) then
-        Self.DisableFarmRuns(
-          'Could not deposit tools to leprechaun at ' + Self.Patches[k].Data.Name
-        );
+      best := k;
+      bestDist := dist;
     end;
-    Break;
   end;
+
+  if best < 0 then
+  begin
+    for k := 0 to High(Self.Patches) do
+    begin
+      dist := Map.Position().DistanceTo(Self.Patches[k].Data.LeprechaunCoords);
+      if (best < 0) or (dist < bestDist) then
+      begin
+        best := k;
+        bestDist := dist;
+      end;
+    end;
+  end;
+
+  if best < 0 then
+    Exit;
+
+  patch := Self.Patches[best];
+  if not patch.AtFarm() then
+  begin
+    WriteLn('[BASHFarm] Walking to leprechaun at ', patch.Data.Name, ' to deposit tools');
+    patch.WalkNearLeprechaun(10);
+  end;
+
+  if not patch.AtFarm() then
+  begin
+    WriteLn('[BASHFarm] Could not reach leprechaun at ', patch.Data.Name, ' to deposit tools');
+    if patch.HasStorableLepTools() and (not BASHFarmAbortRun) then
+      Self.DisableFarmRuns(
+        'Could not deposit tools to leprechaun at ' + patch.Data.Name
+      );
+    Self.Patches[best] := patch;
+    Exit;
+  end;
+
+  WriteLn('[BASHFarm] Depositing with the leprechaun at ', patch.Data.Name);
+  patch.NoteItems();
+  if not patch.DepositLepTools() then
+  begin
+    if patch.HasStorableLepTools() and (not BASHFarmAbortRun) then
+      Self.DisableFarmRuns(
+        'Could not deposit tools to leprechaun at ' + patch.Data.Name
+      );
+  end;
+  Self.Patches[best] := patch;
 end;
 
 procedure TBASHFarmRunner.DisableFarmRuns(reason: String);
