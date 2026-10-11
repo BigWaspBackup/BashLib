@@ -1,3 +1,12 @@
+## [8.7.8](https://github.com/BigWaspBackup/BashLib/compare/v8.7.7...v8.7.8) (2026-10-11)
+
+
+### Bug Fixes
+
+* Fixed woodcutting guild landing location, Fixes to depositing items after a farm run. ([93b445b](https://github.com/BigWaspBackup/BashLib/commit/93b445bedb6a470778a49bf76f62e43170066951))
+
+
+
 ## [8.7.7](https://github.com/BigWaspBackup/BashLib/compare/v8.7.6...v8.7.7) (2026-10-07)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Fixes for hunter cape and hunters guild - Untested ([dad5db5](https://github.com/BigWaspBackup/BashLib/commit/dad5db520460b8a52e8d7bf882e9adeb70da3af7))
-
-
-
-## [8.7.3](https://github.com/BigWaspBackup/BashLib/compare/v8.7.2...v8.7.3) (2026-09-30)
-
-
-### Bug Fixes
-
-* Improved withdrawing from farming lep, Removed portal nexus from farming locations until complete ([17c3acb](https://github.com/BigWaspBackup/BashLib/commit/17c3acbd1759a960f048a407b48d28c9852f7080))
 
 
 
