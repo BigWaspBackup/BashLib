@@ -295,7 +295,7 @@ begin
   RSTeleportsV2.NEXUS_MARIM := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Marim', [3490, 37713]);
   RSTeleportsV2.NEXUS_SENNTISTEN := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Senntisten', [9180, 37283]);
   RSTeleportsV2.NEXUS_KHARYRLL := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Kharyrll', [9880, 37538]);
-  RSTeleportsV2.NEXUS_KOUREND_CASTLE := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Kourend Castle', [2155, 37354]);
+  RSTeleportsV2.NEXUS_KOUREND_CASTLE := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Kourend Castle', [2476, 35740]);
   RSTeleportsV2.NEXUS_LUMBRIDGE := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Lumbridge', [8794, 37356]);
   RSTeleportsV2.NEXUS_MIND_ALTAR := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Mind Altar', [3491, 37491]);
   RSTeleportsV2.NEXUS_LUNAR_ISLE := setupTeleportLocation(ETeleportType.PORTAL_NEXUS, 'Lunar Isle', [3490, 37713]);
@@ -339,7 +339,7 @@ begin
   RSTeleportsV2.WATCHTOWER_YANILLE := setupTeleportLocation(ETeleportType.NORMAL_MAGIC, "Watchtower Yanille", 58, [6142, 37393]);
   RSTeleportsV2.TROLLHEIM := setupTeleportLocation(ETeleportType.NORMAL_MAGIC, "Trollheim", 61, [7469, 35685]);
   RSTeleportsV2.APE_ATOLL := setupTeleportLocation(ETeleportType.NORMAL_MAGIC, "Ape Atoll", 64, [6833, 37494]);
-  RSTeleportsV2.KOUREND := setupTeleportLocation(ETeleportType.NORMAL_MAGIC, "Kourend", 69, [2155, 37354]);
+  RSTeleportsV2.KOUREND := setupTeleportLocation(ETeleportType.NORMAL_MAGIC, "Kourend", 48, [2476, 35740]);
   RSTeleportsV2.PADDEWWA := setupTeleportLocation(ETeleportType.ANCIENT_MAGICKS, "Paddewwa", 54, [3609, 43862]);
   RSTeleportsV2.SENNTISTEN := setupTeleportLocation(ETeleportType.ANCIENT_MAGICKS, "Senntisten", 60, [9180, 37283]);
   RSTeleportsV2.KHARYRLL := setupTeleportLocation(ETeleportType.ANCIENT_MAGICKS, "Kharyrll", 66, [9880, 37538]);
@@ -414,7 +414,7 @@ begin
   RSTeleportsV2.XERICS_LOOKOUT := setupTeleportLocation(ETeleportType.OTHER, ["Xeric's Talisman"], "Xeric's Lookout", [2088, 37410]);
   RSTeleportsV2.XERICS_GLADE := setupTeleportLocation(ETeleportType.OTHER, ["Xeric's Talisman"], "Xeric's Glade", [2266, 37446]);
   RSTeleportsV2.XERICS_INFERNO := setupTeleportLocation(ETeleportType.OTHER, ["Xeric's Talisman"], "Xeric's Inferno", [2016, 37601]);
-  RSTeleportsV2.XERICS_HEART := setupTeleportLocation(ETeleportType.OTHER, ["Xeric's Talisman"], "Xeric's Heart", [2153, 37352]);
+  RSTeleportsV2.XERICS_HEART := setupTeleportLocation(ETeleportType.OTHER, ["Xeric's Talisman"], "Xeric's Heart", [2468, 35748]);
   RSTeleportsV2.XERICS_HONOUR := setupTeleportLocation(ETeleportType.OTHER, ["Xeric's Talisman"], "Xeric's Honour", [1766, 37441]);
   RSTeleportsV2.STRONGHOLD_OF_SECURITY := setupTeleportLocation(ETeleportType.OTHER, ["Skull Sceptre"], "Stronghold of Security", [3593, 37403]);
   RSTeleportsV2.MYTHS_GUILD := setupTeleportLocation(ETeleportType.OTHER, ["Mythical Cape"], "Teleport", [2970, 37371]);
@@ -487,7 +487,7 @@ begin
   RSTeleportsV2.BLS_KEBOWS_LOWLANDS := setupTeleportLocation(ETeleportType.FAIRY_RING, "BLS", [1080,36450]);
   RSTeleportsV2.CIP_ISLAND_MISCELLANIA := setupTeleportLocation(ETeleportType.FAIRY_RING, "CIP", [7066, 37390]);
   RSTeleportsV2.CIQ_NORTHWEST_OF_YANILLE := setupTeleportLocation(ETeleportType.FAIRY_RING, "CIQ", [6018, 37394]);
-  RSTeleportsV2.CIS_NORTH_OF_THE_ARCEUUS_LIBRARY := setupTeleportLocation(ETeleportType.FAIRY_RING, "CIS", [1462, 34964]);
+  RSTeleportsV2.CIS_NORTH_OF_THE_ARCEUUS_LIBRARY := setupTeleportLocation(ETeleportType.FAIRY_RING, "CIS", [2460, 34956]);
   RSTeleportsV2.CIR_NORTHEAST_OF_THE_FARMING_GUILD := setupTeleportLocation(ETeleportType.FAIRY_RING, "CIR", [1114, 36090]);
   RSTeleportsV2.CJR_SINCLAIR_MANSION := setupTeleportLocation(ETeleportType.FAIRY_RING, "CJR", [6726, 36122]);
   RSTeleportsV2.CJQ_THE_GREAT_CONCH := setupTeleportLocation(ETeleportType.FAIRY_RING, "CJQ", [8616,40642]);
