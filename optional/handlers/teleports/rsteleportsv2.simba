@@ -317,7 +317,7 @@ begin
   RSTeleportsV2.MINIGAME_GAMES_ROOM := setupTeleportLocation(ETeleportType.MINIGAME, 'games room', [0, 0], False);
   RSTeleportsV2.MINIGAME_CASTLE_WARS := setupTeleportLocation(ETeleportType.MINIGAME, 'castle wars', [0, 0], False);
   RSTeleportsV2.MINIGAME_CLAN_WARS := setupTeleportLocation(ETeleportType.MINIGAME, 'clan wars', [0, 0], False);
-  RSTeleportsV2.MINIGAME_FISH_TRAWLER := setupTeleportLocation(ETeleportType.MINIGAME, 'fish trawler', [0, 0], False);
+  RSTeleportsV2.MINIGAME_FISH_TRAWLER := setupTeleportLocation(ETeleportType.MINIGAME, 'Fishing Trawler', [0, 0], False);
   RSTeleportsV2.MINIGAME_GIANTS_FOUNDRY := setupTeleportLocation(ETeleportType.MINIGAME, "giants' foundry", [0, 0], False);
   RSTeleportsV2.MINIGAME_GUARDIANS_OF_THE_RIFT := setupTeleportLocation(ETeleportType.MINIGAME, "guardians of the rift", [0, 0], False);
   RSTeleportsV2.MINIGAME_LAST_MAN_STANDING := setupTeleportLocation(ETeleportType.MINIGAME, "last man standing", [0, 0], False);

@@ -60,7 +60,7 @@ end;
 
 function TRSGrouping.DoesActivityHaveTeleport(activity : string) : Boolean;
 const
-  VALID_TELEPORTS : TStringArray := ['barbarian assault', 'games room', 'castle wars', 'clan wars', 'fish trawler', "giants' foundry", "guardians of the rift", "last man standing", "nightmare zone", "pest control", "rat pits", "shades of mort'ton", "soul wars", "tithe farm", "trouble brewing", "tzhaar fight pit" ];
+  VALID_TELEPORTS : TStringArray := ['barbarian assault', 'games room', 'castle wars', 'clan wars', 'fishing trawler', "giants' foundry", "guardians of the rift", "last man standing", "nightmare zone", "pest control", "rat pits", "shades of mort'ton", "soul wars", "tithe farm", "trouble brewing", "tzhaar fight pit" ];
 var
   tempStr : string;
 begin
@@ -88,6 +88,7 @@ begin
   if activity.Len() < 2 then
     Exit;
 
+  activity := activity.ToLower();
   if not Self.DoesActivityHaveTeleport(activity) then
   begin
     Writeln("Activity: ", activity, " does not have a valid teleport");
