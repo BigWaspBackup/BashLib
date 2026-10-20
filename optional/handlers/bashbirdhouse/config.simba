@@ -16,6 +16,13 @@ const
 
   BASH_BH_SEEDS: TStringArray = [
     'Asgarnian seed', 'Barley seed', 'Cabbage seed', 'Hammerstone seed',
+    'Jute seed', 'Krandorian seed', 'Marigold seed', 'Onion seed',
+    'Potato seed', 'Rosemary seed', 'Strawberry seed', 'Sweetcorn seed',
+    'Tomato seed', 'Watermelon seed', 'Wildblood seed', 'Yanillian seed'
+  ];
+
+  BASH_BH_SEEDS_V1: TStringArray = [
+    'Asgarnian seed', 'Barley seed', 'Cabbage seed', 'Hammerstone seed',
     'Jute seed', 'Krandorian seed', 'Onion seed', 'Potato seed',
     'Snape grass seed', 'Strawberry seed', 'Sweetcorn seed', 'Tomato seed',
     'Watermelon seed', 'Wildblood seed', 'Yanillian seed'
@@ -37,7 +44,7 @@ end;
 procedure TBASHBirdHouseConfig.Clear();
 begin
   Self.LogTypeIdx := 4;
-  Self.SeedIdx := 7;
+  Self.SeedIdx := 8; // Potato seed
   Self.UseBestLog := False;
   Self.RunNow := False;
 end;
@@ -52,12 +59,48 @@ begin
   dest := StrToIntDef(ReadINI(Self.Section(), key, Self.Path()), dest);
 end;
 
+function TBASHBirdHouseConfig.IndexOfSeed(name: String): Int32;
+var
+  i: Int32;
+begin
+  Result := -1;
+  for i := 0 to High(BASH_BH_SEEDS) do
+    if BASH_BH_SEEDS[i] = name then
+      Exit(i);
+end;
+
+procedure TBASHBirdHouseConfig.ReadSeed();
+var
+  raw, name: String;
+  idx, found: Int32;
+begin
+  raw := ReadINI(Self.Section(), 'Seed', Self.Path());
+  if raw = '' then
+    Exit;
+
+  found := Self.IndexOfSeed(raw);
+  if found >= 0 then
+  begin
+    Self.SeedIdx := found;
+    Exit;
+  end;
+
+  idx := StrToIntDef(raw, -1);
+  if (idx < 0) or (idx > High(BASH_BH_SEEDS_V1)) then
+    Exit;
+
+  name := BASH_BH_SEEDS_V1[idx];
+  found := Self.IndexOfSeed(name);
+  if found >= 0 then
+    Self.SeedIdx := found;
+end;
+
 procedure TBASHBirdHouseConfig.Read();
 begin
   Self.Clear();
 
   Self.ReadInt('Log type', Self.LogTypeIdx);
-  Self.ReadInt('Seed', Self.SeedIdx);
+  Self.ReadSeed();
   Self.ReadBool('Use best log', Self.UseBestLog);
   Self.ReadBool('Run now', Self.RunNow);
 
@@ -68,9 +111,16 @@ begin
 end;
 
 procedure TBASHBirdHouseConfig.Write();
+var
+  seedName: String;
 begin
+  if (Self.SeedIdx < 0) or (Self.SeedIdx > High(BASH_BH_SEEDS)) then
+    seedName := 'Potato seed'
+  else
+    seedName := BASH_BH_SEEDS[Self.SeedIdx];
+
   WriteINI(Self.Section(), 'Log type', ToStr(Self.LogTypeIdx), Self.Path());
-  WriteINI(Self.Section(), 'Seed', ToStr(Self.SeedIdx), Self.Path());
+  WriteINI(Self.Section(), 'Seed', seedName, Self.Path());
   WriteINI(Self.Section(), 'Use best log', ToStr(Self.UseBestLog), Self.Path());
   WriteINI(Self.Section(), 'Run now', ToStr(Self.RunNow), Self.Path());
 end;
