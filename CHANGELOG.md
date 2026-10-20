@@ -1,3 +1,14 @@
+## [8.7.9](https://github.com/BigWaspBackup/BashLib/compare/v8.7.8...v8.7.9) (2026-10-16)
+
+
+### Bug Fixes
+
+* Improvements to Fairy Ring finding, tweaks to minigame teleports ([2fbc184](https://github.com/BigWaspBackup/BashLib/commit/2fbc1847cb6e12491560e08feb9c56f6b8da020c))
+* Removed debug code ([a77cdcf](https://github.com/BigWaspBackup/BashLib/commit/a77cdcfaea5e78423a4d0f871f67c38535b0fbff))
+* Some changes to teleport locations ([621c2cd](https://github.com/BigWaspBackup/BashLib/commit/621c2cd6ee469a96484a33fd3febc90432c5feba))
+
+
+
 ## [8.7.8](https://github.com/BigWaspBackup/BashLib/compare/v8.7.7...v8.7.8) (2026-10-11)
 
 
@@ -31,15 +42,6 @@
 ### Bug Fixes
 
 * Activity Antiban settings are now saved, Xeric's Talisman added as travel method, farm run tweaks ([57a4d51](https://github.com/BigWaspBackup/BashLib/commit/57a4d51522dac482b460c2849fed08e632e74ef0))
-
-
-
-## [8.7.4](https://github.com/BigWaspBackup/BashLib/compare/v8.7.3...v8.7.4) (2026-10-01)
-
-
-### Bug Fixes
-
-* Fixes for hunter cape and hunters guild - Untested ([dad5db5](https://github.com/BigWaspBackup/BashLib/commit/dad5db520460b8a52e8d7bf882e9adeb70da3af7))
 
 
 
