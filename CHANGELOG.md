@@ -1,3 +1,12 @@
+## [8.7.12](https://github.com/BigWaspBackup/BashLib/compare/v8.7.11...v8.7.12) (2026-10-21)
+
+
+### Bug Fixes
+
+* Minigame teleports tweaks and birdhouse improvements ([aae62ad](https://github.com/BigWaspBackup/BashLib/commit/aae62ad1273bdbf3a0b90374f38456255a8473a0))
+
+
+
 ## [8.7.11](https://github.com/BigWaspBackup/BashLib/compare/v8.7.10...v8.7.11) (2026-10-21)
 
 
@@ -33,15 +42,6 @@
 ### Bug Fixes
 
 * Fixed woodcutting guild landing location, Fixes to depositing items after a farm run. ([93b445b](https://github.com/BigWaspBackup/BashLib/commit/93b445bedb6a470778a49bf76f62e43170066951))
-
-
-
-## [8.7.7](https://github.com/BigWaspBackup/BashLib/compare/v8.7.6...v8.7.7) (2026-10-07)
-
-
-### Bug Fixes
-
-* Assets updated to support latest game version ([841ab9e](https://github.com/BigWaspBackup/BashLib/commit/841ab9e849fc67c981ba73d22664c14ddd5f19b4))
 
 
 
