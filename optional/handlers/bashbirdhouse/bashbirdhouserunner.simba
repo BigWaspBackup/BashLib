@@ -1334,6 +1334,16 @@ begin
   end;
 end;
 
+procedure TBASHBirdHouseRunner.LogWithdrawPlan(itemList: TRSBankItemArray);
+var
+  i: Int32;
+begin
+  WriteLn('[BASHBirdHouse] Looking for birdhouse run items:');
+  for i := 0 to High(itemList) do
+    WriteLn('[BASHBirdHouse]   ', itemList[i].Quantity, 'x ', ToStr(itemList[i].Item));
+  WriteLn('[BASHBirdHouse]   1x ', ToStr(RSTeleportsV2.FOSSIL_ISLAND.item), ' (any charge)');
+end;
+
 function TBASHBirdHouseRunner.WithdrawDigsitePendant(): Boolean;
 var
   chargedVariants: TRSItemArray;
@@ -1342,17 +1352,26 @@ var
   attempt: Int32;
 begin
   chargedVariants := getChargedJewelleryNames(RSTeleportsV2.FOSSIL_ISLAND.item);
+  WriteLn('[BASHBirdHouse] Digsite pendant names: ', ToStr(chargedVariants));
   for attempt := 1 to 3 do
     for chargedJewellery in chargedVariants do
     begin
       if Inventory.ContainsItem(chargedJewellery) then
+      begin
+        WriteLn('[BASHBirdHouse] Already have ', ToStr(chargedJewellery));
         Exit(True);
+      end;
 
-      WriteLn('[BASHBirdHouse] Withdrawing ', ToStr(chargedJewellery), ' (attempt ', attempt, '/3)');
+      WriteLn('[BASHBirdHouse] Looking for ', ToStr(chargedJewellery), ' (attempt ', attempt, '/3)');
       bankItem := TRSBankItem.Setup(chargedJewellery, 1, False);
-      if Bank.WithdrawItem(bankItem, False)
-      and WaitUntil(Inventory.ContainsItem(chargedJewellery), 65, 2200) then
+      if not Bank.WithdrawItem(bankItem, False) then
+      begin
+        WriteLn('[BASHBirdHouse] Could not find ', ToStr(chargedJewellery), ' in the bank');
+        Continue;
+      end;
+      if WaitUntil(Inventory.ContainsItem(chargedJewellery), 65, 2200) then
         Exit(True);
+      WriteLn('[BASHBirdHouse] Clicked ', ToStr(chargedJewellery), ' but it did not arrive');
     end;
 
   WriteLn('[BASHBirdHouse] Could not get digsite pendant');
@@ -1379,14 +1398,19 @@ begin
       Exit(True);
     end;
 
-    WriteLn('[BASHBirdHouse] Withdrawing ', itemName, ' (attempt ', attempt, '/3)');
+    WriteLn('[BASHBirdHouse] Looking for ', itemNumNeeded, 'x ', itemName, ' (attempt ', attempt, '/3)');
     bankItem.Quantity := itemNumNeeded;
-    if Bank.WithdrawItem(bankItem, False) and
-       WaitUntil(Inventory.ContainsItem(bankItem.Item), 65, 2000) then
+    if not Bank.WithdrawItem(bankItem, False) then
+    begin
+      WriteLn('[BASHBirdHouse] Could not find ', itemNumNeeded, 'x ', itemName, ' in the bank');
+      Continue;
+    end;
+    if WaitUntil(Inventory.ContainsItem(bankItem.Item), 65, 2000) then
       Exit(True);
+    WriteLn('[BASHBirdHouse] Clicked ', itemName, ' but it did not arrive');
   end;
 
-  WriteLn('[BASHBirdHouse] Bank is missing: ' + itemName);
+  WriteLn('[BASHBirdHouse] Bank is missing: ', wanted, 'x ', itemName);
 end;
 
 function TBASHBirdHouseRunner.WithdrawNextRun(): Boolean;
@@ -1397,7 +1421,11 @@ var
   nextBestLog: EBASHBirdHouseLog;
 begin
   if not Bank.IsOpen() then
-    Exit;
+  begin
+    WriteLn('[BASHBirdHouse] Bank is not open, cannot search for run items');
+    Self.LogWithdrawPlan(Self.GetWithdrawList());
+    Exit(False);
+  end;
 
   if Self.AlwaysUseBestLog
   and (not Self.TerminateOnNoLogs)
@@ -1421,6 +1449,7 @@ begin
   end;
 
   itemList := Self.GetWithdrawList();
+  Self.LogWithdrawPlan(itemList);
   pendantStep := Length(itemList);
 
   for i := 0 to High(itemList) do
