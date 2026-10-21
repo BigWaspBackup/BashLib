@@ -1110,11 +1110,38 @@ begin
   Result := False;
 end;
 
+function TBASHBirdHouseRunner.ApplyBestLog(useBank: Boolean): Boolean;
+var
+  nextLog: EBASHBirdHouseLog;
+begin
+  Result := True;
+  if not Self.AlwaysUseBestLog then
+    Exit;
+
+  Self.SuggestedLogType := Self.GetLogForHunterLevel(Stats.GetLevel(ERSSkill.HUNTER, False));
+  WriteLn('[BASHBirdHouse] Best log for Hunter/Crafting: ', Self.GetLogString(Self.SuggestedLogType));
+
+  if (not useBank) or Self.TerminateOnNoLogs then
+  begin
+    Self.LogType := Self.SuggestedLogType;
+    Exit;
+  end;
+
+  if not Self.GetNextBestLogInBank(Self.SuggestedLogType, nextLog) then
+  begin
+    WriteLn('[BASHBirdHouse] Out of logs, cannot do a birdhouse run');
+    Exit(False);
+  end;
+
+  if nextLog <> Self.SuggestedLogType then
+    WriteLn('[BASHBirdHouse] Bank is missing ', Self.GetLogString(Self.SuggestedLogType),
+            ', using ', Self.GetLogString(nextLog));
+  Self.LogType := nextLog;
+end;
+
 function TBASHBirdHouseRunner.WalkToIslandBank(): Boolean;
 begin
-  if Self.AlwaysUseBestLog then
-    Self.SuggestedLogType := Self.GetLogForHunterLevel(Stats.GetLevel(ERSSkill.HUNTER, False));
-
+  Self.ApplyBestLog(False);
   Result := Banks.WalkOpen();
 end;
 
@@ -1424,7 +1451,6 @@ var
   itemList: TRSBankItemArray;
   steps: TIntegerArray;
   i, step, pendantStep: Int32;
-  nextBestLog: EBASHBirdHouseLog;
 begin
   if not Bank.IsOpen() then
   begin
@@ -1433,26 +1459,8 @@ begin
     Exit(False);
   end;
 
-  if Self.AlwaysUseBestLog
-  and (not Self.TerminateOnNoLogs)
-  and (Self.LogType <> Self.SuggestedLogType) then
-  begin
-    if not Self.BankHasAll([Self.GetLogString(Self.LogType), Self.GetLogString(Self.SuggestedLogType)]) then
-    begin
-      WriteLn('[BASHBirdHouse] Bank doesn''t have our best choice or current choice, finding another');
-      if not Self.GetNextBestLogInBank(Self.LogType, nextBestLog) then
-      begin
-        WriteLn('[BASHBirdHouse] Out of logs, cannot do a birdhouse run');
-        Exit(False);
-      end;
-      WriteLn('[BASHBirdHouse] Switching log to ' + ToStr(nextBestLog));
-      Self.LogType := nextBestLog;
-    end
-    else if Self.LogType <> Self.SuggestedLogType then
-    begin
-      Self.LogType := Self.SuggestedLogType;
-    end;
-  end;
+  if not Self.ApplyBestLog(True) then
+    Exit(False);
 
   itemList := Self.GetWithdrawList();
   Self.LogWithdrawPlan(itemList);

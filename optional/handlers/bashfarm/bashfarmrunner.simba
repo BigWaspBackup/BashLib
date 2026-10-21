@@ -341,7 +341,10 @@ begin
     Exit(False);
   end;
 
-  WriteLn('[BASHFarm] Withdrawing ', quant, 'x ', ToStr(item));
+  if quant = Bank.QUANTITY_ALL then
+    WriteLn('[BASHFarm] Withdrawing all ', ToStr(item))
+  else
+    WriteLn('[BASHFarm] Withdrawing ', quant, 'x ', ToStr(item));
 
   for attempt := 1 to 5 do
   begin
