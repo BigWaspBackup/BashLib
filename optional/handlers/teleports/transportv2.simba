@@ -207,10 +207,23 @@ end;
 
 function TUniversalTransportV2.handleMinigameTeleport(constref teleportLocation: TTeleportLocation; TransportMap : TRSMap = Map): Boolean;
 var
-  startPosition: TPoint := TransportMap.position;// ScriptWalker^.GetMyPos(); ScriptWalker^.GetMyPos();
+  startPosition, dest: TPoint;
 begin
-  if Grouping.TeleportToActivity(teleportLocation.destination) then
-    Result := WaitUntil(not TransportMap.position.inrange(startPosition, 10), 200, 23000);
+  startPosition := TransportMap.Position();
+  if not Grouping.TeleportToActivity(teleportLocation.destination) then
+    Exit(False);
+
+  dest := teleportLocation.worldPoint;
+  if (dest.X <> 0) or (dest.Y <> 0) then
+  begin
+    WriteLn('[MINIGAME] Waiting to arrive near ', dest);
+    Result := WaitUntil(TransportMap.Position().InRange(dest, 80), 200, 23000);
+  end
+  else
+    Result := WaitUntil(not TransportMap.Position().InRange(startPosition, 10), 200, 23000);
+
+  if not Result then
+    WriteLn('[MINIGAME] Teleport clicked but player is not at the activity yet');
 end;
 
 function TransportInvContains(item: TRSItem): Boolean;

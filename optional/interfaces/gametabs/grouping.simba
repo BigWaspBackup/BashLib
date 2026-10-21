@@ -121,12 +121,13 @@ begin
   if InRange(activityScrollBar.Slider.Height(), activityScrollBar.SliderRegion.Height() - 3,  activityScrollBar.SliderRegion.Height() + 3) then
   begin
     Mouse.Click(dropDowns[0].Bounds, MOUSE_LEFT);
+    Wait(Random(250, 450));
     activityScrollbar := Self.GetScrollBar();
   end;
 
   Mouse.Move(Self.ScrollArea, false, EMouseDistribution.MOUSE_DISTRIBUTION_GAUSS);
-  Wait(Random(120, 450));
-  foundStrings := OCR.RecognizeLines(Self.ScrollArea, TOCRColorFilter.Create([2070783], [1]), RS_FONT_PLAIN_12, textBounds);
+  Wait(Random(200, 400));
+  foundStrings := [];
 
   scrollDirection := 1;
   endString := "Volcanic Mines";
@@ -170,10 +171,16 @@ begin
   if stringFound then
     Mouse.Click(textBounds[i], MOUSE_LEFT);
 
-  //Verify we selected the correct thing.
-  selectedString := OCR.Recognize(dropDowns[0].Bounds, TOCRColorFilter.Create([2070783], [1]), RS_FONT_PLAIN_12);
-  selectedString := selectedString.ToLower();
-  Result := selectedString.Contains(activity);
+  searchTimer.Init(2000);
+  repeat
+    Wait(150);
+    selectedString := OCR.Recognize(dropDowns[0].Bounds, TOCRColorFilter.Create([2070783], [1]), RS_FONT_PLAIN_12);
+    selectedString := selectedString.ToLower();
+    if selectedString.Contains(activity) then
+      Exit(True);
+  until searchTimer.IsFinished();
+
+  WriteLn('Activity dropdown still reads: "', selectedString, '"');
 end;
 
 function TRSGrouping.GetButtons(): TRSButtonArray;

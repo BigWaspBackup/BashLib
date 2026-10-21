@@ -313,7 +313,7 @@ begin
   RSTeleportsV2.CRAFTING_GUILD_CAPE := setupTeleportLocation(ETeleportType.OTHER, ['Crafting cape', 'Crafting cape(t)'], 'Teleport', [7632, 37294]);
   RSTeleportsV2.HOUSE_CAPE := setupTeleportLocation(ETeleportType.OTHER, ['Construct. cape', 'Construct. cape(t)', 'Max cape'], 'Tele to POH', [0, 0]);
   RSTeleportsV2.HOUSE := setupTeleportLocation(ETeleportType.NORMAL_MAGIC, 'House', 40, [0, 0]);
-  RSTeleportsV2.MINIGAME_BARBARIAN_ASSAULT := setupTeleportLocation(ETeleportType.MINIGAME, 'barbarian assault', [0, 0], False);
+  RSTeleportsV2.MINIGAME_BARBARIAN_ASSAULT := setupTeleportLocation(ETeleportType.MINIGAME, 'barbarian assault', [5984, 36550], False);
   RSTeleportsV2.MINIGAME_GAMES_ROOM := setupTeleportLocation(ETeleportType.MINIGAME, 'games room', [0, 0], False);
   RSTeleportsV2.MINIGAME_CASTLE_WARS := setupTeleportLocation(ETeleportType.MINIGAME, 'castle wars', [0, 0], False);
   RSTeleportsV2.MINIGAME_CLAN_WARS := setupTeleportLocation(ETeleportType.MINIGAME, 'clan wars', [0, 0], False);

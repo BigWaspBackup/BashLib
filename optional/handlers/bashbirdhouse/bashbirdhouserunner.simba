@@ -51,7 +51,7 @@ type
     CurrentBirdHouse: PBASHBirdHouse;
     CurrentBirdHouseIndex: Int32;
     HasRunFinished, ShouldTeleport, AlwaysUseBestLog,
-    IsDisabled, TerminateOnNoLogs, Initialized: Boolean;
+    IsDisabled, TerminateOnNoLogs, Initialized, DigsitePendantEquipped: Boolean;
 
     Transport: TUniversalTransportV2;
     ScriptIntervalTimer, NextRunSpewTimer: TCountdown;
@@ -1351,12 +1351,18 @@ var
   bankItem: TRSBankItem;
   attempt: Int32;
 begin
+  if Self.DigsitePendantEquipped then
+  begin
+    WriteLn('[BASHBirdHouse] Digsite pendant is already equipped');
+    Exit(True);
+  end;
+
   chargedVariants := getChargedJewelleryNames(RSTeleportsV2.FOSSIL_ISLAND.item);
   WriteLn('[BASHBirdHouse] Digsite pendant names: ', ToStr(chargedVariants));
   for attempt := 1 to 3 do
     for chargedJewellery in chargedVariants do
     begin
-      if Inventory.ContainsItem(chargedJewellery) then
+      if Inventory.Items.Contains(chargedJewellery) then
       begin
         WriteLn('[BASHBirdHouse] Already have ', ToStr(chargedJewellery));
         Exit(True);
@@ -1369,7 +1375,7 @@ begin
         WriteLn('[BASHBirdHouse] Could not find ', ToStr(chargedJewellery), ' in the bank');
         Continue;
       end;
-      if WaitUntil(Inventory.ContainsItem(chargedJewellery), 65, 2200) then
+      if WaitUntil(Inventory.Items.Contains(chargedJewellery), 65, 2200) then
         Exit(True);
       WriteLn('[BASHBirdHouse] Clicked ', ToStr(chargedJewellery), ' but it did not arrive');
     end;
@@ -1388,9 +1394,9 @@ begin
   for attempt := 1 to 3 do
   begin
     if not itemName.Contains('seed') then
-      itemNumNeeded := wanted - Inventory.CountItem(bankItem.Item)
+      itemNumNeeded := wanted - Inventory.Items.Count(bankItem.Item)
     else
-      itemNumNeeded := wanted - Max(0, Inventory.CountItemStack(bankItem.Item));
+      itemNumNeeded := wanted - Max(0, Inventory.Items.CountStack(bankItem.Item));
 
     if itemNumNeeded < 1 then
     begin
@@ -1405,7 +1411,7 @@ begin
       WriteLn('[BASHBirdHouse] Could not find ', itemNumNeeded, 'x ', itemName, ' in the bank');
       Continue;
     end;
-    if WaitUntil(Inventory.ContainsItem(bankItem.Item), 65, 2000) then
+    if WaitUntil(Inventory.Items.Contains(bankItem.Item), 65, 2000) then
       Exit(True);
     WriteLn('[BASHBirdHouse] Clicked ', itemName, ' but it did not arrive');
   end;
