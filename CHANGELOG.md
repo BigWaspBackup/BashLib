@@ -1,3 +1,12 @@
+## [8.7.10](https://github.com/BigWaspBackup/BashLib/compare/v8.7.9...v8.7.10) (2026-10-20)
+
+
+### Bug Fixes
+
+* More seeds added to birdhouse runner, fixed rune pouch, updated for latest game update ([841eb23](https://github.com/BigWaspBackup/BashLib/commit/841eb230db07b1fb252a0152a69e63b51df6bc7a))
+
+
+
 ## [8.7.9](https://github.com/BigWaspBackup/BashLib/compare/v8.7.8...v8.7.9) (2026-10-16)
 
 
@@ -33,15 +42,6 @@
 ### Bug Fixes
 
 * Fixes for spell withdrawing and farm runs ([c353f8f](https://github.com/BigWaspBackup/BashLib/commit/c353f8f135f0bf1e9a774f6c9fd1f77792159c41))
-
-
-
-## [8.7.5](https://github.com/BigWaspBackup/BashLib/compare/v8.7.4...v8.7.5) (2026-10-06)
-
-
-### Bug Fixes
-
-* Activity Antiban settings are now saved, Xeric's Talisman added as travel method, farm run tweaks ([57a4d51](https://github.com/BigWaspBackup/BashLib/commit/57a4d51522dac482b460c2849fed08e632e74ef0))
 
 
 
