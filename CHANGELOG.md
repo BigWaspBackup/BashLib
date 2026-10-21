@@ -1,3 +1,12 @@
+## [8.7.11](https://github.com/BigWaspBackup/BashLib/compare/v8.7.10...v8.7.11) (2026-10-21)
+
+
+### Bug Fixes
+
+* Birdhouse output added for withdrawing items ([770366a](https://github.com/BigWaspBackup/BashLib/commit/770366aee28afb3321d0ba8a86253196afbf4afb))
+
+
+
 ## [8.7.10](https://github.com/BigWaspBackup/BashLib/compare/v8.7.9...v8.7.10) (2026-10-20)
 
 
@@ -33,15 +42,6 @@
 ### Bug Fixes
 
 * Assets updated to support latest game version ([841ab9e](https://github.com/BigWaspBackup/BashLib/commit/841ab9e849fc67c981ba73d22664c14ddd5f19b4))
-
-
-
-## [8.7.6](https://github.com/BigWaspBackup/BashLib/compare/v8.7.5...v8.7.6) (2026-10-07)
-
-
-### Bug Fixes
-
-* Fixes for spell withdrawing and farm runs ([c353f8f](https://github.com/BigWaspBackup/BashLib/commit/c353f8f135f0bf1e9a774f6c9fd1f77792159c41))
 
 
 
