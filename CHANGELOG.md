@@ -1,3 +1,12 @@
+## [8.7.13](https://github.com/BigWaspBackup/BashLib/compare/v8.7.12...v8.7.13) (2026-10-21)
+
+
+### Bug Fixes
+
+* birdhouse log tweaks ([3f723ab](https://github.com/BigWaspBackup/BashLib/commit/3f723abab6148c8ef4623554141cc9cfd302258b))
+
+
+
 ## [8.7.12](https://github.com/BigWaspBackup/BashLib/compare/v8.7.11...v8.7.12) (2026-10-21)
 
 
@@ -33,15 +42,6 @@
 * Improvements to Fairy Ring finding, tweaks to minigame teleports ([2fbc184](https://github.com/BigWaspBackup/BashLib/commit/2fbc1847cb6e12491560e08feb9c56f6b8da020c))
 * Removed debug code ([a77cdcf](https://github.com/BigWaspBackup/BashLib/commit/a77cdcfaea5e78423a4d0f871f67c38535b0fbff))
 * Some changes to teleport locations ([621c2cd](https://github.com/BigWaspBackup/BashLib/commit/621c2cd6ee469a96484a33fd3febc90432c5feba))
-
-
-
-## [8.7.8](https://github.com/BigWaspBackup/BashLib/compare/v8.7.7...v8.7.8) (2026-10-11)
-
-
-### Bug Fixes
-
-* Fixed woodcutting guild landing location, Fixes to depositing items after a farm run. ([93b445b](https://github.com/BigWaspBackup/BashLib/commit/93b445bedb6a470778a49bf76f62e43170066951))
 
 
 
