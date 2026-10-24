@@ -221,6 +221,47 @@ begin
     PRSObjectV2(mapObj)^.Rotations := keptRots;
 end;
 
+function BASHBankApproachTile(chest: TPoint; out front: TPoint): Boolean;
+begin
+  Result := False;
+
+  if chest.InRange([6052, 36138], 2) then
+  begin
+    front := [6048, 36138];
+    Exit(True);
+  end;
+end;
+
+procedure BASHApplyBankApproachTiles(mapObj: PRSMapObject);
+var
+  i: Int32;
+  front: TPoint;
+  hasAny: Boolean;
+begin
+  if mapObj = nil then
+    Exit;
+
+  mapObj^.WalkCoordinates := [];
+  if mapObj^.MapObjectType <> ERSMapObjectType.OBJ then
+    Exit;
+
+  SetLength(mapObj^.WalkCoordinates, Length(mapObj^.Coordinates));
+  for i := 0 to High(mapObj^.Coordinates) do
+  begin
+    if BASHBankApproachTile(mapObj^.Coordinates[i], front) then
+    begin
+      mapObj^.WalkCoordinates[i] := front;
+      hasAny := True;
+    end
+    else
+      mapObj^.WalkCoordinates[i] := mapObj^.Coordinates[i];
+  end;
+
+  // Leave it empty when nothing matched so TRSMapObject keeps its default behaviour.
+  if not hasAny then
+    mapObj^.WalkCoordinates := [];
+end;
+
 procedure BASHBindLocalBanks(radius: Int32 = 220; keep: Int32 = 2);
 var
   me, p: TPoint;
@@ -240,6 +281,8 @@ begin
     Exit;
 
   Banks._SetupMapObjects();
+  for i := 0 to High(Banks.MapObjects) do
+    BASHApplyBankApproachTiles(Banks.MapObjects[i]);
 
   me := Map.Position();
   if (me = [0, 0]) or (Map.Similarity < 0.70) then
@@ -262,7 +305,10 @@ begin
     if Length(mapObj^.Coordinates) = 0 then
       Delete(Banks.MapObjects, i, 1)
     else
+    begin
       BASHKeepNearestBankCoords(mapObj, me, keep);
+      BASHApplyBankApproachTiles(mapObj);
+    end;
   end;
 end;
 
