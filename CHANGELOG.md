@@ -1,3 +1,12 @@
+## [8.7.14](https://github.com/BigWaspBackup/BashLib/compare/v8.7.13...v8.7.14) (2026-10-24)
+
+
+### Bug Fixes
+
+* Support for improved back chest finding, some fixes to uptext, minor login screen tweaks ([01674bf](https://github.com/BigWaspBackup/BashLib/commit/01674bfff4b2513c654acd09e7a3f7a89d45c226))
+
+
+
 ## [8.7.13](https://github.com/BigWaspBackup/BashLib/compare/v8.7.12...v8.7.13) (2026-10-21)
 
 
@@ -31,17 +40,6 @@
 ### Bug Fixes
 
 * More seeds added to birdhouse runner, fixed rune pouch, updated for latest game update ([841eb23](https://github.com/BigWaspBackup/BashLib/commit/841eb230db07b1fb252a0152a69e63b51df6bc7a))
-
-
-
-## [8.7.9](https://github.com/BigWaspBackup/BashLib/compare/v8.7.8...v8.7.9) (2026-10-16)
-
-
-### Bug Fixes
-
-* Improvements to Fairy Ring finding, tweaks to minigame teleports ([2fbc184](https://github.com/BigWaspBackup/BashLib/commit/2fbc1847cb6e12491560e08feb9c56f6b8da020c))
-* Removed debug code ([a77cdcf](https://github.com/BigWaspBackup/BashLib/commit/a77cdcfaea5e78423a4d0f871f67c38535b0fbff))
-* Some changes to teleport locations ([621c2cd](https://github.com/BigWaspBackup/BashLib/commit/621c2cd6ee469a96484a33fd3febc90432c5feba))
 
 
 
