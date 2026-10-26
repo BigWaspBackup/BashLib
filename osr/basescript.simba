@@ -245,7 +245,9 @@ const
     ];
 begin
   {$IFNDEF SCRIPT_CHAINER}
+  {$IFNDEF SIMBAHEADLESS}
   ClearDebug();
+  {$ENDIF}
   {$ENDIF}
   AddOnTerminate(@ForceSaveScreenshot);
 

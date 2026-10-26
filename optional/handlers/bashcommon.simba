@@ -230,6 +230,12 @@ begin
     front := [6048, 36138];
     Exit(True);
   end;
+
+  if chest.InRange([2272, 36530], 2) then
+  begin
+    front := [2272, 36526];
+    Exit(True);
+  end;
 end;
 
 procedure BASHApplyBankApproachTiles(mapObj: PRSMapObject);
@@ -312,11 +318,30 @@ begin
   end;
 end;
 
+procedure BASHPrepareBankApproach();
+var
+  i: Int32;
+begin
+  if Length(Banks.MapObjects) = 0 then
+    Exit;
+  for i := 0 to High(Banks.MapObjects) do
+    BASHApplyBankApproachTiles(Banks.MapObjects[i]);
+end;
+
+function BASHWalkOpenBank(mapObj: PRSMapObject = nil): Boolean;
+begin
+  if Length(Banks.MapObjects) = 0 then
+    Banks._SetupMapObjects();
+  BASHPrepareBankApproach();
+  Result := Banks.WalkOpen(mapObj);
+end;
+
 function BASHOpenLocalBank(clickDist: Int32 = 48): Boolean;
 var
   mapObj: PRSMapObject;
-  me, nearest: TPoint;
+  me, nearest, walkTo: TPoint;
   oldWalker: Boolean;
+  hasApproach: Boolean;
 begin
   Result := False;
   if Bank.IsOpen() or BankPin.IsOpen() then
@@ -328,15 +353,24 @@ begin
   if Length(Banks.MapObjects) = 0 then
     Exit(False);
 
+  BASHPrepareBankApproach();
   mapObj := Banks.GetClosest();
   if (mapObj = nil) or (Length(mapObj^.Coordinates) = 0) then
     Exit(False);
 
+  if Minimap.IsPlayerMoving() then
+    Minimap.WaitMoving();
+
   me := Map.Position();
   nearest := mapObj^.Coordinates.NearestPoint(me);
+  walkTo := nearest;
+  hasApproach := Length(mapObj^.WalkCoordinates) > 0;
+  if hasApproach then
+    walkTo := mapObj^.WalkCoordinates.NearestPoint(me);
   mapObj^.Filter.Walker := True;
 
-  if nearest.DistanceTo(me) <= clickDist then
+  if ((not hasApproach) and (nearest.DistanceTo(me) <= clickDist)) or
+     (hasApproach and (walkTo.DistanceTo(me) <= clickDist)) then
   begin
     oldWalker := mapObj^.Filter.Walker;
     mapObj^.Filter.Walker := False;

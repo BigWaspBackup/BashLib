@@ -1142,7 +1142,7 @@ end;
 function TBASHBirdHouseRunner.WalkToIslandBank(): Boolean;
 begin
   Self.ApplyBestLog(False);
-  Result := Banks.WalkOpen();
+  Result := BASHWalkOpenBank();
 end;
 
 function TBASHBirdHouseRunner.OnStart(): Boolean;
