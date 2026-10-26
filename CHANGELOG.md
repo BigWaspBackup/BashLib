@@ -1,3 +1,12 @@
+# [8.8.0](https://github.com/BigWaspBackup/BashLib/compare/v8.7.14...v8.8.0) (2026-10-26)
+
+
+### Features
+
+* Prepared support for new BashLauncher, Fixes for tormented demons due to latest game update, Prepared dev branch for release of dev libs ([343d1e4](https://github.com/BigWaspBackup/BashLib/commit/343d1e44e31ec37ce68810bb243fe1b99866a186))
+
+
+
 ## [8.7.14](https://github.com/BigWaspBackup/BashLib/compare/v8.7.13...v8.7.14) (2026-10-24)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Birdhouse output added for withdrawing items ([770366a](https://github.com/BigWaspBackup/BashLib/commit/770366aee28afb3321d0ba8a86253196afbf4afb))
-
-
-
-## [8.7.10](https://github.com/BigWaspBackup/BashLib/compare/v8.7.9...v8.7.10) (2026-10-20)
-
-
-### Bug Fixes
-
-* More seeds added to birdhouse runner, fixed rune pouch, updated for latest game update ([841eb23](https://github.com/BigWaspBackup/BashLib/commit/841eb230db07b1fb252a0152a69e63b51df6bc7a))
 
 
 
