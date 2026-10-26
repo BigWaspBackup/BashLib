@@ -1,3 +1,12 @@
+## [8.8.1](https://github.com/BigWaspBackup/BashLib/compare/v8.8.0...v8.8.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* More bash launcher prep, fixes for barb outpost bank chest ([d50da9d](https://github.com/BigWaspBackup/BashLib/commit/d50da9ddddae076e787225099bfbd93fb476e150))
+
+
+
 # [8.8.0](https://github.com/BigWaspBackup/BashLib/compare/v8.7.14...v8.8.0) (2026-10-26)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Minigame teleports tweaks and birdhouse improvements ([aae62ad](https://github.com/BigWaspBackup/BashLib/commit/aae62ad1273bdbf3a0b90374f38456255a8473a0))
-
-
-
-## [8.7.11](https://github.com/BigWaspBackup/BashLib/compare/v8.7.10...v8.7.11) (2026-10-21)
-
-
-### Bug Fixes
-
-* Birdhouse output added for withdrawing items ([770366a](https://github.com/BigWaspBackup/BashLib/commit/770366aee28afb3321d0ba8a86253196afbf4afb))
 
 
 
