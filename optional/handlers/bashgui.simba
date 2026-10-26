@@ -1029,9 +1029,9 @@ end;
 procedure TBASHPremiumGUI.BuildAccountsSection();
 var
   am: TPanel;
-  selectorPanel, userPanel, passPanel, pinPanel, worldsPanel, jagexPanel: TPanel;
+  selectorPanel, userPanel, pinPanel, worldsPanel: TPanel;
   addBtn, deleteBtn, generateBtn: TButton;
-  leftColW, passW, pinW, worldsLeft, btnW, btnGap, chipW, chipH, profileTop, hookTop, contentBottom, i: Int32;
+  leftColW, pinW, worldsLeft, btnW, btnGap, chipW, chipH, profileTop, hookTop, contentBottom, i: Int32;
   savedURL: String;
   savedEnable: Boolean;
   child: TControl;
@@ -1053,35 +1053,31 @@ begin
   am.SetColor(BASH_GUI_BG);
 
   leftColW := TControl.AdjustToDPI(280);
-  passW := Floor(leftColW * 0.6);
-  pinW := Floor(leftColW * 0.3);
+  pinW := Floor(leftColW * 0.45);
 
   selectorPanel := Self.Form.GetChild('am_selector_panel');
   userPanel := Self.Form.GetChild('am_user_panel');
-  passPanel := Self.Form.GetChild('am_pass_panel');
   pinPanel := Self.Form.GetChild('am_pin_panel');
   worldsPanel := Self.Form.GetChild('am_worlds_panel');
-  jagexPanel := Self.Form.GetChild('am_jagex_panel');
 
   if selectorPanel <> nil then
     selectorPanel.SetWidth(leftColW);
   if userPanel <> nil then
     userPanel.SetWidth(leftColW);
-  if jagexPanel <> nil then
-    jagexPanel.SetWidth(leftColW);
-  if passPanel <> nil then
-    passPanel.SetWidth(passW);
   if (pinPanel <> nil) and (selectorPanel <> nil) then
   begin
     pinPanel.SetWidth(pinW);
-    pinPanel.SetLeft(selectorPanel.GetLeft() + leftColW - pinW);
+    pinPanel.SetLeft(selectorPanel.GetLeft());
   end;
 
   if (worldsPanel <> nil) and (selectorPanel <> nil) and (userPanel <> nil) then
   begin
     worldsLeft := selectorPanel.GetLeft() + leftColW + TControl.AdjustToDPI(48);
     worldsPanel.SetLeft(worldsLeft);
-    worldsPanel.SetHeight(userPanel.GetBottom());
+    if pinPanel <> nil then
+      worldsPanel.SetHeight(pinPanel.GetBottom())
+    else
+      worldsPanel.SetHeight(userPanel.GetBottom());
 
     addBtn := Self.Form.GetChild('am_add_button');
     deleteBtn := Self.Form.GetChild('am_delete_button');

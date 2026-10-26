@@ -975,6 +975,7 @@ end;
 
 procedure TBASHFarmRunner.OnComplete();
 begin
+  BashReportStatus('Running');
   Bank.CachedQuantity := 0;
 end;
 
@@ -2162,6 +2163,7 @@ begin
   i := 0;
   while i <= High(Self.Patches) do
   begin
+    BashReportStatus('Farm run');
     if BASHFarmAbortRun then
       Break;
     Self.CheckActivityFailsafe();

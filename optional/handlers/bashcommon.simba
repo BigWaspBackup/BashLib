@@ -221,6 +221,79 @@ begin
     PRSObjectV2(mapObj)^.Rotations := keptRots;
 end;
 
+const
+  // Floor of the Barbarian Outpost bank, west of the chest at [6052, 36138].
+  BASH_BARB_OUTPOST_BANK_BOX: TBox = [6024, 36118, 6052, 36150];
+
+function BASHBankIsBarbOutpostChest(mapObj: PRSMapObject): Boolean;
+var
+  i: Int32;
+begin
+  Result := False;
+  if mapObj = nil then
+    Exit;
+  for i := 0 to High(mapObj^.Coordinates) do
+    if mapObj^.Coordinates[i].InRange([6052, 36138], 6) then
+      Exit(True);
+end;
+
+function BASHRandomBarbOutpostBankTile(): TPoint;
+begin
+  // Stay one tile west of the chest so the spot is inside the building.
+  Result := [
+    Random(BASH_BARB_OUTPOST_BANK_BOX.X1 div 4, (BASH_BARB_OUTPOST_BANK_BOX.X2 div 4) - 1) * 4,
+    Random(BASH_BARB_OUTPOST_BANK_BOX.Y1 div 4, BASH_BARB_OUTPOST_BANK_BOX.Y2 div 4) * 4
+  ];
+end;
+
+function BASHWalkToBarbOutpostBankBox(): Boolean;
+var
+  attempt: Int32;
+  dest: TPoint;
+  savedScreen, savedAdaptive, savedDoors: Boolean;
+  savedTarget: TStringArray;
+  walked: Boolean;
+begin
+  Result := Map.Position().InBox(BASH_BARB_OUTPOST_BANK_BOX);
+  if Result then
+    Exit;
+
+  savedScreen := Map.Walker.ScreenWalk;
+  savedAdaptive := Map.Walker.AdaptiveWalk;
+  savedDoors := Map.Walker._DoorHandler.Enabled;
+  savedTarget := Copy(Map.Walker.TargetUpText);
+  Map.Walker.ScreenWalk := False;
+  Map.Walker.AdaptiveWalk := False;
+  Map.Walker._DoorHandler.Enabled := True;
+  Map.Walker.TargetUpText := [];
+  Map.Walker.RedClicked := False;
+
+  try
+    for attempt := 1 to 4 do
+    begin
+      dest := BASHRandomBarbOutpostBankTile();
+      WriteLn('[BANK] Walking into the Barbarian Outpost bank at ', dest.ToString());
+      walked := False;
+      try
+        walked := Map.Walker.WebWalk(dest, 4, 0);
+      except
+        walked := False;
+      end;
+      if Minimap.IsPlayerMoving() then
+        Minimap.WaitMoving();
+      if walked and Map.Position().InBox(BASH_BARB_OUTPOST_BANK_BOX) then
+        Exit(True);
+    end;
+  finally
+    Map.Walker.ScreenWalk := savedScreen;
+    Map.Walker.AdaptiveWalk := savedAdaptive;
+    Map.Walker._DoorHandler.Enabled := savedDoors;
+    Map.Walker.TargetUpText := savedTarget;
+  end;
+
+  Result := Map.Position().InBox(BASH_BARB_OUTPOST_BANK_BOX);
+end;
+
 function BASHBankApproachTile(chest: TPoint; out front: TPoint): Boolean;
 begin
   Result := False;
@@ -333,6 +406,21 @@ begin
   if Length(Banks.MapObjects) = 0 then
     Banks._SetupMapObjects();
   BASHPrepareBankApproach();
+  if mapObj = nil then
+    mapObj := Banks.GetClosest();
+
+  if BASHBankIsBarbOutpostChest(mapObj) then
+  begin
+    if not BASHWalkToBarbOutpostBankBox() then
+      Exit(False);
+    if Minimap.IsPlayerMoving() then
+      Minimap.WaitMoving();
+    mapObj^.Filter.Walker := False;
+    Result := Banks.Open(mapObj);
+    mapObj^.Filter.Walker := True;
+    Exit;
+  end;
+
   Result := Banks.WalkOpen(mapObj);
 end;
 
@@ -368,6 +456,19 @@ begin
   if hasApproach then
     walkTo := mapObj^.WalkCoordinates.NearestPoint(me);
   mapObj^.Filter.Walker := True;
+
+  if BASHBankIsBarbOutpostChest(mapObj) then
+  begin
+    if not BASHWalkToBarbOutpostBankBox() then
+      Exit(False);
+    if Minimap.IsPlayerMoving() then
+      Minimap.WaitMoving();
+    oldWalker := mapObj^.Filter.Walker;
+    mapObj^.Filter.Walker := False;
+    Result := Banks.Open(mapObj);
+    mapObj^.Filter.Walker := oldWalker;
+    Exit;
+  end;
 
   if ((not hasApproach) and (nearest.DistanceTo(me) <= clickDist)) or
      (hasApproach and (walkTo.DistanceTo(me) <= clickDist)) then

@@ -1152,6 +1152,7 @@ end;
 
 procedure TBASHBirdHouseRunner.OnComplete();
 begin
+  BashReportStatus('Running');
   Bank.CachedQuantity := 0;
 end;
 
@@ -1274,6 +1275,7 @@ begin
   if not Self.OnStart() then
     Exit;
 
+  BashReportStatus('Birdhouse run');
   BASHEnsureRunZoom(5, 25);
 
   Self.EnsureChunks();
@@ -1282,6 +1284,7 @@ begin
   and (not Self.TeleportToIsland()) then
   begin
     WriteLn('[BASHBirdHouse] Could not reach Fossil Island');
+    BashReportStatus('Running');
     Exit;
   end;
 
@@ -1290,11 +1293,13 @@ begin
 
   while not Self.HasRunFinished do
   begin
+    BashReportStatus('Birdhouse run');
     if not RSClient.IsLoggedIn() then
     begin
       if not Login.LoginPlayer() then
       begin
         WriteLn('[BASHBirdHouse] Could not log in, aborting run attempt');
+        BashReportStatus('Running');
         Exit;
       end;
     end;

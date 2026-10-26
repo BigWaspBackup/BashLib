@@ -3,6 +3,25 @@
   {$I BashLib/osr.simba}
 {$ENDIF}
 
+// Printed for the BASH launcher. A line starting with "#BASH status " is shown on the
+// running card and is not written into the script log.
+procedure BashReportStatus(status: String);
+begin
+  if status = '' then
+    Exit;
+  WriteLn('#BASH status ' + status);
+end;
+
+procedure TAntiban.OnFinishBreakingTask({$H-}task: PBreakTask);{$H+}
+begin
+  BashReportStatus('Running');
+end;
+
+procedure TAntiban.OnFinishSleepingTask({$H-}task: PSleepTask);{$H+}
+begin
+  BashReportStatus('Running');
+end;
+
 procedure TAntiban.OnStartAntibanTask({$H-}task: PAntibanTask);{$H+}
 var
   str: String;
@@ -30,6 +49,7 @@ procedure TAntiban.OnBreakingTask({$H-}task: PBreakTask;{$H+} var countdown: TCo
 var
   str: String;
 begin
+  BashReportStatus('On a break');
   if Length(ProgressReport.ProgressArray) < 1 then
     Exit;
 
@@ -53,6 +73,7 @@ procedure TAntiban.OnSleepingTask({$H-}task: PSleepTask;{$H+} var countdown: TCo
 var
   str: String;
 begin
+  BashReportStatus('Sleeping');
   if Length(ProgressReport.ProgressArray) < 1 then
     Exit;
 
@@ -809,6 +830,7 @@ begin
         Self.AddBreak(minutes * ONE_MINUTE, lengthMin * ONE_MINUTE, slot.Randomness, slot.LogoutChance);
       end;
     Self.OnBreaking := @OnBreakingTask;
+    Self.OnFinishBreak := @OnFinishBreakingTask;
     Exit;
   end;
 
@@ -818,6 +840,7 @@ begin
   Self.AddBreak(120 * ONE_MINUTE, 30 * ONE_MINUTE, 0.33, 0.5 + BioHash);
 
   Self.OnBreaking := @OnBreakingTask;
+  Self.OnFinishBreak := @OnFinishBreakingTask;
 end;
 
 procedure TAntiban.SetupSleep();
@@ -842,11 +865,13 @@ begin
       randomness := 0.1;
     Self.AddSleep(hour, lengthHours * ONE_HOUR, randomness, 0.8);
     Self.OnSleeping := @OnSleepingTask;
+    Self.OnFinishSleep := @OnFinishSleepingTask;
     Exit;
   end;
 
   Self.AddSleep(Self.GetSleepHour(), Self.GetSleepLength() * ONE_HOUR, 0.1, 0.8 + BioHash);
   Self.OnSleeping := @OnSleepingTask;
+  Self.OnFinishSleep := @OnFinishSleepingTask;
 end;
 
 

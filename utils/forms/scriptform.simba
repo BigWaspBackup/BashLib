@@ -1313,12 +1313,10 @@ without calling inherited).
 procedure TScriptForm.SyncAccountManager();
 var
   selector: TComboBox;
-  user, pass, pin: TEdit;
+  user, pin: TEdit;
   worlds: TMemo;
-  jagex: TCheckBox;
   worldsArray: TIntegerArray;
   i: Int32;
-  password: String;
 begin
   if Self.AccountManagerLoading then
     Exit;
@@ -1328,12 +1326,10 @@ begin
 
   selector := Self.Form.GetChild('am_selector_combobox');
   user := Self.Form.GetChild('am_user_edit');
-  pass := Self.Form.GetChild('am_pass_edit');
   pin := Self.Form.GetChild('am_pin_edit');
   worlds := Self.Form.GetChild('am_worlds_memo');
-  jagex := Self.Form.GetChild('am_jagex_checkbox');
 
-  if (selector = nil) or (user = nil) or (pass = nil) or (pin = nil) or (worlds = nil) then
+  if (selector = nil) or (user = nil) or (pin = nil) or (worlds = nil) then
     Exit;
 
   i := selector.getItemIndex();
@@ -1346,14 +1342,9 @@ begin
   if LowerCase(user.GetText()) <> LowerCase(Login.Players[i].User) then
     Exit;
 
-  if (jagex <> nil) and jagex.IsChecked() then
-    password := ''
-  else
-    password := pass.GetText();
-
   worldsArray := worlds.GetIntegerArray(301, 700);
   Login.Players[i].User := user.GetText();
-  Login.Players[i].Password := password;
+  Login.Players[i].Password := '';
   Login.Players[i].Pin := pin.GetText();
   Login.Players[i].Worlds := worldsArray;
   Login.PlayerIndex := i;
@@ -1376,14 +1367,10 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
   var
     edit: TCustomEdit;
     btn: TButton;
-    jagex: TCheckBox;
   begin
     Self.AccountManagerLoading := True;
     try
       edit := Self.Form.GetChild('am_user_edit');
-      edit.Clear();
-
-      edit := Self.Form.GetChild('am_pass_edit');
       edit.Clear();
 
       edit := Self.Form.GetChild('am_pin_edit');
@@ -1391,12 +1378,6 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
 
       edit := Self.Form.GetChild('am_worlds_memo');
       edit.Clear();
-
-      jagex := Self.Form.GetChild('am_jagex_checkbox');
-      if jagex <> nil then
-        jagex.SetChecked(False);
-
-      Self.ApplyJagexAccountVisibility();
 
       btn := Self.Form.GetChild('am_delete_button');
       btn.setEnabled(False);
@@ -1409,23 +1390,19 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
   var
     idx, i: Int32;
     worldsStr: String;
-    user, pass, pin: TEdit;
+    user, pin: TEdit;
     worlds: TMemo;
     btn: TButton;
-    jagex: TCheckBox;
   begin
     Self.AccountManagerLoading := True;
     try
       idx := Login.PlayerIndex;
 
       user := Self.Form.GetChild('am_user_edit');
-      pass := Self.Form.GetChild('am_pass_edit');
       pin := Self.Form.GetChild('am_pin_edit');
       worlds := Self.Form.GetChild('am_worlds_memo');
-      jagex := Self.Form.GetChild('am_jagex_checkbox');
 
       user.SetText(Login.Players[idx].User);
-      pass.setText(Login.Players[idx].Password);
       pin.setText(Login.Players[idx].Pin);
 
       worldsStr := '';
@@ -1437,11 +1414,6 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
       end;
 
       worlds.SetText(worldsStr);
-
-      if jagex <> nil then
-        jagex.SetChecked(Login.Players[idx].Password = '');
-
-      Self.ApplyJagexAccountVisibility();
 
       btn := Self.Form.GetChild('am_delete_button');
       btn.setEnabled(True);
@@ -1511,31 +1483,19 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
     Self.SyncAccountManager();
   end;
 
-  procedure TScriptForm._OnJagexChange({$H-}sender: TObject);{$H+}
-  begin
-    if Self.AccountManagerLoading then
-      Exit;
-
-    Self.ApplyJagexAccountVisibility();
-    Self.SyncAccountManager();
-  end;
-
   procedure TScriptForm._OnAddClick(sender: TObject);
   var
     selector: TComboBox;
-    user, pass, pin: TEdit;
+    user, pin: TEdit;
     worlds: TMemo;
-    jagex: TCheckBox;
     worldsArray: TIntegerArray;
-    password, userName: String;
+    userName: String;
     i, found: Int32;
   begin
     selector := Self.Form.GetChild('am_selector_combobox');
     user := Self.Form.GetChild('am_user_edit');
-    pass := Self.Form.GetChild('am_pass_edit');
     pin  := Self.Form.GetChild('am_pin_edit');
     worlds := Self.Form.GetChild('am_worlds_memo');
-    jagex := Self.Form.GetChild('am_jagex_checkbox');
 
     if user.IsEmpty() then
     begin
@@ -1544,12 +1504,6 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
     end;
 
     userName := user.GetText();
-
-    if (jagex <> nil) and jagex.IsChecked() then
-      password := ''
-    else
-      password := pass.GetText();
-
     worldsArray := worlds.GetIntegerArray(301, 700);
 
     found := -1;
@@ -1564,14 +1518,14 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
 
     if found >= 0 then
     begin
-      Login.Players[found].Password := password;
+      Login.Players[found].Password := '';
       Login.Players[found].Pin := pin.GetText();
       Login.Players[found].Worlds := worldsArray;
       Login.PlayerIndex := found;
     end
     else
     begin
-      Login.AddPlayer(userName, password, pin.GetText(), worldsArray);
+      Login.AddPlayer(userName, '', pin.GetText(), worldsArray);
       Login.PlayerIndex := High(Login.Players);
     end;
 
@@ -1610,13 +1564,52 @@ function TScriptForm.CreateAccountManager(owner: TControl): TPanel;
     Self.ShowWorldFetcherDialog();
   end;
 
+  procedure TScriptForm._SelectClientAccount();
+  var
+    win: TOSWindow;
+    title, name: String;
+    at, i: Int32;
+  begin
+    {$IFDEF SIMBAHEADLESS}
+    win := GetTargetWindow();
+    {$ELSE}
+    win := GetSimbaTargetWindow();
+    {$ENDIF}
+    if win = 0 then
+      Exit;
+
+    title := win.GetRootWindow().GetTitle();
+    if Copy(title, 1, 11) <> 'RuneLite - ' then
+      Exit;
+
+    name := Trim(Copy(title, 12, Length(title)));
+    at := Pos(' - ', name);
+    if at > 0 then
+      name := Trim(Copy(name, 1, at - 1));
+    at := Pos(' (pid ', LowerCase(name));
+    if at > 0 then
+      name := Trim(Copy(name, 1, at - 1));
+    if (name = '') or (name = 'RuneLite') or (Pos('''', name) > 0) then
+      Exit;
+
+    for i := 0 to High(Login.Players) do
+      if LowerCase(Login.Players[i].User) = LowerCase(name) then
+      begin
+        Login.PlayerIndex := i;
+        Exit;
+      end;
+
+    Login.AddPlayer(name, '', '', []);
+    Login.PlayerIndex := High(Login.Players);
+    RewriteCredentials();
+  end;
+
 var
   selector: TLabeledCombobox;
   addButton, deleteButton, generateButton: TButton;
-  user, pass, pin: TLabeledEdit;
-  jagex: TLabeledCheckBox;
+  user, pin: TLabeledEdit;
   worlds: TLabeledMemo;
-  fullWidth, w, space, passW, pinW, y, btnW: Int32;
+  fullWidth, w, space, pinW, y, btnW: Int32;
 begin
   with Result do
   begin
@@ -1633,8 +1626,7 @@ begin
   space := Floor(fullWidth * 0.08);
   w := fullWidth - (space * 2);
 
-  passW := Floor(w * 0.6);
-  pinW := Floor(w * 0.3);
+  pinW := Floor(w * 0.45);
 
   y := TControl.AdjustToDPI(5);
 
@@ -1654,37 +1646,12 @@ begin
   with user do
   begin
     Create(Result);
-    SetCaption('Username:');
+    SetCaption('Account:');
     SetName('am_user');
-    SetTooltip('Username or email of the current account.');
+    SetTooltip('Character name for this account.');
     SetLeft(space);
     SetTop(selector.GetBottom() + TControl.AdjustToDPI(2));
     SetWidth(w);
-    Edit.setOnEditingDone(@Self._OnFieldDone);
-  end;
-
-  with jagex do
-  begin
-    Create(Result);
-    SetCaption('Jagex Account');
-    SetName('am_jagex');
-    SetTooltip('Jagex accounts do not need a password here. Password field is disabled when enabled.');
-    SetLeft(space);
-    SetTop(user.GetBottom() + TControl.AdjustToDPI(4));
-    SetWidth(w);
-    CheckBox.setOnChange(@Self._OnJagexChange);
-  end;
-
-  with pass do
-  begin
-    Create(Result);
-    SetCaption('Password:');
-    SetName('am_pass');
-    SetTooltip('Password of the current account.');
-    SetLeft(space);
-    SetTop(jagex.GetBottom() + TControl.AdjustToDPI(2));
-    SetWidth(passW);
-    SetPasswordChar('*');
     Edit.setOnEditingDone(@Self._OnFieldDone);
   end;
 
@@ -1694,8 +1661,8 @@ begin
     SetCaption('Bank pin:');
     SetName('am_pin');
     SetTooltip('Bank pin of the current account.');
-    SetLeft(selector.GetRight() - pinW);
-    SetTop(pass.GetTop());
+    SetLeft(space);
+    SetTop(user.GetBottom() + TControl.AdjustToDPI(2));
     SetWidth(pinW);
     SetPasswordChar('*');
     SetMaxLength(4);
@@ -1711,7 +1678,7 @@ begin
     SetTooltip('World list of the current account. Ex. 302, 305, 309, 444, 573');
     SetLeft(TControl.AdjustToDPI(375));
     SetTop(selector.GetTop());
-    SetHeight(user.GetBottom());
+    SetHeight(pin.GetBottom());
     SetWidth(TControl.AdjustToDPI(336));
     Memo.setOnKeyPress(@Memo.NumberArrayField);
   end;
@@ -1737,11 +1704,11 @@ begin
     Create(Result);
     SetCaption('Add Account');
     SetName('am_add_button');
-    SetTooltip('Creates a new account from the fields below. Does not replace the selected account.');
+    SetTooltip('Creates a new account from the fields. Does not replace the selected account.');
     SetLeft(worlds.GetLeft());
     SetWidth(btnW);
     SetHeight(TControl.AdjustToDPI(27));
-    SetTop(pass.GetBottom() - GetHeight() + 1 + TControl.AdjustToDPI(2));
+    SetTop(generateButton.GetBottom() + TControl.AdjustToDPI(4));
     setOnClick(@Self._OnAddClick);
   end;
 
@@ -1762,7 +1729,7 @@ begin
     Max(addButton.GetTop() + addButton.GetHeight(), generateButton.GetTop() + generateButton.GetHeight())
     + TControl.AdjustToDPI(8));
 
-  Self.ApplyJagexAccountVisibility();
+  Self._SelectClientAccount();
   Self._ReloadSelector(selector.ComboBox);
   Self._SelectorOnChange(selector.ComboBox);
 end;
