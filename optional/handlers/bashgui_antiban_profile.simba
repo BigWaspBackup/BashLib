@@ -1073,3 +1073,95 @@ begin
   Self.AntibanProfileChip.SetOnClick(@Self.ShowAntibanProfile);
   Self.LoadAntibanProfile();
 end;
+
+procedure BASHApplyStoredAntiban(user: String);
+var
+  section, hour, mode: String;
+  i: Int32;
+  lengthHours: Double;
+  cameraOn, mouseOn, chatOn, tabsOn, bankOn: Boolean;
+  j: TJSONObject;
+begin
+  if Trim(user) = '' then
+    Exit;
+  section := user + BASH_GUI_ANTIBAN_SECTION;
+  if ReadINI(section, 'ProfileVersion', BASH_GUI_SETTINGS_FILE) = '' then
+    Exit;
+
+  BASHAntibanProfile.Ready := True;
+  BASHAntibanProfile.BreaksEnabled := StrToBoolDef(ReadINI(section, 'BreaksEnabled', BASH_GUI_SETTINGS_FILE), True);
+  for i := 0 to 3 do
+  begin
+    BASHAntibanProfile.Breaks[i].Enabled := StrToBoolDef(ReadINI(section, 'Break' + IntToStr(i) + 'Enabled', BASH_GUI_SETTINGS_FILE), True);
+    BASHAntibanProfile.Breaks[i].IntervalMin := BASHClampInt(StrToIntDef(ReadINI(section, 'Break' + IntToStr(i) + 'Interval', BASH_GUI_SETTINGS_FILE), BASH_BREAK_INTERVALS[i]), 1, 10000);
+    BASHAntibanProfile.Breaks[i].LengthMin := BASHClampInt(StrToIntDef(ReadINI(section, 'Break' + IntToStr(i) + 'Length', BASH_GUI_SETTINGS_FILE), BASH_BREAK_LENGTHS[i]), 1, 10000);
+    BASHAntibanProfile.Breaks[i].Randomness := BASHClampInt(StrToIntDef(ReadINI(section, 'Break' + IntToStr(i) + 'Random', BASH_GUI_SETTINGS_FILE), 33), 0, 100) / 100;
+    BASHAntibanProfile.Breaks[i].LogoutChance := BASHClampInt(StrToIntDef(ReadINI(section, 'Break' + IntToStr(i) + 'Logout', BASH_GUI_SETTINGS_FILE), BASH_BREAK_LOGOUTS[i]), 0, 100) / 100;
+  end;
+
+  hour := Trim(ReadINI(section, 'SleepHour', BASH_GUI_SETTINGS_FILE));
+  if hour = '' then
+    hour := '23:00:00';
+  lengthHours := StrToFloatDef(ReadINI(section, 'SleepLength', BASH_GUI_SETTINGS_FILE), 8);
+  if lengthHours <= 0 then
+    lengthHours := 8;
+  BASHAntibanProfile.SleepEnabled := StrToBoolDef(ReadINI(section, 'SleepEnabled', BASH_GUI_SETTINGS_FILE), True);
+  BASHAntibanProfile.SleepHour := hour;
+  BASHAntibanProfile.SleepLength := lengthHours;
+  BASHAntibanProfile.SleepRandomness := BASHClampInt(StrToIntDef(ReadINI(section, 'SleepRandom', BASH_GUI_SETTINGS_FILE), 10), 0, 100) / 100;
+  BASHAntibanProfile.TasksEnabled := StrToBoolDef(ReadINI(section, 'TasksEnabled', BASH_GUI_SETTINGS_FILE), True);
+  for i := 0 to 7 do
+  begin
+    BASHAntibanProfile.Tasks[i].Enabled := StrToBoolDef(ReadINI(section, 'Task' + IntToStr(i) + 'Enabled', BASH_GUI_SETTINGS_FILE), True);
+    BASHAntibanProfile.Tasks[i].IntervalMin := BASHClampInt(StrToIntDef(ReadINI(section, 'Task' + IntToStr(i) + 'Interval', BASH_GUI_SETTINGS_FILE), BASH_TASK_MINUTES[i]), 1, 10000);
+    BASHAntibanProfile.Tasks[i].Randomness := BASHClampInt(StrToIntDef(ReadINI(section, 'Task' + IntToStr(i) + 'Random', BASH_GUI_SETTINGS_FILE), 33), 0, 100) / 100;
+  end;
+
+  cameraOn := BASHAntibanProfile.Tasks[0].Enabled or BASHAntibanProfile.Tasks[1].Enabled;
+  mouseOn := BASHAntibanProfile.Tasks[2].Enabled or BASHAntibanProfile.Tasks[3].Enabled;
+  chatOn := BASHAntibanProfile.Tasks[4].Enabled;
+  tabsOn := BASHAntibanProfile.Tasks[5].Enabled or BASHAntibanProfile.Tasks[6].Enabled;
+  bankOn := BASHAntibanProfile.Tasks[7].Enabled;
+  WLSettings.GetObject('antiban').Put('breaks', BASHAntibanProfile.BreaksEnabled);
+  WLSettings.GetObject('antiban').getJSONObject('sleep').Put('enabled', BASHAntibanProfile.SleepEnabled);
+  WLSettings.GetObject('antiban').getJSONObject('sleep').Put('biohash', False);
+  WLSettings.GetObject('antiban').getJSONObject('sleep').Put('hour', hour);
+  WLSettings.GetObject('antiban').getJSONObject('sleep').Put('length', lengthHours);
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('enabled', BASHAntibanProfile.TasksEnabled);
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('camera', cameraOn);
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('mouse', mouseOn);
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('chat', chatOn);
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('gametabs', tabsOn);
+  WLSettings.GetObject('antiban').getJSONObject('tasks').Put('bank', bankOn);
+
+  ENABLEWORLDHOPPING := StrToBoolDef(ReadINI(section, 'EnableWorldHopping', BASH_GUI_SETTINGS_FILE), False);
+  WORLDHOPINTERVAL := BASHClampInt(StrToIntDef(ReadINI(section, 'WorldHopInterval', BASH_GUI_SETTINGS_FILE), 45), 1, 10000);
+  WORLDHOPVARIATION := BASHClampInt(StrToIntDef(ReadINI(section, 'WorldHopVariation', BASH_GUI_SETTINGS_FILE), 10), 0, 100);
+
+  mode := ReadINI(section, 'REMode', BASH_GUI_SETTINGS_FILE);
+  if mode <> '' then
+  begin
+    j := WLSettings.GetObject('antiban').getJSONObject('random_events');
+    j.Put('mode', mode);
+    j.Put('skill', ReadINI(section, 'RESkill', BASH_GUI_SETTINGS_FILE));
+    j.Put('warning_shown', StrToBoolDef(ReadINI(section, 'REWarning', BASH_GUI_SETTINGS_FILE), True));
+    j.Put('genie', StrToBoolDef(ReadINI(section, 'REGenie', BASH_GUI_SETTINGS_FILE), False));
+    j.Put('genie_action', ReadINI(section, 'REGenieAction', BASH_GUI_SETTINGS_FILE));
+    j.Put('count_check', StrToBoolDef(ReadINI(section, 'RECountCheck', BASH_GUI_SETTINGS_FILE), False));
+    j.Put('count_check_action', ReadINI(section, 'RECountCheckAction', BASH_GUI_SETTINGS_FILE));
+  end;
+
+  section := user + ' Webhook Settings';
+  WEBHOOKURL := ReadINI(section, 'WebhookURL', BASH_GUI_SETTINGS_FILE);
+  ENABLEWEBHOOKS := StrToBoolDef(ReadINI(section, 'EnableWebhooks', BASH_GUI_SETTINGS_FILE), False);
+  if ENABLEWEBHOOKS and (WEBHOOKURL <> '') then
+  begin
+    Discord.SetWebhook(WEBHOOKURL);
+    Discord.SetUsername('B.A.S.H. Bot');
+    Discord.SetAvatar(BASH_GUI_DISCORD_AVATAR);
+  end;
+
+  section := user + ' BigAussies AIO Agility Session';
+  if ReadINI(section, 'MaxTime', BASH_GUI_SETTINGS_FILE) <> '' then
+    WLSettings.Put('max_time', StrToIntDef(ReadINI(section, 'MaxTime', BASH_GUI_SETTINGS_FILE), 0));
+end;

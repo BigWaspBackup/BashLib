@@ -1448,5 +1448,6 @@ begin
 end;
 
 {$I BashLib/optional/handlers/bashgui_antiban_profile.simba}
+{$I BashLib/optional/handlers/bashlauncher.simba}
 {$ENDIF}
 {$ENDIF}

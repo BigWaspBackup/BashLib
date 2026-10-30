@@ -1,0 +1,41 @@
+(*
+  Helpers for scripts started by BASH.exe.
+  When BASH_LAUNCHER is 1 the script applies the settings the launcher saved
+  and does not open the Simba form. Opening the script in the editor leaves
+  the variable unset, so the form still appears.
+*)
+
+function BASHRunningFromLauncher(): Boolean;
+begin
+  Result := GetEnvironmentVariable('BASH_LAUNCHER') = '1';
+end;
+
+procedure BASHUseLauncherAccount();
+var
+  name: String;
+  i: Int32;
+begin
+  name := Trim(GetEnvironmentVariable('BASH_ACCOUNT'));
+  if name = '' then
+    TerminateScript('The launcher did not pass an account. Choose the logged-in account, then press Start.');
+  for i := 0 to High(Login.Players) do
+    if SameText(Login.Players[i].User, name) then
+    begin
+      Login.PlayerIndex := i;
+      Exit;
+    end;
+  TerminateScript('Save the account in the launcher before starting. ' + name + ' is not in the account list.');
+end;
+
+procedure BASHSetupLauncherRemoteInput();
+begin
+  {$IFNDEF SRL_DISABLE_REMOTEINPUT}
+  if WLSettings.GetObject('remote_input').getBoolean('enabled') then
+  begin
+    if not RSClient.RemoteInput.IsSetup() then
+      RSClient.RemoteInput.Setup();
+  end
+  else if RSClient.RemoteInput.IsSetup() then
+    RSClient.RemoteInput.Free();
+  {$ENDIF}
+end;
