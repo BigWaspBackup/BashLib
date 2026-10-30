@@ -1,3 +1,12 @@
+## [8.8.2](https://github.com/BigWaspBackup/BashLib/compare/v8.8.1...v8.8.2) (2026-10-30)
+
+
+### Bug Fixes
+
+* BASH Launcher 2.0 Support ([71f7722](https://github.com/BigWaspBackup/BashLib/commit/71f7722b95433201a3fc5c06ab88ea90328ceff9))
+
+
+
 ## [8.8.1](https://github.com/BigWaspBackup/BashLib/compare/v8.8.0...v8.8.1) (2026-10-26)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * birdhouse log tweaks ([3f723ab](https://github.com/BigWaspBackup/BashLib/commit/3f723abab6148c8ef4623554141cc9cfd302258b))
-
-
-
-## [8.7.12](https://github.com/BigWaspBackup/BashLib/compare/v8.7.11...v8.7.12) (2026-10-21)
-
-
-### Bug Fixes
-
-* Minigame teleports tweaks and birdhouse improvements ([aae62ad](https://github.com/BigWaspBackup/BashLib/commit/aae62ad1273bdbf3a0b90374f38456255a8473a0))
 
 
 
