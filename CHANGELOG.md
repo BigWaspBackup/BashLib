@@ -1,3 +1,12 @@
+## [8.8.5](https://github.com/BigWaspBackup/BashLib/compare/v8.8.4...v8.8.5) (2026-10-31)
+
+
+### Bug Fixes
+
+* Recorder fixes ([5bd5179](https://github.com/BigWaspBackup/BashLib/commit/5bd5179549da6a921f0bc90449396c30c4895f0e))
+
+
+
 ## [8.8.4](https://github.com/BigWaspBackup/BashLib/compare/v8.8.3...v8.8.4) (2026-10-31)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * More bash launcher prep, fixes for barb outpost bank chest ([d50da9d](https://github.com/BigWaspBackup/BashLib/commit/d50da9ddddae076e787225099bfbd93fb476e150))
-
-
-
-# [8.8.0](https://github.com/BigWaspBackup/BashLib/compare/v8.7.14...v8.8.0) (2026-10-26)
-
-
-### Features
-
-* Prepared support for new BashLauncher, Fixes for tormented demons due to latest game update, Prepared dev branch for release of dev libs ([343d1e4](https://github.com/BigWaspBackup/BashLib/commit/343d1e44e31ec37ce68810bb243fe1b99866a186))
 
 
 
