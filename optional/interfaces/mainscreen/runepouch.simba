@@ -5,7 +5,9 @@
 
 const
   RUNE_POUCH_WINDOW: TBox = [85, 8, 435, 333];
+  { Post Interface Uplift brown. Keep the older brown as a fallback. }
   RUNE_POUCH_BROWN = 3424329;
+  RUNE_POUCH_BROWN_OLD = 2586039;
 
   RUNES : TRSItemArray := [
     'Air rune', 'Water rune', 'Earth rune', 'Fire rune',
@@ -25,8 +27,21 @@ var
   RunePouch : TRSRunePouch;
 
 function TRSRunePouch.IsOpen(): Boolean;
+var
+  cNew, cOld: Int32;
+  title: String;
 begin
-  Result := SRL.CountColor(RUNE_POUCH_BROWN, Self.Bounds) > 600;
+  cNew := SRL.CountColor(RUNE_POUCH_BROWN, Self.Bounds);
+  cOld := SRL.CountColor(RUNE_POUCH_BROWN_OLD, Self.Bounds);
+  Result := (cNew > 600) or (cOld > 600);
+  if Result then
+    Exit;
+  { Colour can miss after UI tweaks. Only try title OCR when some
+    brown is already in the pouch window so we do not false-open. }
+  if (cNew < 80) and (cOld < 80) then
+    Exit(False);
+  title := LowerCase(Self.GetTitle());
+  Result := (Pos('pouch', title) > 0) and ((Pos('rune', title) > 0) or (Pos('divine', title) > 0));
 end;
 
 function TRSRunePouch.IsOpen(waitTime: Int32; interval: Int32 = -1): Boolean; overload; begin
@@ -39,6 +54,7 @@ end;
 function TRSRunePouch.Open: Boolean;
 var
   Match : TRSItemFinderMatch;
+  up: String;
 begin
   if Self.IsOpen then
     Exit(True);
@@ -49,11 +65,23 @@ begin
   if not ItemFinder.Find(['Rune pouch', 'Divine rune pouch'], Inventory.GetSlotBoxes, Match) then
     Exit;
 
+  { Prefer left-click. Open is the default action and avoids ChooseOption OCR
+    missing the short word "Open". }
   Mouse.Move(Match.Box);
-  if not ChooseOption.Select('Open') then
-    Exit;
+  Wait(40, 80);
+  up := Trim(MainScreen.GetUpText());
+  if (up = '') or up.ContainsAny(['Open', 'Rune pouch', 'Divine']) then
+  begin
+    Mouse.Click(MOUSE_LEFT);
+    if Self.IsOpen(4000) then
+      Exit(True);
+  end;
 
-  Result := WaitUntil(Self.IsOpen, 17, 5000);
+  Mouse.Move(Match.Box);
+  if ChooseOption.Select(['Open'], MOUSE_LEFT, False) then
+    Result := Self.IsOpen(5000)
+  else
+    Result := False;
 end;
 
 function TRSRunePouch.GetTitle(): String; override;

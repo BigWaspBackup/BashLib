@@ -54,7 +54,13 @@ begin
     Sets[i].Name := key;
 
     for slot := Low(ERSEquipmentSlot) to High(ERSEquipmentSlot) do
-      Sets[i].Items[slot] := obj.getString(ToStr(slot).Lower());
+    begin
+      name := ToStr(slot).Lower();
+      if obj.Has(name) then
+        Sets[i].Items[slot] := obj.getString(name)
+      else
+        Sets[i].Items[slot] := 'None';
+    end;
   end;
 
   for slot := Low(ERSEquipmentSlot) to High(ERSEquipmentSlot) do

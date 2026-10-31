@@ -1,0 +1,175 @@
+{$IFNDEF BASH_WORN_GEAR}
+{$DEFINE BASH_WORN_GEAR}
+{$IFNDEF WL_OSR}
+  {$I BashLib/osr.simba}
+{$ENDIF}
+
+type
+  TBASHWornGear = record
+    Scanned: Boolean;
+    Items: TRSItemArray;
+  end;
+
+function BASHUnlimitedGearNames(): TRSItemArray;
+begin
+  Result := [
+    'Staff of air', 'Staff of water', 'Staff of earth', 'Staff of fire',
+    'Air battlestaff', 'Water battlestaff', 'Earth battlestaff', 'Fire battlestaff',
+    'Mystic air staff', 'Mystic water staff', 'Mystic earth staff', 'Mystic fire staff',
+    'Dust battlestaff', 'Mist battlestaff', 'Smoke battlestaff', 'Steam battlestaff',
+    'Mud battlestaff', 'Lava battlestaff',
+    'Mystic dust staff', 'Mystic mist staff', 'Mystic smoke staff', 'Mystic steam staff',
+    'Mystic mud staff', 'Mystic lava staff',
+    'Twinflame staff', 'Kodai wand',
+    'Tome of fire', 'Tome of water', 'Tome of earth'
+  ];
+end;
+
+function BASHIsUnlimitedGear(const item: String): Boolean;
+var
+  known: TRSItemArray;
+  i: Int32;
+begin
+  known := BASHUnlimitedGearNames();
+  for i := 0 to High(known) do
+    if SameText(item, known[i]) then
+      Exit(True);
+  Result := False;
+end;
+
+procedure BASHMarkUnlimitedGear(const item: String; var air, water, earth, fire: Boolean);
+var
+  lower: String;
+begin
+  lower := LowerCase(item);
+  if SameText(lower, 'kodai wand') then
+  begin
+    water := True;
+    Exit;
+  end;
+
+  if lower.Contains('air') or lower.Contains('dust') or lower.Contains('mist') or lower.Contains('smoke') then
+    air := True;
+  if lower.Contains('water') or lower.Contains('mud') or lower.Contains('mist') or lower.Contains('steam') or
+     lower.Contains('twinflame') then
+    water := True;
+  if lower.Contains('earth') or lower.Contains('dust') or lower.Contains('mud') or lower.Contains('lava') then
+    earth := True;
+  if lower.Contains('fire') or lower.Contains('smoke') or lower.Contains('steam') or lower.Contains('lava') or
+     lower.Contains('twinflame') then
+    fire := True;
+end;
+
+function TBASHWornGear.HasAny(const names: TRSItemArray): Boolean;
+var
+  i, j: Int32;
+begin
+  Result := False;
+  if not Self.Scanned then
+    Exit;
+
+  for i := 0 to High(names) do
+  begin
+    if names[i] = '' then
+      Continue;
+    for j := 0 to High(Self.Items) do
+      if SameText(ToStr(Self.Items[j]), ToStr(names[i])) then
+        Exit(True);
+  end;
+end;
+
+function TBASHWornGear.CoversRune(const rune: TRSItem): Boolean;
+var
+  element: String;
+  i: Int32;
+  air, water, earth, fire: Boolean;
+begin
+  Result := False;
+  if not Self.Scanned then
+    Exit;
+
+  element := LowerCase(ToStr(rune));
+  if (element <> 'air rune') and (element <> 'water rune') and
+     (element <> 'earth rune') and (element <> 'fire rune') then
+    Exit;
+
+  air := False;
+  water := False;
+  earth := False;
+  fire := False;
+  for i := 0 to High(Self.Items) do
+    if BASHIsUnlimitedGear(Self.Items[i]) then
+      BASHMarkUnlimitedGear(Self.Items[i], air, water, earth, fire);
+
+  if element = 'air rune' then
+    Result := air
+  else if element = 'water rune' then
+    Result := water
+  else if element = 'earth rune' then
+    Result := earth
+  else if element = 'fire rune' then
+    Result := fire;
+end;
+
+procedure TBASHWornGear.FilterRunes(var names: TRSItemArray; var qtys: TIntegerArray);
+var
+  i: Int32;
+  keepNames: TRSItemArray;
+  keepQtys: TIntegerArray;
+begin
+  if not Self.Scanned then
+    Exit;
+
+  SetLength(keepNames, 0);
+  SetLength(keepQtys, 0);
+  for i := 0 to High(names) do
+  begin
+    if Self.CoversRune(names[i]) then
+    begin
+      WriteLn('[WornGear] Skipping ', ToStr(names[i]), ' (unlimited from equipment)');
+      Continue;
+    end;
+    keepNames += names[i];
+    if i <= High(qtys) then
+      keepQtys += qtys[i];
+  end;
+  names := keepNames;
+  qtys := keepQtys;
+end;
+
+function BASHScanWornGear(): TBASHWornGear;
+var
+  i: Int32;
+begin
+  Result.Scanned := False;
+  SetLength(Result.Items, 0);
+
+  if not RSClient.IsLoggedIn() then
+  begin
+    WriteLn('[WornGear] Not logged in, equipment not scanned');
+    Exit;
+  end;
+
+  if Bank.IsOpen() then
+  begin
+    WriteLn('[WornGear] Bank is open, equipment not scanned');
+    Exit;
+  end;
+
+  if not Equipment.Open() then
+  begin
+    WriteLn('[WornGear] Could not open equipment');
+    Exit;
+  end;
+
+  Result.Items := Equipment.DiscoverAll();
+  Result.Scanned := True;
+  WriteLn('[WornGear] Equipped: ', ToStr(Result.Items));
+  for i := 0 to High(Result.Items) do
+    if BASHIsUnlimitedGear(Result.Items[i]) then
+      WriteLn('[WornGear] Unlimited runes from ', ToStr(Result.Items[i]));
+
+  Inventory.Open();
+end;
+
+{$ENDIF}

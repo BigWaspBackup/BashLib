@@ -3,6 +3,9 @@
 {$IFNDEF WL_OSR}
   {$I BashLib/osr.simba}
 {$ENDIF}
+{$IFNDEF BASH_WORN_GEAR}
+  {$I BashLib/optional/handlers/worngear.simba}
+{$ENDIF}
 {$IFNDEF SKUNK_UNIVERSAL_TRANSPORTV2}
   {$I BashLib/optional/handlers/teleports/transportv2.simba}
 {$ENDIF}
@@ -39,6 +42,7 @@ type
     LeaveBankOpen: Boolean;
 
     EquippedScanDone: Boolean;
+    WornGear: TBASHWornGear;
     EquippedTravelKeys: TStringArray;
     ArdyCloakEquipped: Boolean;
     FairyStaffEquipped: Boolean;
@@ -53,6 +57,16 @@ type
 
 var
   BASHFarmRunner: TBASHFarmRunner;
+
+procedure BASHAssignWornGear(var gear: TBASHWornGear);
+begin
+  gear := BASHScanWornGear();
+  BASHFarmRunner.WornGear := gear;
+  BASHFarmRunner.EquippedScanDone := False;
+  {$IFDEF BASH_BIRDHOUSE_RUNNER}
+  BASHBirdHouseRunner.WornGear := gear;
+  {$ENDIF}
+end;
 
 function TBASHFarmRunner.CompostItemName(): TRSItem;
 begin
@@ -580,6 +594,47 @@ begin
   Result := False;
 end;
 
+function BASHFarmTeleportInGear(gear: TBASHWornGear; constref travel: TTeleportLocation): Boolean;
+var
+  j: Int32;
+  tpItem: TRSItem;
+  concrete: TRSItemArray;
+begin
+  if not gear.Scanned then
+    Exit(False);
+
+  for j := 0 to High(travel.items) do
+  begin
+    tpItem := travel.items[j];
+    if tpItem = '' then
+      Continue;
+    concrete := tpItem.GetArray();
+    if gear.HasAny(concrete) then
+      Exit(True);
+  end;
+
+  if (travel.teleportType = ETeleportType.DIARY_ITEM) and (travel.item <> '') then
+  begin
+    concrete := BASHFarmExpandItemVariants(getNumberedDiaryItems(travel.item));
+    Exit(gear.HasAny(concrete));
+  end;
+
+  if (travel.teleportType = ETeleportType.JEWELLERY) and (travel.item <> '') then
+  begin
+    concrete := BASHFarmExpandItemVariants(getChargedJewelleryNames(travel.item));
+    Exit(gear.HasAny(concrete));
+  end;
+
+  if travel.item <> '' then
+  begin
+    tpItem := travel.item;
+    concrete := tpItem.GetArray();
+    Exit(gear.HasAny(concrete));
+  end;
+
+  Result := False;
+end;
+
 function BASHFarmTeleportEquipped(constref travel: TTeleportLocation): Boolean;
 var
   j: Int32;
@@ -655,19 +710,20 @@ begin
   if Length(Self.Patches) = 0 then
     Exit;
 
-  WriteLn('[BASHFarm] Scanning equipment for teleports / fairy staff');
-
-  if Bank.IsOpen() then
-  begin
-    Bank.Close();
-    WaitUntil(not Bank.IsOpen(), 50, 5000);
-  end;
-
   SetLength(Self.EquippedTravelKeys, 0);
   Self.ArdyCloakEquipped := False;
   Self.FairyStaffEquipped := Self.LumbyElite;
   Self.FairyStaffName := '';
   needGuildFairy := False;
+
+  if not Self.WornGear.Scanned then
+  begin
+    WriteLn('[BASHFarm] Worn gear was not scanned; teleport items will be withdrawn');
+    Self.EquippedScanDone := True;
+    Exit;
+  end;
+
+  WriteLn('[BASHFarm] Using startup equipment for teleports / fairy staff');
 
   for i := 0 to High(Self.Patches) do
   begin
@@ -686,7 +742,7 @@ begin
     if Self.TravelKeyEquipped(itemKey) then
       Continue;
 
-    if BASHFarmTeleportEquipped(travel) then
+    if BASHFarmTeleportInGear(Self.WornGear, travel) then
     begin
       WriteLn('[BASHFarm] Equipped teleport: ', Self.Patches[i].Data.Name,
               ' (', travel.destination, ')');
@@ -696,7 +752,7 @@ begin
 
   if needGuildFairy or Self.TravelKeyEquipped(BASHFarmTravelItemKey(RSTeleportsV2.MONASTERY)) then
   begin
-    Self.ArdyCloakEquipped := BASHFarmTeleportEquipped(RSTeleportsV2.MONASTERY);
+    Self.ArdyCloakEquipped := BASHFarmTeleportInGear(Self.WornGear, RSTeleportsV2.MONASTERY);
     if Self.ArdyCloakEquipped then
       WriteLn('[BASHFarm] Ardougne cloak equipped - will cast from equipment');
   end;
@@ -708,7 +764,7 @@ begin
       if (travel.teleportType = ETeleportType.DIARY_ITEM) and
          ('ardougne cloak' in ToStr(travel.item).Lower()) then
       begin
-        if BASHFarmTeleportEquipped(travel) then
+        if BASHFarmTeleportInGear(Self.WornGear, travel) then
         begin
           Self.ArdyCloakEquipped := True;
           WriteLn('[BASHFarm] Ardougne cloak equipped - will cast from equipment');
@@ -719,12 +775,12 @@ begin
 
   if needGuildFairy and (not Self.LumbyElite) then
   begin
-    if Equipment.ContainsItem('Lunar staff') then
+    if Self.WornGear.HasAny(['Lunar staff']) then
     begin
       Self.FairyStaffEquipped := True;
       Self.FairyStaffName := 'Lunar staff';
     end
-    else if Equipment.ContainsItem('Dramen staff') then
+    else if Self.WornGear.HasAny(['Dramen staff']) then
     begin
       Self.FairyStaffEquipped := True;
       Self.FairyStaffName := 'Dramen staff';
@@ -735,7 +791,6 @@ begin
   end;
 
   Self.EquippedScanDone := True;
-  Inventory.Open();
 end;
 
 function TBASHFarmRunner.OnStart(): Boolean;
@@ -942,6 +997,8 @@ begin
       Continue;
     BASHFarmAddRuneNeed(runeNames, runeQtys, Self.ExtraRuneNames[i], Self.ExtraRuneQtys[i]);
   end;
+
+  Self.WornGear.FilterRunes(runeNames, runeQtys);
 
   if Length(runeNames) > 0 then
   begin

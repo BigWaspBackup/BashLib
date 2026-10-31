@@ -3,6 +3,9 @@
 {$IFNDEF WL_OSR}
   {$I BashLib/osr.simba}
 {$ENDIF}
+{$IFNDEF BASH_WORN_GEAR}
+  {$I BashLib/optional/handlers/worngear.simba}
+{$ENDIF}
 {$IFNDEF ANDREW_MUSHTREE_INCLUDED}
   {$I BashLib/optional/interfaces/mainscreen/mushtree.simba}
 {$ENDIF}
@@ -52,6 +55,7 @@ type
     CurrentBirdHouseIndex: Int32;
     HasRunFinished, ShouldTeleport, AlwaysUseBestLog,
     IsDisabled, TerminateOnNoLogs, Initialized, DigsitePendantEquipped: Boolean;
+    WornGear: TBASHWornGear;
 
     Transport: TUniversalTransportV2;
     ScriptIntervalTimer, NextRunSpewTimer: TCountdown;
@@ -1383,13 +1387,12 @@ var
   bankItem: TRSBankItem;
   attempt: Int32;
 begin
-  if Self.DigsitePendantEquipped then
+  chargedVariants := getChargedJewelleryNames(RSTeleportsV2.FOSSIL_ISLAND.item);
+  if Self.DigsitePendantEquipped or Self.WornGear.HasAny(chargedVariants) then
   begin
     WriteLn('[BASHBirdHouse] Digsite pendant is already equipped');
     Exit(True);
   end;
-
-  chargedVariants := getChargedJewelleryNames(RSTeleportsV2.FOSSIL_ISLAND.item);
   WriteLn('[BASHBirdHouse] Digsite pendant names: ', ToStr(chargedVariants));
   for attempt := 1 to 3 do
     for chargedJewellery in chargedVariants do
