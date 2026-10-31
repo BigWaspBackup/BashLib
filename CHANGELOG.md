@@ -1,3 +1,12 @@
+## [8.8.3](https://github.com/BigWaspBackup/BashLib/compare/v8.8.2...v8.8.3) (2026-10-31)
+
+
+### Bug Fixes
+
+* Fixes for gear handler, initial support for unlimited runes in runners. ([4d3242a](https://github.com/BigWaspBackup/BashLib/commit/4d3242aa1fdc0e5e895c45a5b5907ea310d97693))
+
+
+
 ## [8.8.2](https://github.com/BigWaspBackup/BashLib/compare/v8.8.1...v8.8.2) (2026-10-30)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Support for improved back chest finding, some fixes to uptext, minor login screen tweaks ([01674bf](https://github.com/BigWaspBackup/BashLib/commit/01674bfff4b2513c654acd09e7a3f7a89d45c226))
-
-
-
-## [8.7.13](https://github.com/BigWaspBackup/BashLib/compare/v8.7.12...v8.7.13) (2026-10-21)
-
-
-### Bug Fixes
-
-* birdhouse log tweaks ([3f723ab](https://github.com/BigWaspBackup/BashLib/commit/3f723abab6148c8ef4623554141cc9cfd302258b))
 
 
 
