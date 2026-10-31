@@ -447,7 +447,7 @@ var
   PID: PtrUInt;
   UsernameBox, ExperienceBox: TBox;
 
-function GetFrame(sender: TRecorder): Pointer;
+function GetFrame({$H-}sender: TRecorder): Pointer;
 begin
   Image.CopyClientToBitmap(Client.getIOManager(), False, 0, 0, Image.GetWidth()-1, Image.GetHeight()-1);
 
@@ -463,7 +463,7 @@ begin
   Result := Image.GetData();
 end;
 
-function GetTerminated(sender: TRecorder): Boolean;
+function GetTerminated({$H-}sender: TRecorder): Boolean;
 begin
   Result := (not IsProcessRunning(PID)) or (not Client.GetIOManager().TargetValid());
 end;

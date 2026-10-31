@@ -85,17 +85,48 @@ begin
   WL.IsRecording := True;
 end;
 
+var
+  RecorderWindow: PtrUInt;
+
+function _RecordingWindow(): PtrUInt;
+var
+  saved, w, found: TOSWindow;
+  title: String;
+begin
+  {$IFNDEF SIMBAHEADLESS}
+  Exit(GetSimbaTargetWindow());
+  {$ENDIF}
+  saved := RecorderWindow;
+  if (saved <> 0) and saved.IsVaild() then
+    Exit(saved);
+
+  saved := GetTargetWindow();
+  if (saved <> 0) and saved.IsVaild() then
+    Exit(saved);
+
+  {$IFNDEF SRL_DISABLE_REMOTEINPUT}
+  if RSClient.RemoteInput.PID > 0 then
+    for w in GetVisibleWindows() do
+    begin
+      if w.GetPID() <> RSClient.RemoteInput.PID then
+        Continue;
+      w := w.GetRootWindow();
+      title := w.GetTitle();
+      if (title = 'Old School RuneScape') or (title = 'RuneLite') or (Copy(title, 1, 9) = 'RuneLite ') then
+        Exit(w);
+      if found = 0 then
+        found := w;
+    end;
+  {$ENDIF}
+
+  Result := found;
+end;
+
 procedure TRecorder.Start(seconds: Integer; directory: String; userBox, expBox: TBox = []); overload;
 var
   window: PtrUInt;
 begin
-  // BASH runs Simba with --run. That has no IDE window, so the crosshair
-  // target does not exist. The launcher already passed the client as --target.
-  {$IFDEF SIMBAHEADLESS}
-  window := GetTargetWindow();
-  {$ELSE}
-  window := GetSimbaTargetWindow();
-  {$ENDIF}
+  window := _RecordingWindow();
   if window = 0 then
   begin
     WriteLn('Crash recorder skipped: no client window.');

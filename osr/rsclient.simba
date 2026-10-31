@@ -25,6 +25,10 @@ begin
   if not Self.Revalidate() then
     TerminateScript('Please refocus the client!');
 
+  // Keep the real client window. RemoteInput replaces the image target, and
+  // the crash recorder has to record that window rather than the injected buffer.
+  RecorderWindow := GetTargetWindow();
+
   {$IFNDEF SRL_DISABLE_REMOTEINPUT}
     {$IFNDEF SCRIPT_GUI}
       Self.RemoteInput.Setup();
