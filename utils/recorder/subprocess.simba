@@ -422,8 +422,8 @@ begin
   try
     GetClientDimensions(W, H);
   except
-    WriteLn('TargetPID: ', GetSimbaTargetPID());
-    WriteLn('TargetWin: ', GetSimbaTargetWindow());
+    WriteLn('TargetPID: ', GetTargetPID());
+    WriteLn('TargetWin: ', GetTargetWindow());
     WriteLn('Please refocus the client!');
     WriteLn(GetExceptionMessage());
     TerminateScript();
@@ -440,10 +440,6 @@ begin
   GameTabs.SetupAlignment(Result);
 end;
 
-begin
-  GameTabs.Cache.Enabled := True;
-  DetectClientMode();
-end;
 //SUBPROCESS STARTS HERE
 
 var
@@ -485,6 +481,10 @@ var
 begin
   Client.GetIOManager().SetTarget(GetParam('Window'));
   Client.GetIOManager().GetDimensions(W, H);
+  // The mode check needs the window from the parent. A headless recorder has
+  // no target until that handle is applied, so this stays after SetTarget.
+  GameTabs.Cache.Enabled := True;
+  DetectClientMode();
 
   param := GetParam('UsernameBox');
   if param <> '' then

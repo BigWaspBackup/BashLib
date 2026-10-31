@@ -86,8 +86,22 @@ begin
 end;
 
 procedure TRecorder.Start(seconds: Integer; directory: String; userBox, expBox: TBox = []); overload;
+var
+  window: PtrUInt;
 begin
-  Self.Start(GetSimbaTargetWindow(), seconds, directory, userBox, expBox);
+  // BASH runs Simba with --run. That has no IDE window, so the crosshair
+  // target does not exist. The launcher already passed the client as --target.
+  {$IFDEF SIMBAHEADLESS}
+  window := GetTargetWindow();
+  {$ELSE}
+  window := GetSimbaTargetWindow();
+  {$ENDIF}
+  if window = 0 then
+  begin
+    WriteLn('Crash recorder skipped: no client window.');
+    Exit;
+  end;
+  Self.Start(window, seconds, directory, userBox, expBox);
 end;
 
 var
