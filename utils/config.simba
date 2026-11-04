@@ -432,6 +432,7 @@ WriteLn(ConfigINI.GetKeys('GUISettings')); // List all keys in 'GUISettings'
   TConfigINI = record
     Path: String;
     FileName: String;
+    Account: String;
   end;
 
 (*
@@ -477,9 +478,36 @@ Example:
 ConfigINI.Put('GUISettings', 'UsePoolPOH', 'True');
 ```
 *)
+function TConfigINI.SectionName(Section: String): String;
+begin
+  if Trim(Self.Account) = '' then
+    Result := Section
+  else
+    Result := Trim(Self.Account) + ' ' + Section;
+end;
+
+function TConfigINI.HasSection(Section: String): Boolean;
+var
+  lines: TStringArray;
+  i: Int32;
+  header: String;
+begin
+  Result := False;
+  if not FileExists(Self.Path) then
+    Exit;
+  header := '[' + Section + ']';
+  lines := ReadFileContents(Self.Path).Split(#10);
+  for i := 0 to High(lines) do
+    if SameText(Trim(lines[i]), header) then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
+
 procedure TConfigINI.Put(Section, KeyName, Value: String);
 begin
-  WriteINI(Section, KeyName, Value, Self.Path);
+  WriteINI(Self.SectionName(Section), KeyName, Value, Self.Path);
 end;
 
 
@@ -497,13 +525,18 @@ WriteLn(ConfigINI.Get('GUISettings', 'UsePoolPOH'));
 ```
 *)
 function TConfigINI.Get(Section, KeyName: String): String;
+var
+  named: String;
 begin
-  Result := ReadINI(Section, KeyName, Self.Path);
+  named := Self.SectionName(Section);
+  Result := ReadINI(named, KeyName, Self.Path);
+  if (Result = '') and (named <> Section) and (not Self.HasSection(named)) then
+    Result := ReadINI(Section, KeyName, Self.Path);
 end;
 
 function TConfigINI.Get(Section, KeyName, DefaultValue: String): String; overload;
 begin
-  Result := ReadINI(Section, KeyName, Self.Path);
+  Result := Self.Get(Section, KeyName);
   if Result = '' then Result := DefaultValue;
 end;
 
@@ -533,7 +566,7 @@ begin
   while i < Length(FileContent) do begin
     FileContent[i] := FileContent[i].Trim;
     if FileContent[i].StartsWith('[') and FileContent[i].EndsWith(']') then begin
-      InSection := FileContent[i].Between('[', ']') = Section;
+      InSection := SameText(FileContent[i].Between('[', ']'), Self.SectionName(Section));
     end else if InSection and FileContent[i].Contains('=') then begin
       Result += FileContent[i].Before('=').Trim;
     end;
@@ -558,7 +591,7 @@ procedure TConfigINI.Remove(Section, KeyName: String);
 begin
   if not FileExists(Self.Path) then
     RaiseException('File does not exist: ' + Self.Path);
-  DeleteINI(Section, KeyName, Self.Path);
+  DeleteINI(Self.SectionName(Section), KeyName, Self.Path);
 end;
 
 

@@ -22,7 +22,7 @@ type
 
 const
   BASH_HOST_START_LOCATIONS: TStringArray = [
-    'Grand Exchange Teleport'
+    'Grand Exchange'
   ];
 
   BASH_FARM_HERB_SEEDS: TStringArray = [

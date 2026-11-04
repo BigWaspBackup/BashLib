@@ -11,6 +11,8 @@ type
     DoPatches, DoTrees, DoBirdhouse: Boolean;
     StartingLocationIdx: Int32;
     Embedded: Boolean;
+    ProfileBound: Boolean;
+    BoundPlayerIndex: Int32;
   end;
 
 procedure TBASHFarmGUI.StyleNav(selected: TImage);
@@ -679,9 +681,11 @@ begin
   cb.SetTooltip('Enable birdhouse runs on Fossil Island. Shows the Birdhouse tab when checked.');
   cb.CheckBox.SetOnChange(@Self.OnActivityCheckChange);
 
-  Self.AddCombo(Self.ActivitiesSection, lcb, 'lcb_bash_start_loc', 'Starting location (return to bank)',
-    24, 270, BASH_HOST_START_LOCATIONS, BASHFarmConfig.StartingLocationIdx);
-  lcb.SetTooltip('Bank / start location to return to between activities.');
+  Self.AddCombo(Self.ActivitiesSection, lcb, 'lcb_bash_start_loc', 'Location',
+    24, 270, BASH_HOST_START_LOCATIONS, 0);
+  lcb.SetTooltip('Grand Exchange is the only starting location right now.');
+  lcb.SetEnabled(False);
+  lcb.ComboBox.SetEnabled(False);
 end;
 
 procedure TBASHFarmGUI.BuildBirdhouseSection();
@@ -947,6 +951,155 @@ end;
 function TBASHFarmGUI.HasNamedControl(ctrlName, suffix: String): Boolean;
 begin
   Result := (Self.Form <> nil) and (Self.Form.GetChild(ctrlName + suffix) <> nil);
+end;
+
+procedure TBASHFarmGUI.SetNamedCheck(ctrlName: String; checked: Boolean);
+var
+  cb: TCheckBox;
+begin
+  if Self.Form = nil then
+    Exit;
+  cb := Self.Form.GetChild(ctrlName + '_checkbox');
+  if cb <> nil then
+    cb.SetChecked(checked);
+end;
+
+procedure TBASHFarmGUI.SetNamedCombo(ctrlName: String; idx: Int32);
+var
+  combo: TComboBox;
+begin
+  if Self.Form = nil then
+    Exit;
+  combo := Self.Form.GetChild(ctrlName + '_combobox');
+  if combo = nil then
+    Exit;
+  if (idx < 0) or (idx >= combo.GetItems().GetCount()) then
+    idx := 0;
+  combo.SetItemIndex(idx);
+end;
+
+procedure TBASHFarmGUI.PushConfigToControls();
+begin
+  Self.SetNamedCombo('lcb_bash_herbseed', BASHFarmConfig.HerbSeedIdx);
+  Self.SetNamedCombo('lcb_bash_flowerseed', BASHFarmConfig.FlowerSeedIdx);
+  Self.SetNamedCombo('lcb_bash_allotseed', BASHFarmConfig.AllotmentSeedIdx);
+  Self.SetNamedCombo('lcb_bash_bushseed', BASHFarmConfig.BushSeedIdx);
+  Self.SetNamedCombo('lcb_bash_cactusseed', BASHFarmConfig.CactusSeedIdx);
+  Self.SetNamedCombo('lcb_bash_compost', BASHFarmConfig.CompostIdx);
+  Self.SetNamedCombo('lcb_bash_treesapling', BASHFarmConfig.TreeSaplingIdx);
+  Self.SetNamedCombo('lcb_bash_fruitsapling', BASHFarmConfig.FruitSaplingIdx);
+
+  Self.SetNamedCombo('lcb_bash_weiss_tp', BASHFarmConfig.WeissTP);
+  Self.SetNamedCombo('lcb_bash_stronghold_tp', BASHFarmConfig.StrongholdTP);
+  Self.SetNamedCombo('lcb_bash_ardougne_tp', BASHFarmConfig.ArdougneTP);
+  Self.SetNamedCombo('lcb_bash_falador_tp', BASHFarmConfig.FaladorTP);
+  Self.SetNamedCombo('lcb_bash_catherby_tp', BASHFarmConfig.CatherbyTP);
+  Self.SetNamedCombo('lcb_bash_hosidius_tp', BASHFarmConfig.HosidiusTP);
+  Self.SetNamedCombo('lcb_bash_ortus_tp', BASHFarmConfig.OrtusTP);
+  Self.SetNamedCombo('lcb_bash_guild_tp', BASHFarmConfig.GuildTP);
+  Self.SetNamedCombo('lcb_bash_lum_tree_tp', BASHFarmConfig.LumbridgeTreeTP);
+  Self.SetNamedCombo('lcb_bash_var_tree_tp', BASHFarmConfig.VarrockTreeTP);
+  Self.SetNamedCombo('lcb_bash_fally_tree_tp', BASHFarmConfig.FaladorTreeTP);
+  Self.SetNamedCombo('lcb_bash_tav_tree_tp', BASHFarmConfig.TaverleyTreeTP);
+  Self.SetNamedCombo('lcb_bash_gnome_tree_tp', BASHFarmConfig.GnomeTreeTP);
+  Self.SetNamedCombo('lcb_bash_gnome_fruit_tp', BASHFarmConfig.GnomeFruitTP);
+  Self.SetNamedCombo('lcb_bash_gnome_village_tp', BASHFarmConfig.GnomeVillageFruitTP);
+  Self.SetNamedCombo('lcb_bash_cath_fruit_tp', BASHFarmConfig.CatherbyFruitTP);
+  Self.SetNamedCombo('lcb_bash_brim_fruit_tp', BASHFarmConfig.BrimhavenFruitTP);
+  Self.SetNamedCombo('lcb_bash_lletya_fruit_tp', BASHFarmConfig.LletyaFruitTP);
+
+  Self.SetNamedCheck('cb_bash_barbdibber', BASHFarmConfig.BarbDibber);
+  Self.SetNamedCheck('cb_bash_magicsecs', BASHFarmConfig.MagicSecateurs);
+  Self.SetNamedCheck('cb_bash_lumby_elite', BASHFarmConfig.LumbyElite);
+  Self.SetNamedCheck('cb_bash_runnow', BASHFarmConfig.RunNow);
+
+  Self.SetNamedCheck('cb_bash_weiss_herb', BASHFarmConfig.Enabled[EBASHFarmPatch.WEISS_HERB]);
+  Self.SetNamedCheck('cb_bash_stronghold_herb', BASHFarmConfig.Enabled[EBASHFarmPatch.STRONGHOLD_HERB]);
+  Self.SetNamedCheck('cb_bash_ardy_herb', BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_HERB]);
+  Self.SetNamedCheck('cb_bash_ardy_flower', BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_FLOWER]);
+  Self.SetNamedCheck('cb_bash_ardy_allot', BASHFarmConfig.Enabled[EBASHFarmPatch.ARDOUGNE_ALLOT_N]);
+  Self.SetNamedCheck('cb_bash_fally_herb', BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_HERB]);
+  Self.SetNamedCheck('cb_bash_fally_flower', BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_FLOWER]);
+  Self.SetNamedCheck('cb_bash_fally_allot', BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_ALLOT_N]);
+  Self.SetNamedCheck('cb_bash_cath_herb', BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_HERB]);
+  Self.SetNamedCheck('cb_bash_cath_flower', BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_FLOWER]);
+  Self.SetNamedCheck('cb_bash_cath_allot', BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_ALLOT_N]);
+  Self.SetNamedCheck('cb_bash_phas_herb', BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_HERB]);
+  Self.SetNamedCheck('cb_bash_phas_flower', BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_FLOWER]);
+  Self.SetNamedCheck('cb_bash_phas_allot', BASHFarmConfig.Enabled[EBASHFarmPatch.PHASMATYS_ALLOT_N]);
+  Self.SetNamedCheck('cb_bash_hosi_herb', BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_HERB]);
+  Self.SetNamedCheck('cb_bash_hosi_flower', BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_FLOWER]);
+  Self.SetNamedCheck('cb_bash_hosi_allot', BASHFarmConfig.Enabled[EBASHFarmPatch.HOSIDIUS_ALLOT_N]);
+  Self.SetNamedCheck('cb_bash_ortus_herb', BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_HERB]);
+  Self.SetNamedCheck('cb_bash_ortus_flower', BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_FLOWER]);
+  Self.SetNamedCheck('cb_bash_ortus_allot', BASHFarmConfig.Enabled[EBASHFarmPatch.ORTUS_ALLOT_N]);
+  Self.SetNamedCheck('cb_bash_guild_herb', BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_HERB]);
+  Self.SetNamedCheck('cb_bash_guild_flower', BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_FLOWER]);
+  Self.SetNamedCheck('cb_bash_guild_allot', BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_ALLOT_N]);
+  Self.SetNamedCheck('cb_bash_guild_bush', BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_BUSH]);
+  Self.SetNamedCheck('cb_bash_guild_cactus', BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_CACTUS]);
+
+  Self.SetNamedCheck('cb_bash_lum_tree', BASHFarmConfig.Enabled[EBASHFarmPatch.LUMBRIDGE_TREE]);
+  Self.SetNamedCheck('cb_bash_var_tree', BASHFarmConfig.Enabled[EBASHFarmPatch.VARROCK_TREE]);
+  Self.SetNamedCheck('cb_bash_fally_tree', BASHFarmConfig.Enabled[EBASHFarmPatch.FALADOR_TREE]);
+  Self.SetNamedCheck('cb_bash_tav_tree', BASHFarmConfig.Enabled[EBASHFarmPatch.TAVERLEY_TREE]);
+  Self.SetNamedCheck('cb_bash_gnome_tree', BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_TREE]);
+  Self.SetNamedCheck('cb_bash_guild_tree', BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_TREE]);
+  Self.SetNamedCheck('cb_bash_guild_redwood', BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_REDWOOD]);
+  Self.SetNamedCheck('cb_bash_gnome_fruit', BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_STRONGHOLD_FRUIT]);
+  Self.SetNamedCheck('cb_bash_cath_fruit', BASHFarmConfig.Enabled[EBASHFarmPatch.CATHERBY_FRUIT]);
+  Self.SetNamedCheck('cb_bash_gnome_village_fruit', BASHFarmConfig.Enabled[EBASHFarmPatch.GNOME_VILLAGE_FRUIT]);
+  Self.SetNamedCheck('cb_bash_brim_fruit', BASHFarmConfig.Enabled[EBASHFarmPatch.BRIMHAVEN_FRUIT]);
+  Self.SetNamedCheck('cb_bash_lletya_fruit', BASHFarmConfig.Enabled[EBASHFarmPatch.LLETYA_FRUIT]);
+  Self.SetNamedCheck('cb_bash_guild_fruit', BASHFarmConfig.Enabled[EBASHFarmPatch.GUILD_FRUIT]);
+
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  Self.SetNamedCheck('cb_bash_enable_patches', BASHFarmConfig.EnablePatches);
+  Self.SetNamedCheck('cb_bash_enable_birdhouse', BASHFarmConfig.EnableBirdhouse);
+  Self.SetNamedCombo('lcb_bash_start_loc', 0);
+  Self.SetNamedCombo('lcb_bash_bh_log', BASHBirdHouseConfig.LogTypeIdx);
+  Self.SetNamedCombo('lcb_bash_bh_seed', BASHBirdHouseConfig.SeedIdx);
+  Self.SetNamedCheck('cb_bash_bh_bestlog', BASHBirdHouseConfig.UseBestLog);
+  Self.SetNamedCheck('cb_bash_bh_runnow', BASHBirdHouseConfig.RunNow);
+  Self.RefreshBirdhouseLogEnabled();
+  Self.RefreshActivityNav();
+  {$ENDIF}
+  Self.RefreshPatchesEnabled();
+  Self.RefreshTreesEnabled();
+  Self.RefreshTravelEnabled();
+end;
+
+procedure TBASHFarmGUI.SaveBoundProfile();
+var
+  current: Int32;
+begin
+  if not Self.ProfileBound then
+    Exit;
+  current := Login.PlayerIndex;
+  Login.PlayerIndex := Self.BoundPlayerIndex;
+  Self.ApplySettings();
+  Login.PlayerIndex := current;
+end;
+
+procedure TBASHFarmGUI.AccountSelectionChanged(); override;
+begin
+  if Self.Embedded or (Self.Form = nil) then
+    Exit;
+  if not Self.HasNamedControl('lcb_bash_herbseed', '_combobox') then
+    Exit;
+
+  if Self.ProfileBound and (Self.BoundPlayerIndex <> Login.PlayerIndex) then
+    Self.SaveBoundProfile();
+
+  BASHFarmConfig.Read();
+  {$IFDEF BASH_FARM_WITH_BIRDHOUSE}
+  BASHBirdHouseConfig.Read();
+  {$ENDIF}
+  Self.PushConfigToControls();
+  Self.BoundPlayerIndex := Login.PlayerIndex;
+  Self.ProfileBound := True;
+  if (Login.PlayerIndex >= 0) and (Login.PlayerIndex <= High(Login.Players)) then
+    WriteLn('[BASH Farm+BH] Loaded settings for ', Login.Players[Login.PlayerIndex].User);
 end;
 
 procedure TBASHFarmGUI.ReadFarmControlsIntoConfig();
