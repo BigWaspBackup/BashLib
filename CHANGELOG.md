@@ -1,3 +1,12 @@
+## [8.8.7](https://github.com/BigWaspBackup/BashLib/compare/v8.8.6...v8.8.7) (2026-11-09)
+
+
+### Bug Fixes
+
+* Added support for hardcore worlds, default filtering now removes hardcore worlds. ([c063c2f](https://github.com/BigWaspBackup/BashLib/commit/c063c2f5cff27d728913d97bed2fa3120678870d))
+
+
+
 ## [8.8.6](https://github.com/BigWaspBackup/BashLib/compare/v8.8.5...v8.8.6) (2026-11-04)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Fixes for gear handler, initial support for unlimited runes in runners. ([4d3242a](https://github.com/BigWaspBackup/BashLib/commit/4d3242aa1fdc0e5e895c45a5b5907ea310d97693))
-
-
-
-## [8.8.2](https://github.com/BigWaspBackup/BashLib/compare/v8.8.1...v8.8.2) (2026-10-30)
-
-
-### Bug Fixes
-
-* BASH Launcher 2.0 Support ([71f7722](https://github.com/BigWaspBackup/BashLib/commit/71f7722b95433201a3fc5c06ab88ea90328ceff9))
 
 
 
