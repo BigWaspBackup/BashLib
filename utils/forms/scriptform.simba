@@ -546,18 +546,26 @@ procedure TScriptForm.ShowWorldFetcherDialog();
     if not check.IsChecked() then
       Result.ExcludeLocations += [EWorldLocation.SOUTH_AFRICA];
 
-    check := Self.WorldFetcherDialog.GetChild('wf_normal_checkbox');
-    if not check.IsChecked() then
-      Result.ExcludeActivities += [EWorldActivity.NORMAL];
-    check := Self.WorldFetcherDialog.GetChild('wf_dangerous_checkbox');
-    if not check.IsChecked() then
-      Result.ExcludeActivities += [EWorldActivity.DANGEROUS];
-    check := Self.WorldFetcherDialog.GetChild('wf_restricted_checkbox');
-    if not check.IsChecked() then
-      Result.ExcludeActivities += [EWorldActivity.RESTRICTED];
-    check := Self.WorldFetcherDialog.GetChild('wf_skilltotal_checkbox');
-    if not check.IsChecked() then
-      Result.ExcludeActivities += [EWorldActivity.SKILL_TOTAL];
+    check := Self.WorldFetcherDialog.GetChild('wf_hardcore_checkbox');
+    if check.IsChecked() then
+      Result.IncludeActivities := [EWorldActivity.HARDCORE]
+    else
+    begin
+      Result.ExcludeActivities += [EWorldActivity.HARDCORE];
+
+      check := Self.WorldFetcherDialog.GetChild('wf_normal_checkbox');
+      if not check.IsChecked() then
+        Result.ExcludeActivities += [EWorldActivity.NORMAL];
+      check := Self.WorldFetcherDialog.GetChild('wf_dangerous_checkbox');
+      if not check.IsChecked() then
+        Result.ExcludeActivities += [EWorldActivity.DANGEROUS];
+      check := Self.WorldFetcherDialog.GetChild('wf_restricted_checkbox');
+      if not check.IsChecked() then
+        Result.ExcludeActivities += [EWorldActivity.RESTRICTED];
+      check := Self.WorldFetcherDialog.GetChild('wf_skilltotal_checkbox');
+      if not check.IsChecked() then
+        Result.ExcludeActivities += [EWorldActivity.SKILL_TOTAL];
+    end;
 
     edit := Self.WorldFetcherDialog.GetChild('wf_exclude_worlds_edit');
     excludeWorlds := edit.GetIntegerArray(301, 700);
@@ -589,7 +597,7 @@ procedure TScriptForm.ShowWorldFetcherDialog();
     Result := activityStr;
     if (Result = '') or (Result = '-') then
       Result := 'Normal';
-    Result := Self._WFPadRight(Result, 22);
+    Result := Self._WFPadRight(Result, 40);
   end;
 
   procedure TScriptForm._WFUpdateStats();
@@ -827,7 +835,7 @@ begin
   begin
     Create(header);
     setName('wf_help_label');
-    setCaption('Tick the worlds you want, then click Done. Done replaces your worlds list with the ticked worlds.');
+    setCaption('Tick the worlds you want, then click Done. Tick Hardcore worlds to list only those worlds.');
     setLeft(TControl.AdjustToDPI(24));
     setTop(TControl.AdjustToDPI(46));
     setWidth(TControl.AdjustToDPI(860));
@@ -882,6 +890,16 @@ begin
     setCaption('Members');
     getFont().setColor(WF_GUI_TEXT);
     SetChecked(True);
+    setOnChange(@Self._WFOnFilterChange);
+  end;
+  checkboxY += checkboxHeight + TControl.AdjustToDPI(8);
+  with check do
+  begin
+    Create(typePanel, 'Hardcore worlds', '', [TControl.AdjustToDPI(16), checkboxY], [TControl.AdjustToDPI(170), checkboxHeight]);
+    setName('wf_hardcore_checkbox');
+    setCaption('Hardcore worlds');
+    getFont().setColor(WF_GUI_TEXT);
+    SetChecked(False);
     setOnChange(@Self._WFOnFilterChange);
   end;
 
@@ -1167,7 +1185,7 @@ begin
       Self._WFPadRight('#', 5) + '  ' +
       Self._WFPadRight('LOCATION', 12) + '        ' +
       Self._WFPadRight('TYPE', 11) + '        ' +
-      Self._WFPadRight('ACTIVITY', 20) + '        ' +
+      Self._WFPadRight('ACTIVITY', 40) + '        ' +
       Self._WFPadLeft('PLAYERS', 10)
     );
     setLeft(gap + TControl.AdjustToDPI(8));

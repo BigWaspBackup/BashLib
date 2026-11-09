@@ -44,11 +44,13 @@ An enumeration representing the membership type of a world.
 (*
 ## type EWorldActivity
 ```pascal
-EWorldActivity = (NORMAL, DANGEROUS, RESTRICTED, SKILL_TOTAL);
+EWorldActivity = (NORMAL, DANGEROUS, RESTRICTED, SKILL_TOTAL, HARDCORE);
 ```
 An enumeration representing world activity categories.
+`HARDCORE` is the Hardcore worlds game mode. Those characters can only log in
+to worlds whose activity contains "Hardcore".
 *)
-  EWorldActivity = (NORMAL, DANGEROUS, RESTRICTED, SKILL_TOTAL);
+  EWorldActivity = (NORMAL, DANGEROUS, RESTRICTED, SKILL_TOTAL, HARDCORE);
 
 (*
 ## type EWorldLocation
@@ -209,6 +211,10 @@ function TWorldFetcher._ParseActivity(TypeStr: String): EWorldActivity; static;
 begin
   TypeStr := UpperCase(TypeStr.Trim());
 
+  // Checked first so "Hardcore World - Group PvM" stays hardcore, not dangerous.
+  if TypeStr.Contains('HARDCORE') then
+    Exit(EWorldActivity.HARDCORE);
+
   if TypeStr.ContainsAny(['PVP', 'DEADMAN', 'RISK']) then
     Exit(EWorldActivity.DANGEROUS);
 
@@ -362,7 +368,8 @@ Setup WorldFetcher with default search settings.
 *)
 procedure TWorldFetcher.Setup();
 begin
-  Self.Settings.ExcludeActivities := [];
+  // Hardcore worlds are a separate game mode. Leave them out unless a caller opts in.
+  Self.Settings.ExcludeActivities := [EWorldActivity.HARDCORE];
   Self.Settings.ExcludeWorlds := [];
   Self.Settings.ExcludeLocations := [];
   Self.Settings.ExcludeTypes := [];
