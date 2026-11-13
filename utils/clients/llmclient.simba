@@ -4,7 +4,7 @@
 {$ENDIF}
 
 type
-  ELLMService = (llmLocal, llmDeepSeek, llmOpenAI, llmGroq, llmGemini);
+  ELLMService = (llmLocal, llmDeepSeek, llmOpenAI, llmGroq, llmGemini, llmMistral, llmOpenRouter);
 
   TLLMClient = record
     Service: ELLMService;
@@ -34,6 +34,8 @@ begin
     ELLMService.llmOpenAI: Result := 'ChatGPT';
     ELLMService.llmGroq: Result := 'Groq';
     ELLMService.llmGemini: Result := 'Gemini';
+    ELLMService.llmMistral: Result := 'Mistral';
+    ELLMService.llmOpenRouter: Result := 'OpenRouter';
   else
     Result := 'Gemini';
   end;
@@ -46,6 +48,8 @@ begin
     'deepseek': Self.Service := ELLMService.llmDeepSeek;
     'chatgpt', 'openai': Self.Service := ELLMService.llmOpenAI;
     'groq': Self.Service := ELLMService.llmGroq;
+    'mistral': Self.Service := ELLMService.llmMistral;
+    'openrouter': Self.Service := ELLMService.llmOpenRouter;
   else
     Self.Service := ELLMService.llmGemini;
   end;
@@ -55,9 +59,11 @@ function TLLMClient.DefaultModel(): String;
 begin
   case Self.Service of
     ELLMService.llmLocal: Result := 'granite4.1:3b';
-    ELLMService.llmDeepSeek: Result := 'deepseek-chat';
+    ELLMService.llmDeepSeek: Result := 'deepseek-flash';
     ELLMService.llmOpenAI: Result := 'gpt-4o-mini';
-    ELLMService.llmGroq: Result := 'llama-3.3-70b-versatile';
+    ELLMService.llmGroq: Result := 'openai/gpt-oss-20b';
+    ELLMService.llmMistral: Result := 'mistral-small-latest';
+    ELLMService.llmOpenRouter: Result := 'openrouter/free';
     ELLMService.llmGemini: Result := 'gemini-3.5-flash-lite';
   else
     Result := 'gemini-3.5-flash-lite';
@@ -83,6 +89,10 @@ begin
       Result := 'https://api.openai.com/v1/chat/completions';
     ELLMService.llmGroq:
       Result := 'https://api.groq.com/openai/v1/chat/completions';
+    ELLMService.llmMistral:
+      Result := 'https://api.mistral.ai/v1/chat/completions';
+    ELLMService.llmOpenRouter:
+      Result := 'https://openrouter.ai/api/v1/chat/completions';
     ELLMService.llmGemini:
       Result := 'https://generativelanguage.googleapis.com/v1beta/models/' +
                 Self.ResolveModel() + ':generateContent';
@@ -103,6 +113,13 @@ begin
       begin
         if Self.APIKey <> '' then
           SetHTTPHeader(Self.Client.Client, 'x-goog-api-key', Self.APIKey);
+      end;
+    ELLMService.llmOpenRouter:
+      begin
+        if Self.APIKey <> '' then
+          SetHTTPHeader(Self.Client.Client, 'Authorization', 'Bearer ' + Self.APIKey);
+        SetHTTPHeader(Self.Client.Client, 'HTTP-Referer', 'https://bashscripts.shop');
+        SetHTTPHeader(Self.Client.Client, 'X-Title', 'BASH');
       end;
     ELLMService.llmLocal:
       begin

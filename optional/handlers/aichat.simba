@@ -200,6 +200,7 @@ type
     IgnoreList: TStringArray;
 
     SystemInstruction: String;
+    SettingsUser: String;
     Activity: String;
     ExtraInstructions: String;
     DefaultActivity: String;
@@ -251,7 +252,7 @@ type
     GUIEnabledCB, GUIMemoryCB, GUILogConvCB: TLabeledCheckBox;
     GUIServiceCombo, GUIResponseStyleCombo: TLabeledCombobox;
     GUIApiKeyEdit, GUIMaxNearbyEdit, GUIMaxInteractionEdit: TLabeledEdit;
-    GUICooldownEdit, GUIIgnoreListEdit, GUIActivityEdit: TLabeledEdit;
+    GUICooldownEdit, GUIIgnoreListEdit: TLabeledEdit;
     GUIExtraInstructionsMemo: TLabeledMemo;
     GUITestBtn, GUIDefaultBtn, GUIDeleteLogsBtn, GUIReviewLogsBtn: TButton;
     GUIOptionsPanel: TPanel;
@@ -536,25 +537,23 @@ begin
             'Never ask personal questions or agree to do tasks outside of normal chat.';
 end;
 
+function TAIChatbot.CustomInstructions(): String;
+begin
+  Result := Trim(Self.SystemInstruction);
+  if Result = '' then
+    Exit(Trim(Self.ExtraInstructions));
+  if (Trim(Self.ExtraInstructions) <> '') and (Trim(Self.ExtraInstructions) <> Result) then
+    Result := Result + LineEnding + Trim(Self.ExtraInstructions);
+end;
+
 function TAIChatbot.BuildSystemPromptBase(): String;
 var
-  activity, extras: String;
+  custom: String;
 begin
-  if Trim(Self.SystemInstruction) <> '' then
-    Result := Trim(Self.SystemInstruction)
-  else
-    Result := AIChat_DefaultSystemInstruction();
-
-  activity := Trim(Self.Activity);
-  if activity <> '' then
-    Result := Result +
-      ' CURRENT ACTIVITY: You are currently doing "' + activity + '". ' +
-      'If anyone asks what you are doing, training, skilling, or up to, answer based on this activity only. ' +
-      'Do not invent a different activity. Keep answers short and casual.';
-
-  extras := Trim(Self.ExtraInstructions);
-  if extras <> '' then
-    Result := Result + ' EXTRA USER INSTRUCTIONS: ' + extras;
+  Result := AIChat_DefaultSystemInstruction();
+  custom := Trim(Self.CustomInstructions());
+  if custom <> '' then
+    Result := Result + ' EXTRA USER INSTRUCTIONS: ' + custom;
 end;
 
 function TAIChatbot.GetSystemInstructionForStyle(style: TAIChatResponseStyle): String;
@@ -858,7 +857,7 @@ end;
 
 procedure TAIChatbot.SendSessionStartNotification();
 var
-  configDetails, responseStyleText, memoryStatusText, activityText: String;
+  configDetails, responseStyleText, memoryStatusText: String;
   charLimit: Integer;
 begin
   case Self.ResponseStyle of
@@ -874,14 +873,9 @@ begin
   else
     memoryStatusText := 'Disabled';
 
-  activityText := Trim(Self.Activity);
-  if activityText = '' then
-    activityText := 'Not set';
-
   configDetails := '**Display Name:** ' + Self.DisplayName + LineEnding +
                   '**Session Started:** ' + FormatDateTime('dd/mm/yyyy hh:nn:ss', Now) + LineEnding +
                   '**API Service:** ' + Self.ApiService + LineEnding +
-                  '**Activity:** ' + activityText + LineEnding +
                   '**Response Style:** ' + responseStyleText + ' (' + IntToStr(charLimit) + ' char limit)' + LineEnding +
                   '**Conversation Memory:** ' + memoryStatusText + LineEnding +
                   '**Max Players Nearby:** ' + IntToStr(Self.MaxNearbyPlayers) + LineEnding +
@@ -1563,18 +1557,56 @@ begin
   Result := False;
 end;
 
+function AIChat_SanitizeAccount(user: String): String;
+var
+  i: Integer;
+begin
+  Result := Trim(user);
+  for i := 1 to Length(Result) do
+    if Result[i] in ['\', '/', ':', '*', '?', '"', '<', '>', '|'] then
+      Result[i] := '_';
+end;
+
+function AIChat_AccountName(): String;
+var
+  fromLauncher: String;
+begin
+  fromLauncher := Trim(GetEnvironmentVariable('BASH_ACCOUNT'));
+  if fromLauncher <> '' then
+    Exit(fromLauncher);
+  if (Login.PlayerIndex >= 0) and (Login.PlayerIndex <= High(Login.Players)) then
+    Exit(Trim(Login.Players[Login.PlayerIndex].User));
+  Result := '';
+end;
+
+function AIChat_ConfigName(user: String): String;
+begin
+  user := AIChat_SanitizeAccount(user);
+  if (user = '') or SameText(user, 'NoUserNameSelected') then
+    Result := 'aichat'
+  else
+    Result := 'aichat-' + user;
+end;
+
 procedure TAIChatbot.LoadSettings(user: String = '');
 var
   ignoreListFromConfig: String;
-  configName: String;
+  configName, perAccount, configsDir: String;
 begin
-  if user = '' then
+  if Trim(user) = '' then
+    user := AIChat_AccountName();
+  user := Trim(user);
+  Self.SettingsUser := user;
+  perAccount := AIChat_ConfigName(user);
+  configsDir := AppPath + 'Configs' + DirectorySeparator;
+  if (perAccount <> 'aichat') and (not FileExists(configsDir + perAccount + '.json')) and FileExists(configsDir + 'aichat.json') then
     configName := 'aichat'
   else
-    configName := 'aichat-' + user;
+    configName := perAccount;
 
-  if not Self.Config.IsSetup then
-    Self.Config.Setup(configName);
+  if Self.Config.IsSetup then
+    Self.Config.Free();
+  Self.Config.Setup(configName);
 
   if Self.Config.Has('enabled') then
     Self.Enabled := Self.Config.GetBoolean('enabled')
@@ -1594,6 +1626,8 @@ begin
   if Self.Config.Has('api_model') then
     Self.ApiModel := Self.Config.GetString('api_model')
   else
+    Self.ApiModel := '';
+  if (Self.ApiModel = 'llama-3.3-70b-versatile') or (Self.ApiModel = 'deepseek-chat') or (Self.ApiModel = 'deepseek-reasoner') then
     Self.ApiModel := '';
 
   if Self.Config.Has('response_style') then
@@ -1713,11 +1747,16 @@ var
   i: Integer;
   configName: String;
 begin
+  if Trim(user) = '' then
+    user := Trim(Self.SettingsUser);
   if user = '' then
-    configName := 'aichat'
-  else
-    configName := 'aichat-' + user;
+    user := AIChat_AccountName();
+  user := Trim(user);
+  Self.SettingsUser := user;
+  configName := AIChat_ConfigName(user);
 
+  if Self.Config.IsSetup then
+    Self.Config.Free();
   Self.Config.Setup(configName);
 
   ignoreListString := '';
@@ -1764,9 +1803,7 @@ end;
 
 procedure TAIChatbot.ApplyScriptDefaults();
 begin
-  if Trim(Self.DefaultActivity) <> '' then
-    Self.Activity := Trim(Self.DefaultActivity);
-  if (Trim(Self.ExtraInstructions) = '') and (Trim(Self.DefaultExtraInstructions) <> '') then
+  if (Trim(Self.CustomInstructions()) = '') and (Trim(Self.DefaultExtraInstructions) <> '') then
     Self.ExtraInstructions := Trim(Self.DefaultExtraInstructions);
 end;
 
@@ -2176,8 +2213,6 @@ begin
   LLMClient.ConfigureFromName(Self.ApiService, Self.ApiKey, Self.ApiModel, Self.BuildSystemPromptBase());
   LLMClient.Memory := Self.UseConversationMemory;
   WriteLn('[AI Chatbot] Using ' + Self.ApiService + ' via LLMClient');
-  if Trim(Self.Activity) <> '' then
-    WriteLn('[AI Chatbot] Activity: ' + Trim(Self.Activity));
 
   Self.IsInitialized := True;
   Self.CheckAndFixChatTabs();
@@ -2449,6 +2484,20 @@ begin
         Self.GUIApiHelpInfo.SetVisible(True);
         Self.GUIApiHelpInfo.SetCursor(crHandPoint);
       end;
+    'mistral':
+      begin
+        Self.GUIApiHelpInfo.SetCaption('Click here to open the Mistral API keys page');
+        Self.GUIApiHelpInfo.SetTooltip('Opens Mistral where you can create a cheap API key.');
+        Self.GUIApiHelpInfo.SetVisible(True);
+        Self.GUIApiHelpInfo.SetCursor(crHandPoint);
+      end;
+    'openrouter':
+      begin
+        Self.GUIApiHelpInfo.SetCaption('Click here to open the OpenRouter API keys page');
+        Self.GUIApiHelpInfo.SetTooltip('Opens OpenRouter. One key can use free and cheap models.');
+        Self.GUIApiHelpInfo.SetVisible(True);
+        Self.GUIApiHelpInfo.SetCursor(crHandPoint);
+      end;
     'chatgpt', 'openai':
       begin
         Self.GUIApiHelpInfo.SetCaption('Click here to open the OpenAI API keys page');
@@ -2483,6 +2532,10 @@ begin
       OpenWebPage('https://www.apideck.com/blog/how-to-get-your-groq-api-key');
     'deepseek':
       OpenWebPage('https://platform.deepseek.com/api_keys');
+    'mistral':
+      OpenWebPage('https://console.mistral.ai/api-keys');
+    'openrouter':
+      OpenWebPage('https://openrouter.ai/keys');
     'chatgpt', 'openai':
       OpenWebPage('https://platform.openai.com/api-keys');
   end;
@@ -2514,8 +2567,8 @@ begin
   Self.MaxNearbyPlayers := StrToIntDef(Self.GUIMaxNearbyEdit.GetText(), 2);
   Self.MaxInteractionCount := StrToIntDef(Self.GUIMaxInteractionEdit.GetText(), 2);
   Self.InteractionCooldown := Max(1, StrToIntDef(Self.GUICooldownEdit.GetText(), 10)) * 60000;
-  Self.Activity := Trim(Self.GUIActivityEdit.GetText());
   Self.ExtraInstructions := Trim(Self.GUIExtraInstructionsMemo.GetText());
+  Self.SystemInstruction := Self.ExtraInstructions;
 
   txt := Trim(Self.GUIIgnoreListEdit.GetText());
   if txt <> '' then
@@ -2672,8 +2725,6 @@ begin
   Self.MessageCooldown := 200;
   Self.LogConversations := True;
   Self.IgnoreList := ['Buying', 'Selling', 'Discord'];
-  Self.ExtraInstructions := '';
-  Self.SystemInstruction := '';
 
   if not Self.HasGUI then
     Exit;
@@ -2685,7 +2736,6 @@ begin
   Self.GUICooldownEdit.SetText('10');
   Self.GUILogConvCB.SetChecked(True);
   Self.GUIIgnoreListEdit.SetText('Buying,Selling,Discord');
-  Self.GUIExtraInstructionsMemo.SetText('');
 end;
 
 procedure TAIChatbot.GUI_AddLabel(
@@ -2837,7 +2887,7 @@ begin
   Self.GUI_AddCheck(parent, Self.GUIEnabledCB, 'aichat_enabled_checkbox', 'Enable AI Chatbot', 24, 100, Self.Enabled);
   Self.GUIEnabledCB.SetTooltip('When on, the script watches public chat and can type short replies.');
 
-  optionsH := TControl.AdjustToDPI(470);
+  optionsH := TControl.AdjustToDPI(420);
   Self.GUIOptionsPanel.Create(parent);
   Self.GUIOptionsPanel.SetLeft(0);
   Self.GUIOptionsPanel.SetTop(TControl.AdjustToDPI(128));
@@ -2852,14 +2902,16 @@ begin
   case LowerCase(Self.ApiService) of
     'groq': serviceIndex := 1;
     'deepseek': serviceIndex := 2;
-    'chatgpt', 'openai': serviceIndex := 3;
-    'local', 'ollama': serviceIndex := 4;
+    'mistral': serviceIndex := 3;
+    'openrouter': serviceIndex := 4;
+    'chatgpt', 'openai': serviceIndex := 5;
+    'local', 'ollama': serviceIndex := 6;
   else
     serviceIndex := 0;
   end;
 
-  Self.GUI_AddCombo(options, Self.GUIServiceCombo, 'aichat_service', 'AI Service', 24, 18, ['Gemini', 'Groq', 'DeepSeek', 'ChatGPT', 'Local'], serviceIndex);
-  Self.GUIServiceCombo.SetTooltip('Which AI provider to use. Gemini and Groq both offer free API keys.');
+  Self.GUI_AddCombo(options, Self.GUIServiceCombo, 'aichat_service', 'AI Service', 24, 18, ['Gemini', 'Groq', 'DeepSeek', 'Mistral', 'OpenRouter', 'ChatGPT', 'Local'], serviceIndex);
+  Self.GUIServiceCombo.SetTooltip('Which AI provider to use. Gemini, Groq, and OpenRouter have free options. Mistral and DeepSeek are cheap.');
   Self.GUIServiceCombo.ComboBox.SetOnChange(@Self.OnServiceChanged);
 
   Self.GUI_AddEdit(options, Self.GUIApiKeyEdit, 'aichat_api_key', 'API Key', Self.ApiKey, AIC_GUI_COL2, 18, AIC_GUI_EDIT_W);
@@ -2889,53 +2941,50 @@ begin
 
   Self.GUI_AddLabel(options, 'Chat Settings', 24, 100, 11, AIC_GUI_TEXT, True);
 
-  Self.GUI_AddEdit(options, Self.GUIActivityEdit, 'aichat_activity', 'Current activity', Self.Activity, 24, 118, AIC_GUI_EDIT_W + AIC_GUI_EDIT_W + 48);
-  Self.GUIActivityEdit.SetTooltip('What this character is doing right now. Example: prif agility / mining iron at mining guild');
+  Self.GUI_AddMemo(options, Self.GUIExtraInstructionsMemo, 'aichat_extra', 'Custom instructions', Self.CustomInstructions(), 24, 118, AIC_GUI_EDIT_W + AIC_GUI_EDIT_W + 48, 78);
+  Self.GUIExtraInstructionsMemo.SetTooltip('Added after the default chat rules. It does not replace them. Example: keep answers vague about exact location');
 
-  Self.GUI_AddMemo(options, Self.GUIExtraInstructionsMemo, 'aichat_extra', 'Extra instructions (optional)', Self.ExtraInstructions, 24, 168, AIC_GUI_EDIT_W + AIC_GUI_EDIT_W + 48, 78);
-  Self.GUIExtraInstructionsMemo.SetTooltip('Optional add-ons to the AI personality. Example: keep answers vague about exact location');
-
-  Self.GUI_AddCombo(options, Self.GUIResponseStyleCombo, 'aichat_style', 'Reply style', 24, 258, ['Normal', 'Friendly', 'Casual', 'Minimal'], styleIndex);
+  Self.GUI_AddCombo(options, Self.GUIResponseStyleCombo, 'aichat_style', 'Reply style', 24, 208, ['Normal', 'Friendly', 'Casual', 'Minimal'], styleIndex);
   Self.GUIResponseStyleCombo.SetTooltip('Normal = balanced. Friendly = warmer. Casual = slangy. Minimal = very short.');
   Self.GUIResponseStyleCombo.ComboBox.SetOnChange(@Self.OnStyleChanged);
 
-  Self.GUI_AddCheck(options, Self.GUIMemoryCB, 'aichat_memory_checkbox', 'Remember recent chat with each player', AIC_GUI_COL2, 276, Self.UseConversationMemory);
+  Self.GUI_AddCheck(options, Self.GUIMemoryCB, 'aichat_memory_checkbox', 'Remember recent chat with each player', AIC_GUI_COL2, 226, Self.UseConversationMemory);
   Self.GUIMemoryCB.SetTooltip('Keeps short context so replies make more sense in an ongoing conversation.');
 
   Self.GUIDefaultBtn.Create(options);
   Self.GUIDefaultBtn.SetLeft(TControl.AdjustToDPI(AIC_GUI_COL3));
-  Self.GUIDefaultBtn.SetTop(TControl.AdjustToDPI(271));
+  Self.GUIDefaultBtn.SetTop(TControl.AdjustToDPI(221));
   Self.GUIDefaultBtn.SetWidth(TControl.AdjustToDPI(80));
   Self.GUIDefaultBtn.SetHeight(TControl.AdjustToDPI(AIC_GUI_BTN_H));
   Self.GUIDefaultBtn.SetCaption('Default');
-  Self.GUIDefaultBtn.SetTooltip('Reset reply limits, style, and extra instructions. Leaves activity as-is.');
+  Self.GUIDefaultBtn.SetTooltip('Reset reply limits and style. Leaves the API key and custom instructions as they are.');
   Self.GUIDefaultBtn.SetOnClick(@Self.OnDefaultClicked);
 
-  Self.GUI_AddEdit(options, Self.GUIMaxNearbyEdit, 'aichat_nearby', 'Pause if this many players nearby', IntToStr(Self.MaxNearbyPlayers), 24, 316, AIC_GUI_EDIT_W);
+  Self.GUI_AddEdit(options, Self.GUIMaxNearbyEdit, 'aichat_nearby', 'Pause if this many players nearby', IntToStr(Self.MaxNearbyPlayers), 24, 266, AIC_GUI_EDIT_W);
   Self.GUIMaxNearbyEdit.Edit.SetOnKeyPress(@Self.GUIMaxNearbyEdit.Edit.NumberField);
   Self.GUIMaxNearbyEdit.Edit.SetOnChange(@Self.OnMaxNearbyChanged);
   Self.GUIMaxNearbyEdit.SetTooltip('If more players than this are nearby, the bot stops replying until it is quieter.');
 
-  Self.GUI_AddEdit(options, Self.GUIMaxInteractionEdit, 'aichat_interactions', 'Max interactions per player', IntToStr(Self.MaxInteractionCount), AIC_GUI_COL2, 316, AIC_GUI_EDIT_W);
+  Self.GUI_AddEdit(options, Self.GUIMaxInteractionEdit, 'aichat_interactions', 'Max interactions per player', IntToStr(Self.MaxInteractionCount), AIC_GUI_COL2, 266, AIC_GUI_EDIT_W);
   Self.GUIMaxInteractionEdit.Edit.SetOnKeyPress(@Self.GUIMaxInteractionEdit.Edit.NumberField);
   Self.GUIMaxInteractionEdit.Edit.SetOnChange(@Self.OnMaxInteractionChanged);
   Self.GUIMaxInteractionEdit.SetTooltip('How many replies one player can get before the cooldown starts.');
 
-  Self.GUI_AddEdit(options, Self.GUICooldownEdit, 'aichat_cooldown', 'Cooldown after max (minutes)', IntToStr(Max(1, Self.InteractionCooldown div 60000)), AIC_GUI_COL3, 316, AIC_GUI_EDIT_W);
+  Self.GUI_AddEdit(options, Self.GUICooldownEdit, 'aichat_cooldown', 'Cooldown after max (minutes)', IntToStr(Max(1, Self.InteractionCooldown div 60000)), AIC_GUI_COL3, 266, AIC_GUI_EDIT_W);
   Self.GUICooldownEdit.Edit.SetOnKeyPress(@Self.GUICooldownEdit.Edit.NumberField);
   Self.GUICooldownEdit.Edit.SetOnChange(@Self.OnCooldownChanged);
   Self.GUICooldownEdit.SetTooltip('How long to wait before chatting with that player again after hitting the max.');
 
-  Self.GUI_AddEdit(options, Self.GUIIgnoreListEdit, 'aichat_ignore', 'Ignore messages containing (comma separated)', Self.IgnoreListAsString(), 24, 376, AIC_GUI_EDIT_W + AIC_GUI_EDIT_W + 48);
+  Self.GUI_AddEdit(options, Self.GUIIgnoreListEdit, 'aichat_ignore', 'Ignore messages containing (comma separated)', Self.IgnoreListAsString(), 24, 326, AIC_GUI_EDIT_W + AIC_GUI_EDIT_W + 48);
   Self.GUIIgnoreListEdit.Edit.SetOnChange(@Self.OnIgnoreListChanged);
   Self.GUIIgnoreListEdit.SetTooltip('Skip chat that looks like spam trading ads. Example: Buying,Selling,Discord');
 
-  Self.GUI_AddCheck(options, Self.GUILogConvCB, 'aichat_logconv_checkbox', 'Save conversations to a log file', 24, 431, Self.LogConversations);
+  Self.GUI_AddCheck(options, Self.GUILogConvCB, 'aichat_logconv_checkbox', 'Save conversations to a log file', 24, 381, Self.LogConversations);
   Self.GUILogConvCB.SetTooltip('Writes chats to files you can review later with Review Logs.');
 
   Self.GUIReviewLogsBtn.Create(options);
   Self.GUIReviewLogsBtn.SetLeft(TControl.AdjustToDPI(AIC_GUI_COL2));
-  Self.GUIReviewLogsBtn.SetTop(TControl.AdjustToDPI(431));
+  Self.GUIReviewLogsBtn.SetTop(TControl.AdjustToDPI(381));
   Self.GUIReviewLogsBtn.SetWidth(TControl.AdjustToDPI(110));
   Self.GUIReviewLogsBtn.SetHeight(TControl.AdjustToDPI(AIC_GUI_BTN_H));
   Self.GUIReviewLogsBtn.SetCaption('Review Logs');
@@ -2944,7 +2993,7 @@ begin
 
   Self.GUIDeleteLogsBtn.Create(options);
   Self.GUIDeleteLogsBtn.SetLeft(TControl.AdjustToDPI(AIC_GUI_COL2 + 120));
-  Self.GUIDeleteLogsBtn.SetTop(TControl.AdjustToDPI(431));
+  Self.GUIDeleteLogsBtn.SetTop(TControl.AdjustToDPI(381));
   Self.GUIDeleteLogsBtn.SetWidth(TControl.AdjustToDPI(110));
   Self.GUIDeleteLogsBtn.SetHeight(TControl.AdjustToDPI(AIC_GUI_BTN_H));
   Self.GUIDeleteLogsBtn.SetCaption('Delete Logs');

@@ -22,6 +22,9 @@ begin
     if SameText(Login.Players[i].User, name) then
     begin
       Login.PlayerIndex := i;
+      {$IFDEF WL_AICHAT_INCLUDED}
+      AIChatbot.LoadSettings(name);
+      {$ENDIF}
       Exit;
     end;
   TerminateScript('Save the account in the launcher before starting. ' + name + ' is not in the account list.');

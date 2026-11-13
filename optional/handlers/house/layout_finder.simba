@@ -186,6 +186,10 @@ var
   r: EHouseRoom;
 begin
   topLeft := [$FFFFFF, $FFFFFF];
+  bottomRight := [0, 0];
+
+  if Self.Name = '' then
+    Self.Setup();
 
   for r in EHouseRoom do
   begin
@@ -209,6 +213,48 @@ end;
 
 var
   LayoutFinder: TPoHLayoutFinder;
+
+procedure HouseReadToFile(path: String);
+var
+  matches: TPoHLayoutFinderMatchArray;
+  match: TPoHLayoutFinderMatch;
+  topLeft, bottomRight: TPoint;
+  body, rooms: String;
+  count: Int32;
 begin
-  LayoutFinder.Setup();
+  if path = '' then
+    Exit;
+
+  SRL.Setup();
+  if not RSInterface.IsOpen(ERSInterfaceType.CLASSIC) then
+  begin
+    WriteFileContents(path, '{"status":"viewer","detail":"Open the house viewer on this client, then try again.","rooms":[]}', False);
+    Exit;
+  end;
+
+  matches := LayoutFinder.Run(topLeft, bottomRight);
+  count := Length(matches);
+  if count = 0 then
+  begin
+    WriteFileContents(path, '{"status":"empty","detail":"No rooms were found. Open the house viewer and use the smallest icons.","rooms":[]}', False);
+    Exit;
+  end;
+
+  rooms := '';
+  for match in matches do
+  begin
+    if rooms <> '' then
+      rooms += ',';
+    rooms += '{"room":' + ToStr(Ord(match.Room)) +
+             ',"x":' + ToStr(match.LayoutPoint.X) +
+             ',"y":' + ToStr(match.LayoutPoint.Y) +
+             ',"rotation":' + ToStr(match.Rotation) + '}';
+  end;
+
+  body := '{"status":"ok","detail":"","count":' + ToStr(count) +
+          ',"top_left":[' + ToStr(topLeft.X) + ',' + ToStr(topLeft.Y) + ']' +
+          ',"bottom_right":[' + ToStr(bottomRight.X) + ',' + ToStr(bottomRight.Y) + ']' +
+          ',"rooms":[' + rooms + ']}';
+  WriteFileContents(path, body, False);
+  WriteLn('HOUSE_READ ok ' + ToStr(count));
 end;

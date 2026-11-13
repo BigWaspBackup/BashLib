@@ -588,7 +588,7 @@ begin
   {$IFDEF WL_AICHAT_INCLUDED}
   AIChatbot.Setup('Gemini', '');
   AIChatbot.Enabled := False;
-  AIChatbot.LoadSettings();
+  AIChatbot.LoadSettings(Self.Username);
   {$ENDIF}
 end;
 

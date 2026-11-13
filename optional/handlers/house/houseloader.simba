@@ -124,14 +124,49 @@ begin
   Self.Colors := decoration.GetColors();
 end;
 
+function House_SanitizeAccount(user: String): String;
+var
+  i: Integer;
+begin
+  Result := Trim(user);
+  for i := 1 to Length(Result) do
+    if Result[i] in ['\', '/', ':', '*', '?', '"', '<', '>', '|'] then
+      Result[i] := '_';
+end;
+
+function House_AccountName(): String;
+var
+  fromLauncher: String;
+begin
+  fromLauncher := Trim(GetEnvironmentVariable('BASH_ACCOUNT'));
+  if fromLauncher <> '' then
+    Exit(fromLauncher);
+  if (Login.PlayerIndex >= 0) and (Login.PlayerIndex <= High(Login.Players)) then
+    Exit(Trim(Login.Players[Login.PlayerIndex].User));
+  Result := '';
+end;
+
+function House_ConfigStem(): String;
+var
+  name: String;
+begin
+  name := House_SanitizeAccount(House_AccountName());
+  if name = '' then
+    name := ToStr(Login.PlayerIndex);
+  Result := AppPath + 'Configs' + DirectorySeparator + 'house' + DirectorySeparator + name;
+end;
+
 procedure THouseLoader.SetupConfig();
+var
+  stem, legacy: String;
 begin
   if Self.Config.IsSetup and (Self.LayoutIndex = Login.PlayerIndex) then Exit;
   Self.LayoutIndex := Login.PlayerIndex;
-  Self.Config.Setup(
-    AppPath + 'Configs' + DirectorySeparator + 'house' +
-    DirectorySeparator + ToStr(Self.LayoutIndex)
-  );
+  stem := House_ConfigStem();
+  legacy := AppPath + 'Configs' + DirectorySeparator + 'house' + DirectorySeparator + ToStr(Self.LayoutIndex) + '.json';
+  if (not FileExists(stem + '.json')) and (stem + '.json' <> legacy) and FileExists(legacy) then
+    CopyFile(legacy, stem + '.json', True);
+  Self.Config.Setup(stem);
 end;
 
 (*
@@ -538,7 +573,7 @@ begin
   Self.Location := EHouseLocation(StrToInt(values[3]));
   Self.SetColors(EHouseDecoration(StrToInt(values[4])));
 
-  for i := 2 to High(elements) do
+  for i := 1 to High(elements) do
   begin
     if elements[i].Contains(' (') then
     begin

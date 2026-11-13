@@ -1,0 +1,10 @@
+(*
+  Started by BASH Launcher with --target set to this account's RuneLite window.
+  Remote input comes up with the client, the house viewer is read, and the
+  rooms are written to BASH_HOUSE_RESULT for the launcher to show.
+*)
+{$I BashLib/optional/handlers/house/layout_finder.simba}
+
+begin
+  HouseReadToFile(GetEnvironmentVariable('BASH_HOUSE_RESULT'));
+end.

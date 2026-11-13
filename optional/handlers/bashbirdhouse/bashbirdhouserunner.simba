@@ -155,10 +155,41 @@ begin
   end;
 end;
 
+function TBASHBirdHouseRunner.HammerNames(): TRSItemArray;
+begin
+  Result := ['Hammer', 'Imcando hammer', 'Imcando hammer (off-hand)'];
+end;
+
+function TBASHBirdHouseRunner.HasHammer(): Boolean;
+var
+  names: TRSItemArray;
+  i: Int32;
+begin
+  names := Self.HammerNames();
+  if Self.WornGear.HasAny(names) then
+    Exit(True);
+
+  for i := 0 to High(names) do
+  begin
+    if Bank.IsOpen(False) then
+    begin
+      if Inventory.Items.Contains(names[i]) then
+        Exit(True);
+    end
+    else if Inventory.ContainsItem(names[i]) then
+      Exit(True);
+  end;
+
+  Result := False;
+end;
+
 function TBASHBirdHouseRunner.GetWithdrawList(): TRSBankItemArray;
 begin
   Result += TRSBankItem.Setup('Chisel', 1, False);
-  Result += TRSBankItem.Setup('Hammer', 1, False);
+  if Self.HasHammer() then
+    WriteLn('[BASHBirdHouse] Hammer requirement covered by an Imcando hammer or a hammer already carried')
+  else
+    Result += TRSBankItem.Setup('Hammer', 1, False);
   Result += TRSBankItem.Setup(Self.GetLogString(Self.LogType), 4, False);
   Result += TRSBankItem.Setup(Self.Seed, 40, False);
 end;
@@ -194,7 +225,7 @@ begin
       Exit(False);
     end;
 
-    tools := ['Chisel', 'Hammer'];
+    tools := ['Chisel'];
     for i := 0 to High(tools) do
     begin
       if not Inventory.ContainsItem(tools[i]) then
@@ -202,6 +233,12 @@ begin
         WriteLn('[BASHBirdHouse] Missing item: ' + ToStr(tools[i]));
         Exit(False);
       end;
+    end;
+
+    if not Self.HasHammer() then
+    begin
+      WriteLn('[BASHBirdHouse] Missing item: Hammer');
+      Exit(False);
     end;
   end;
 
@@ -1425,6 +1462,12 @@ var
 begin
   itemName := ToStr(bankItem.Item);
   wanted := bankItem.Quantity;
+
+  if SameText(itemName, 'Hammer') and Self.HasHammer() then
+  begin
+    WriteLn('[BASHBirdHouse] Skipping hammer withdraw (Imcando hammer or hammer already available)');
+    Exit(True);
+  end;
 
   for attempt := 1 to 3 do
   begin
