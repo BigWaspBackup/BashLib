@@ -1,25 +1,37 @@
 const
+  BASH_HOUSE_TELEPORT: TStringArray = [
+    'House Teleport Spell',
+    'House Teleport Tab',
+    'Construction Cape',
+    'Construction cape (t)'
+  ];
+
   BASH_TRAVEL_WEISS: TStringArray = [
-    'Icy basalt'
+    'Icy basalt',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_STRONGHOLD: TStringArray = [
-    'Stony basalt'
+    'Stony basalt',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_ARDOUGNE: TStringArray = [
     'Ardougne Cloak (Farm)',
     'Ardougne Spell',
-    'Ardougne Tablet'
+    'Ardougne Tablet',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_FALADOR: TStringArray = [
     'Explorers Ring (Farm)',
     'Falador Spell',
-    'Falador Tablet'
+    'Falador Tablet',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_CATHERBY: TStringArray = [
     'Lunar Catherby',
     'Camelot Spell',
     'Camelot Tablet',
-    'Catherby Tablet'
+    'Catherby Tablet',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_PHASMATYS: TStringArray = [
     'Ectophial'
@@ -35,31 +47,38 @@ const
     'Hunter Guild (Hunters Cape)',
     'Quetzal Whistle',
     'Civitas Tablet',
-    'Civitas Teleport'
+    'Civitas Teleport',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_GUILD: TStringArray = [
     'Skills Necklace',
     'Farming Cape',
     'Fairy CIR (Ardy Cloak)',
-    'Farming Cape (t)'
+    'Farming Cape (t)',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_LUMBRIDGE_TREE: TStringArray = [
-    'Lumbridge Spell'
+    'Lumbridge Spell',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_VARROCK_TREE: TStringArray = [
-    'Varrock Spell'
+    'Varrock Spell',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_FALADOR_TREE: TStringArray = [
     'Ring of Wealth (Falador Park)',
     'Falador Spell',
-    'Falador Tablet'
+    'Falador Tablet',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_TAVERLEY_TREE: TStringArray = [
-    'Taverley Tablet'
+    'Taverley Tablet',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_GNOME_TREE: TStringArray = [
     'Fairy CIQ (Yanille)',
-    'Slayer Ring (Stronghold Cave)'
+    'Slayer Ring (Stronghold Cave)',
+    'Portal Nexus'
   ];
   BASH_TRAVEL_GNOME_FRUIT: TStringArray = [
     'Fairy CIQ (Yanille)',
@@ -126,18 +145,51 @@ begin
   Result := BASHFarmTravelIdxFromName(options, sorted[BASHFarmTravelClamp(sortedIdx, sorted)]);
 end;
 
-function BASHFarmTravel_Weiss({$H-}idx: Int32): TTeleportLocation; {$H+}
+function BASHFarmTravelIsPortal(idx: Int32; options: TStringArray): Boolean;
 begin
+  if Length(options) = 0 then
+    Exit(False);
+  Result := LowerCase(options[BASHFarmTravelClamp(idx, options)]) = 'portal nexus';
+end;
+
+{ Farming Guild and Taverley have no nexus entry. Those use the nearest nexus the walker can leave from. }
+function BASHFarmPortalNexus(place: String): TTeleportLocation;
+begin
+  case LowerCase(place) of
+    'weiss': Result := RSTeleportsV2.NEXUS_WEISS;
+    'stronghold': Result := RSTeleportsV2.NEXUS_TROLL_STRONGHOLD;
+    'ardougne': Result := RSTeleportsV2.NEXUS_ARDOUGNE;
+    'falador': Result := RSTeleportsV2.NEXUS_FALADOR;
+    'catherby': Result := RSTeleportsV2.NEXUS_CATHERBY;
+    'ortus': Result := RSTeleportsV2.NEXUS_Civitas_Illa_Fortis;
+    'guild': Result := RSTeleportsV2.NEXUS_KOUREND_CASTLE;
+    'lumbridge': Result := RSTeleportsV2.NEXUS_LUMBRIDGE;
+    'varrock': Result := RSTeleportsV2.NEXUS_VARROCK;
+    'taverley': Result := RSTeleportsV2.NEXUS_FALADOR;
+    'gnome': Result := RSTeleportsV2.NEXUS_YANILLE;
+  else
+    Result := RSTeleportsV2.NEXUS_VARROCK;
+  end;
+end;
+
+function BASHFarmTravel_Weiss(idx: Int32): TTeleportLocation;
+begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_WEISS) then
+    Exit(BASHFarmPortalNexus('weiss'));
   Result := RSTeleportsV2.WEISS;
 end;
 
-function BASHFarmTravel_Stronghold({$H-}idx: Int32): TTeleportLocation; {$H+}
+function BASHFarmTravel_Stronghold(idx: Int32): TTeleportLocation;
 begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_STRONGHOLD) then
+    Exit(BASHFarmPortalNexus('stronghold'));
   Result := RSTeleportsV2.TROLL_STRONGHOLD;
 end;
 
 function BASHFarmTravel_Ardougne(idx: Int32): TTeleportLocation;
 begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_ARDOUGNE) then
+    Exit(BASHFarmPortalNexus('ardougne'));
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_ARDOUGNE) of
     1: Exit(RSTeleportsV2.ARDOUGNE);
     2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Ardougne teleport'], 'Break', [6565, 37207]));
@@ -147,6 +199,8 @@ end;
 
 function BASHFarmTravel_Falador(idx: Int32): TTeleportLocation;
 begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_FALADOR) then
+    Exit(BASHFarmPortalNexus('falador'));
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_FALADOR) of
     1: Exit(RSTeleportsV2.FALADOR);
     2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Falador teleport'], 'Break', [7769, 37211]));
@@ -156,6 +210,8 @@ end;
 
 function BASHFarmTravel_Catherby(idx: Int32): TTeleportLocation;
 begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_CATHERBY) then
+    Exit(BASHFarmPortalNexus('catherby'));
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_CATHERBY) of
     1: Exit(RSTeleportsV2.CAMELOT);
     2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Camelot teleport'], 'Break', [6933, 37963]));
@@ -187,6 +243,8 @@ end;
 
 function BASHFarmTravel_Ortus(idx: Int32): TTeleportLocation;
 begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_ORTUS) then
+    Exit(BASHFarmPortalNexus('ortus'));
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_ORTUS) of
     1:
       Exit(setupTeleportLocation(
@@ -226,6 +284,8 @@ end;
 
 function BASHFarmTravel_Guild(idx: Int32): TTeleportLocation;
 begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_GUILD) then
+    Exit(BASHFarmPortalNexus('guild'));
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_GUILD) of
     1: Exit(setupTeleportLocation(
          ETeleportType.OTHER,
@@ -249,18 +309,24 @@ begin
   Result := RSTeleportsV2.FARMING_GUILD;
 end;
 
-function BASHFarmTravel_LumbridgeTree({$H-}idx: Int32): TTeleportLocation; {$H+}
+function BASHFarmTravel_LumbridgeTree(idx: Int32): TTeleportLocation;
 begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_LUMBRIDGE_TREE) then
+    Exit(BASHFarmPortalNexus('lumbridge'));
   Result := RSTeleportsV2.LUMBRIDGE;
 end;
 
-function BASHFarmTravel_VarrockTree({$H-}idx: Int32): TTeleportLocation; {$H+}
+function BASHFarmTravel_VarrockTree(idx: Int32): TTeleportLocation;
 begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_VARROCK_TREE) then
+    Exit(BASHFarmPortalNexus('varrock'));
   Result := RSTeleportsV2.VARROCK;
 end;
 
 function BASHFarmTravel_FaladorTree(idx: Int32): TTeleportLocation;
 begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_FALADOR_TREE) then
+    Exit(BASHFarmPortalNexus('falador'));
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_FALADOR_TREE) of
     1: Exit(RSTeleportsV2.FALADOR);
     2: Exit(setupTeleportLocation(ETeleportType.OTHER, ['Falador teleport'], 'Break', [7769, 37211]));
@@ -268,13 +334,17 @@ begin
   Result := RSTeleportsV2.FALADOR_PARK;
 end;
 
-function BASHFarmTravel_TaverleyTree({$H-}idx: Int32): TTeleportLocation; {$H+}
+function BASHFarmTravel_TaverleyTree(idx: Int32): TTeleportLocation;
 begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_TAVERLEY_TREE) then
+    Exit(BASHFarmPortalNexus('taverley'));
   Result := RSTeleportsV2.TAVERLEY_PORTAL;
 end;
 
 function BASHFarmTravel_GnomeTree(idx: Int32): TTeleportLocation;
 begin
+  if BASHFarmTravelIsPortal(idx, BASH_TRAVEL_GNOME_TREE) then
+    Exit(BASHFarmPortalNexus('gnome'));
   case BASHFarmTravelClamp(idx, BASH_TRAVEL_GNOME_TREE) of
     1: Exit(RSTeleportsV2.STRONGHOLD_SLAYER_CAVE);
   end;
@@ -309,7 +379,7 @@ end;
 
 function BASHFarmTravel_CatherbyFruit(idx: Int32): TTeleportLocation;
 begin
-  Result := BASHFarmTravel_Catherby(idx);
+  Result := BASHFarmTravel_Catherby(BASHFarmTravelClamp(idx, BASH_TRAVEL_CATHERBY_FRUIT));
 end;
 
 function BASHFarmTravelForPatch(patchId: EBASHFarmPatch; cfg: TBASHFarmConfig): TTeleportLocation;

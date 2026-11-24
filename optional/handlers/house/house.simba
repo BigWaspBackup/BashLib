@@ -1419,7 +1419,7 @@ var
   tmp: TMufasaBitmap;
   parent: TControl;
   imgbox: TSimbaImageBox;
-  topLeft, bottomRight, offset, center: TPoint;
+  topLeft, bottomRight, offset, slot, center: TPoint;
 begin
   if not RSInterface.IsOpen(ERSInterfaceType.CLASSIC) then
   begin
@@ -1433,7 +1433,7 @@ begin
   matches := LayoutFinder.Run(topLeft, bottomRight);
   if Length(matches) = 0 then
   begin
-    MessageDlg('LayoutFinder', 'No matches found. Try adding more rooms (only works with smallest icons)', mtWarning, [mbOk]);
+    MessageDlg('LayoutFinder', 'No matches found. Open the house viewer and try again.', mtWarning, [mbOk]);
     Exit;
   end;
 
@@ -1442,8 +1442,11 @@ begin
 
   for match in matches do
   begin
-    House.Loader.DrawMap(match.ToHouseRoom(), match.LayoutPoint + offset + [1,1]);
-    House.Loader.WriteRoom(match.ToHouseRoom(), match.LayoutPoint + offset + [1,1]);
+    slot := match.LayoutPoint + offset + [1, 1];
+    if (slot.X < 0) or (slot.Y < 0) or (slot.X >= House.Loader.AMOUNT) or (slot.Y >= House.Loader.AMOUNT) then
+      Continue;
+    House.Loader.DrawMap(match.ToHouseRoom(), slot);
+    House.Loader.WriteRoom(match.ToHouseRoom(), slot);
   end;
 
   tmp := House.Loader.Map.Copy();

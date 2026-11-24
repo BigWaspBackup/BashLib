@@ -12,6 +12,9 @@
 {$IFNDEF WL_QUETZAL_INCLUDED}
   {$I BashLib/optional/interfaces/mainscreen/quetzal.simba}
 {$ENDIF}
+{$IFNDEF WL_HOUSE_INCLUDED}
+  {$I BashLib/optional/handlers/house/house.simba}
+{$ENDIF}
 
 {$I BashLib/optional/handlers/bashfarm/types.simba}
 {$I BashLib/optional/handlers/bashfarm/patchdata.simba}
@@ -33,6 +36,7 @@ type
     BarbDibber: Boolean;
     MagicSecateurs: Boolean;
     LumbyElite: Boolean;
+    HouseTeleport: Int32;
     Initialized: Boolean;
     IsDisabled: Boolean;
     PatchesCompleted, PatchesSkipped, RunsComplete: Int32;
@@ -144,6 +148,9 @@ begin
   Self.BarbDibber := cfg.BarbDibber;
   Self.MagicSecateurs := cfg.MagicSecateurs;
   Self.LumbyElite := cfg.LumbyElite;
+  Self.HouseTeleport := cfg.HouseTP;
+  if (Self.HouseTeleport < 0) or (Self.HouseTeleport > 3) then
+    Self.HouseTeleport := 0;
 
   for p := Low(EBASHFarmPatch) to High(EBASHFarmPatch) do
   begin
@@ -181,6 +188,13 @@ function BASHFarmIsGuildFairyCIR(constref travel: TTeleportLocation): Boolean;
 begin
   Result := 'bash guild fairy cir' in travel.destination.Lower();
 end;
+
+function BASHFarmIsPortalNexus(constref travel: TTeleportLocation): Boolean;
+begin
+  Result := travel.teleportType = ETeleportType.PORTAL_NEXUS;
+end;
+
+function BASHFarmLocationKey(constref patch: TBASHFarmPatch): String; forward;
 
 function TBASHFarmRunner.CollectChunks(): array of TRSMapChunk;
 var
@@ -735,7 +749,7 @@ begin
       Continue;
     end;
 
-    if BASHFarmIsMagicTeleport(travel.teleportType) then
+    if BASHFarmIsPortalNexus(travel) or BASHFarmIsMagicTeleport(travel.teleportType) then
       Continue;
 
     itemKey := BASHFarmTravelItemKey(travel);
@@ -795,14 +809,14 @@ end;
 
 function TBASHFarmRunner.OnStart(): Boolean;
 var
-  i, j, seedsNeeded: Int32;
-  seed, tpItem: TRSItem;
-  counted, magicSeen, itemSeen, withdrew: Boolean;
-  travel: TTeleportLocation;
+  i, j, n, seedsNeeded, nexusCount: Int32;
+  seed, tpItem, capeItem: TRSItem;
+  counted, magicSeen, itemSeen, withdrew, locSeen: Boolean;
+  travel, houseTravel: TTeleportLocation;
   runeNames: TRSItemArray;
   runeQtys: TIntegerArray;
-  seenMagic, seenItems: TStringArray;
-  magicKey, itemKey: String;
+  seenMagic, seenItems, seenNexus: TStringArray;
+  magicKey, itemKey, locKey: String;
   needGuildFairy: Boolean;
 begin
   Self.EnsureEquippedTeleportCache();
@@ -869,10 +883,34 @@ begin
   SetLength(runeQtys, 0);
   SetLength(seenMagic, 0);
   SetLength(seenItems, 0);
+  SetLength(seenNexus, 0);
+  nexusCount := 0;
 
   for i := 0 to High(Self.Patches) do
   begin
     travel := Self.Patches[i].Travel;
+
+    if BASHFarmIsPortalNexus(travel) then
+    begin
+      if BASHFarmIsGuildPatch(Self.Patches[i].Id) then
+        locKey := 'guild'
+      else
+        locKey := BASHFarmLocationKey(Self.Patches[i]);
+
+      locSeen := False;
+      for j := 0 to High(seenNexus) do
+        if seenNexus[j] = locKey then
+        begin
+          locSeen := True;
+          Break;
+        end;
+      if not locSeen then
+      begin
+        seenNexus += locKey;
+        Inc(nexusCount);
+      end;
+      Continue;
+    end;
 
     if BASHFarmIsMagicTeleport(travel.teleportType) then
     begin
@@ -988,6 +1026,41 @@ begin
             WriteLn('[BASHFarm] Warning: could not withdraw Dramen or Lunar staff');
         end;
       end;
+    end;
+  end;
+
+  if nexusCount > 0 then
+  begin
+    WriteLn('[BASHFarm] Portal nexus on ', nexusCount, ' location(s). House teleport: ',
+            BASH_HOUSE_TELEPORT[BASHFarmTravelClamp(Self.HouseTeleport, BASH_HOUSE_TELEPORT)]);
+
+    if Self.HouseTeleport = 0 then
+    begin
+      houseTravel.destination := 'house';
+      for n := 1 to nexusCount do
+        BASHFarmAddMagicRuneCost(runeNames, runeQtys, houseTravel);
+    end
+    else if Self.HouseTeleport = 1 then
+    begin
+      if not Self.EnsureBankOpen() then
+        WriteLn('[BASHFarm] Warning: bank closed before house tab withdraw')
+      else if not Self.FarmWithdrawHelper('Teleport to house', nexusCount) then
+        WriteLn('[BASHFarm] Warning: could not withdraw ', nexusCount, ' house tab(s)');
+    end
+    else
+    begin
+      if Self.HouseTeleport = 3 then
+        capeItem := 'Construct. cape(t)'
+      else
+        capeItem := 'Construct. cape';
+
+      if BASHFarmInvHas([capeItem]) or
+         (Self.WornGear.Scanned and Self.WornGear.HasAny([capeItem])) then
+        WriteLn('[BASHFarm] ', ToStr(capeItem), ' already available')
+      else if not Self.EnsureBankOpen() then
+        WriteLn('[BASHFarm] Warning: bank closed before construction cape withdraw')
+      else if not Self.FarmWithdrawHelper(capeItem, 1) then
+        WriteLn('[BASHFarm] Warning: could not withdraw ', ToStr(capeItem));
     end;
   end;
 
@@ -1532,6 +1605,233 @@ begin
   end;
 end;
 
+function BASHFarmClickHouseInside(spell: Boolean): Boolean;
+var
+  up: String;
+  upIndex: Int32;
+begin
+  Result := False;
+  if spell then
+  begin
+    if not Magic.MouseSpell(ERSSpell.TELEPORT_TO_HOUSE) then
+      Exit;
+  end
+  else if not Inventory.MouseItem('Teleport to house') then
+    Exit;
+
+  MainScreen.IsUpText(['Inside', 'Outside'], 400, upIndex);
+  up := MainScreen.GetUpText();
+  if 'Inside' in up then
+  begin
+    Mouse.Click(MOUSE_LEFT);
+    Exit(True);
+  end;
+  Result := ChooseOption.Select('Inside');
+end;
+
+function BASHFarmWaitInsideHouse(): Boolean;
+begin
+  WaitUntil((Minimap.PercentBlack() >= 90) or Minimap.InPOH(), 50, 4000);
+  Result := WaitUntil(Minimap.InPOH, 50, 8000);
+  if not Result then
+    WriteLn('[BASHFarm] Timed out waiting to arrive in the house');
+end;
+
+function BASHFarmMatchNexus(const name: String; out dest: ERSNexusDestination): Boolean;
+var
+  destination: ERSNexusDestination;
+  needle: String;
+begin
+  needle := name.Upper().Replace(' ', '_').Replace('''', '');
+  for destination in ERSNexusDestination do
+    if needle = ToStr(destination).Upper().Replace('''', '') then
+    begin
+      dest := destination;
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+function TBASHFarmRunner.EnterHouse(): Boolean;
+var
+  cape: TRSItem;
+begin
+  if Minimap.InPOH() then
+    Exit(True);
+
+  case Self.HouseTeleport of
+    1:
+      begin
+        WriteLn('[BASHFarm] Teleporting inside with a house tab');
+        if not BASHFarmClickHouseInside(False) then
+          Exit(False);
+      end;
+    2:
+      begin
+        cape := 'Construct. cape';
+        WriteLn('[BASHFarm] Teleporting inside with ', ToStr(cape));
+        if Inventory.ContainsItem(cape) then
+          Result := Inventory.ClickItem(cape, 'Tele to POH')
+        else if Equipment.ContainsItem(cape) then
+          Result := Equipment.ClickItem(cape, 'Tele to POH')
+        else
+        begin
+          WriteLn('[BASHFarm] Missing ', ToStr(cape));
+          Exit(False);
+        end;
+        if not Result then
+          Exit(False);
+      end;
+    3:
+      begin
+        cape := 'Construct. cape(t)';
+        WriteLn('[BASHFarm] Teleporting inside with ', ToStr(cape));
+        if Inventory.ContainsItem(cape) then
+          Result := Inventory.ClickItem(cape, 'Tele to POH')
+        else if Equipment.ContainsItem(cape) then
+          Result := Equipment.ClickItem(cape, 'Tele to POH')
+        else
+        begin
+          WriteLn('[BASHFarm] Missing ', ToStr(cape));
+          Exit(False);
+        end;
+        if not Result then
+          Exit(False);
+      end;
+  else
+    begin
+      WriteLn('[BASHFarm] Teleporting inside with the house spell');
+      if not BASHFarmClickHouseInside(True) then
+        Exit(False);
+    end;
+  end;
+
+  Result := BASHFarmWaitInsideHouse();
+end;
+
+function TBASHFarmRunner.OpenPortalNexus(): Boolean;
+var
+  attempt: Int32;
+begin
+  if PortalNexus.IsOpen() then
+    Exit(True);
+
+  if House.Objects[EHouseObject.NEXUS].Coordinates <> [] then
+  begin
+    for attempt := 1 to 3 do
+    begin
+      if PortalNexus.IsOpen() then
+        Exit(True);
+
+      if attempt = 2 then
+      begin
+        WriteLn('[BASHFarm] Turning to find the portal nexus');
+        Antiban.RandomRotate();
+      end;
+
+      if attempt = 3 then
+      begin
+        WriteLn('[BASHFarm] Walking to the portal nexus');
+        Result := House.Objects[EHouseObject.NEXUS].WalkSelectOption(['Teleport Menu']);
+      end
+      else
+        Result := House.Objects[EHouseObject.NEXUS].SelectOption(['Teleport Menu']);
+
+      if Result or PortalNexus.IsOpen() then
+        Exit(True);
+    end;
+
+    WriteLn('[BASHFarm] Could not use the portal nexus');
+    Exit(False);
+  end;
+
+  WriteLn('[BASHFarm] Saved house layout has no portal nexus. Scanning from the entrance.');
+  if not POH.IsSetup then
+    POH.Setup();
+
+  if POH.RoomObjects[ERSRoomObject.NEXUS].Coordinates = [] then
+  begin
+    WriteLn('[BASHFarm] Could not find a portal nexus next to the entrance. Save a house layout with the portal nexus marked.');
+    Exit(False);
+  end;
+
+  Result := POH.WalkSelect(ERSRoomObject.NEXUS, ['Teleport Menu']);
+  if (not Result) and PortalNexus.IsOpen() then
+    Result := True;
+  if not Result then
+    WriteLn('[BASHFarm] Could not use the portal nexus');
+end;
+
+function TBASHFarmRunner.ClickPortalNexus(dest: ERSNexusDestination; constref travel: TTeleportLocation): Boolean;
+var
+  attempt: Int32;
+  leftAt: UInt64;
+begin
+  for attempt := 1 to 3 do
+  begin
+    if not PortalNexus.IsOpen() then
+      Break;
+    if attempt > 1 then
+      WriteLn('[BASHFarm] Retrying the portal nexus teleport to ', travel.destination);
+    if not PortalNexus.ClickDestination(dest, False) then
+      Continue;
+
+    leftAt := GetTickCount();
+    while GetTickCount() - leftAt < 8000 do
+    begin
+      if not Minimap.InPOH() then
+      begin
+        if travel.worldPoint <> [0, 0] then
+          WaitUntil(Map.Position().DistanceTo(travel.worldPoint) <= 80, 50, 5000);
+        Exit(True);
+      end;
+      if PortalNexus.IsOpen() and (attempt < 3) and (GetTickCount() - leftAt > 1500) then
+        Break;
+      Wait(40, 80);
+    end;
+  end;
+
+  Result := False;
+  WriteLn('[BASHFarm] Portal nexus teleport to ', travel.destination, ' failed');
+end;
+
+function TBASHFarmRunner.TeleportViaPortalNexus(constref travel: TTeleportLocation): Boolean;
+var
+  dest: ERSNexusDestination;
+begin
+  Result := False;
+  WriteLn('[BASHFarm] Portal nexus -> ', travel.destination);
+
+  if not BASHFarmMatchNexus(travel.destination, dest) then
+  begin
+    WriteLn('[BASHFarm] No portal nexus destination named ', travel.destination);
+    Exit;
+  end;
+
+  if not Self.EnterHouse() then
+    Exit;
+
+  if not House.Loader.IsSetup then
+    House.Loader.Init(32, 13);
+  if not House.IsSetup then
+    House.Setup();
+
+  if not Self.OpenPortalNexus() then
+    Exit;
+
+  if not PortalNexus.IsOpen() then
+  begin
+    WriteLn('[BASHFarm] Waiting for the portal nexus interface');
+    if not WaitUntil(PortalNexus.IsOpen, 50, 8000) then
+    begin
+      WriteLn('[BASHFarm] The portal nexus interface did not appear');
+      Exit;
+    end;
+  end;
+
+  Result := Self.ClickPortalNexus(dest, travel);
+end;
+
 function TBASHFarmRunner.TeleportTo(travel: TTeleportLocation): Boolean;
 var
   startPos: TPoint;
@@ -1543,6 +1843,12 @@ begin
   Result := False;
   startPos := Map.Position();
   dest := travel.destination.Lower();
+
+  if BASHFarmIsPortalNexus(travel) then
+  begin
+    Result := Self.TeleportViaPortalNexus(travel);
+    Exit;
+  end;
 
   if BASHFarmIsGuildFairyCIR(travel) then
   begin

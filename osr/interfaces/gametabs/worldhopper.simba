@@ -362,10 +362,19 @@ var
 begin
   if not Self.Cooldown.IsFinished() then Exit;
 
+  if Length(Login.Players) > 0 then
+  begin
+    if Length(Login.GetPlayer().Worlds) = 0 then
+      WriteLn('[WORLDHOP] Player worlds: none')
+    else
+      WriteLn('[WORLDHOP] Player worlds: ', ToStr(Login.GetPlayer().Worlds));
+  end;
+  WriteLn('[WORLDHOP] This hop is choosing from: ', ToStr(targetWorlds));
+
   targetWorlds := Self.FilterValidWorlds(targetWorlds);
   if targetWorlds.Len() = 0 then
   begin
-    Self.DebugLn('No valid worlds to hop to');
+    WriteLn('[WORLDHOP] No valid worlds to hop to. Not hopping');
     Exit;
   end;
 
@@ -527,9 +536,10 @@ begin
 
   if Length(Login.GetPlayer().Worlds) < 2 then
   begin
-    WriteLn('[WORLDHOP] Need at least 2 worlds in player setup or disable world hopping');
-    Logout.ClickLogout();
-    TerminateScript('Configure at least 2 worlds or disable world hopping.');
+    WriteLn('[WORLDHOP] Player worlds: ', ToStr(Login.GetPlayer().Worlds));
+    WriteLn('[WORLDHOP] No worlds list to hop with. World hopping stays off');
+    Self.TimedHopEnabled := False;
+    Exit;
   end;
 
   Self.ScheduleNextTimedHop();

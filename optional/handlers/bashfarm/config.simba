@@ -12,6 +12,7 @@ type
     LumbridgeTreeTP, VarrockTreeTP, FaladorTreeTP, TaverleyTreeTP: Int32;
     GnomeTreeTP, GnomeFruitTP, GnomeVillageFruitTP: Int32;
     CatherbyFruitTP, BrimhavenFruitTP, LletyaFruitTP: Int32;
+    HouseTP: Int32;
 
     BarbDibber, MagicSecateurs, RunNow: Boolean;
     LumbyElite: Boolean;
@@ -291,6 +292,7 @@ begin
   Self.CatherbyFruitTP := 0;
   Self.BrimhavenFruitTP := 0;
   Self.LletyaFruitTP := 0;
+  Self.HouseTP := 0;
 
   Self.BarbDibber := False;
   Self.MagicSecateurs := False;
@@ -360,6 +362,9 @@ begin
   Self.ReadInt('Catherby fruit TP', Self.CatherbyFruitTP);
   Self.ReadInt('Brimhaven fruit TP', Self.BrimhavenFruitTP);
   Self.ReadInt('Lletya fruit TP', Self.LletyaFruitTP);
+  Self.ReadInt('House TP', Self.HouseTP);
+  if (Self.HouseTP < 0) or (Self.HouseTP > 3) then
+    Self.HouseTP := 0;
 
   for p := Low(EBASHFarmPatch) to High(EBASHFarmPatch) do
   begin
@@ -420,6 +425,7 @@ begin
   WriteINI(sec, 'Catherby fruit TP', ToStr(Self.CatherbyFruitTP), path);
   WriteINI(sec, 'Brimhaven fruit TP', ToStr(Self.BrimhavenFruitTP), path);
   WriteINI(sec, 'Lletya fruit TP', ToStr(Self.LletyaFruitTP), path);
+  WriteINI(sec, 'House TP', ToStr(Self.HouseTP), path);
 
   for p := Low(EBASHFarmPatch) to High(EBASHFarmPatch) do
   begin

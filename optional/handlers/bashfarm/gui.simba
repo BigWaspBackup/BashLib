@@ -324,6 +324,11 @@ begin
     caption.SetEnabled(enabled);
 end;
 
+function TBASHFarmGUI.LocationUsesPortal(ctrlName: String; locationEnabled: Boolean): Boolean;
+begin
+  Result := locationEnabled and (LowerCase(Trim(Self.ReadComboText(ctrlName))) = 'portal nexus');
+end;
+
 procedure TBASHFarmGUI.RefreshTravelEnabled();
 var
   herb, flower, allot, bush, cactus, treeSap, fruitSap: Boolean;
@@ -391,6 +396,20 @@ begin
   Self.SetTravelComboEnabled('lcb_bash_cath_fruit_tp', Self.ReadCheck('cb_bash_cath_fruit') and fruitSap);
   Self.SetTravelComboEnabled('lcb_bash_brim_fruit_tp', Self.ReadCheck('cb_bash_brim_fruit') and fruitSap);
   Self.SetTravelComboEnabled('lcb_bash_lletya_fruit_tp', Self.ReadCheck('cb_bash_lletya_fruit') and fruitSap);
+
+  Self.SetTravelComboEnabled('lcb_bash_house_tp',
+    Self.LocationUsesPortal('lcb_bash_weiss_tp', weiss) or
+    Self.LocationUsesPortal('lcb_bash_stronghold_tp', stronghold) or
+    Self.LocationUsesPortal('lcb_bash_ardougne_tp', ardy) or
+    Self.LocationUsesPortal('lcb_bash_falador_tp', fally) or
+    Self.LocationUsesPortal('lcb_bash_catherby_tp', cath) or
+    Self.LocationUsesPortal('lcb_bash_ortus_tp', ortus) or
+    Self.LocationUsesPortal('lcb_bash_guild_tp', guild) or
+    Self.LocationUsesPortal('lcb_bash_lum_tree_tp', Self.ReadCheck('cb_bash_lum_tree') and treeSap) or
+    Self.LocationUsesPortal('lcb_bash_var_tree_tp', Self.ReadCheck('cb_bash_var_tree') and treeSap) or
+    Self.LocationUsesPortal('lcb_bash_fally_tree_tp', Self.ReadCheck('cb_bash_fally_tree') and treeSap) or
+    Self.LocationUsesPortal('lcb_bash_tav_tree_tp', Self.ReadCheck('cb_bash_tav_tree') and treeSap) or
+    Self.LocationUsesPortal('lcb_bash_gnome_tree_tp', Self.ReadCheck('cb_bash_gnome_tree') and treeSap));
 end;
 
 procedure TBASHFarmGUI.BuildPatchesSection();
@@ -530,6 +549,7 @@ procedure TBASHFarmGUI.AddTravelCombo(
 begin
   Self.AddCombo(parent, box, ctrlName, labelText, left, top,
     BASHFarmTravelSorted(options), BASHFarmTravelSortedIdx(options, unsortedIdx));
+  box.ComboBox.SetOnChange(@Self.OnSeedComboChange);
 end;
 
 function TBASHFarmGUI.ReadTravelIdx(ctrlName: String; options: TStringArray): Int32;
@@ -542,7 +562,7 @@ var
   lcb: TLabeledComboBox;
   cb: TLabeledCheckBox;
 begin
-  Self.AddHeader(Self.TravelSection, 'Travel', 'Teleports for enabled patches with a seed or sapling selected.');
+  Self.AddHeader(Self.TravelSection, 'Travel', 'Teleports for enabled patches with a seed or sapling selected. Portal Nexus uses the House Teleport option.');
 
   Self.MakeLabel(Self.TravelSection, 'Herb / flower / allotment', 24, 96, 11, BASH_GUI_TEXT, True);
 
@@ -563,10 +583,13 @@ begin
   Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_ortus_tp', 'Civitas illa Fortis', 24, 240, BASH_TRAVEL_ORTUS, BASHFarmConfig.OrtusTP);
   lcb.SetTooltip('How to travel to Civitas illa Fortis patches. Enabled when any Ortus patch is selected.');
   Self.AddTravelCombo(Self.TravelSection, lcb, 'lcb_bash_guild_tp', 'Farming Guild', BASH_GUI_COMBO_COL2, 240, BASH_TRAVEL_GUILD, BASHFarmConfig.GuildTP);
-  lcb.SetTooltip('How to travel to the Farming Guild. Enabled when any guild patch/tree is selected.');
+  lcb.SetTooltip('How to travel to the Farming Guild. Portal Nexus uses Kourend Castle. Enabled when any guild patch/tree is selected.');
   lcb.ComboBox.SetOnChange(@Self.OnSeedComboChange);
   Self.AddCheck(Self.TravelSection, cb, 'cb_bash_lumby_elite', 'Lumby elite (no Dramen)', BASH_GUI_COMBO_COL2, 302, BASHFarmConfig.LumbyElite);
   cb.SetTooltip('You have Lumbridge Elite diary done - Fairy Ring travel without a Dramen/Lunar staff.');
+  Self.AddCombo(Self.TravelSection, lcb, 'lcb_bash_house_tp', 'House Teleport', BASH_GUI_COMBO_COL3, 302,
+    BASH_HOUSE_TELEPORT, BASHFarmConfig.HouseTP);
+  lcb.SetTooltip('How the script enters the house before using a portal nexus. Construction capes do not use runes or tablets. Enabled when a location is set to Portal Nexus.');
 
   Self.MakeLabel(Self.TravelSection, 'Trees', 24, 336, 11, BASH_GUI_TEXT, True);
 
@@ -989,24 +1012,25 @@ begin
   Self.SetNamedCombo('lcb_bash_treesapling', BASHFarmConfig.TreeSaplingIdx);
   Self.SetNamedCombo('lcb_bash_fruitsapling', BASHFarmConfig.FruitSaplingIdx);
 
-  Self.SetNamedCombo('lcb_bash_weiss_tp', BASHFarmConfig.WeissTP);
-  Self.SetNamedCombo('lcb_bash_stronghold_tp', BASHFarmConfig.StrongholdTP);
-  Self.SetNamedCombo('lcb_bash_ardougne_tp', BASHFarmConfig.ArdougneTP);
-  Self.SetNamedCombo('lcb_bash_falador_tp', BASHFarmConfig.FaladorTP);
-  Self.SetNamedCombo('lcb_bash_catherby_tp', BASHFarmConfig.CatherbyTP);
-  Self.SetNamedCombo('lcb_bash_hosidius_tp', BASHFarmConfig.HosidiusTP);
-  Self.SetNamedCombo('lcb_bash_ortus_tp', BASHFarmConfig.OrtusTP);
-  Self.SetNamedCombo('lcb_bash_guild_tp', BASHFarmConfig.GuildTP);
-  Self.SetNamedCombo('lcb_bash_lum_tree_tp', BASHFarmConfig.LumbridgeTreeTP);
-  Self.SetNamedCombo('lcb_bash_var_tree_tp', BASHFarmConfig.VarrockTreeTP);
-  Self.SetNamedCombo('lcb_bash_fally_tree_tp', BASHFarmConfig.FaladorTreeTP);
-  Self.SetNamedCombo('lcb_bash_tav_tree_tp', BASHFarmConfig.TaverleyTreeTP);
-  Self.SetNamedCombo('lcb_bash_gnome_tree_tp', BASHFarmConfig.GnomeTreeTP);
-  Self.SetNamedCombo('lcb_bash_gnome_fruit_tp', BASHFarmConfig.GnomeFruitTP);
-  Self.SetNamedCombo('lcb_bash_gnome_village_tp', BASHFarmConfig.GnomeVillageFruitTP);
-  Self.SetNamedCombo('lcb_bash_cath_fruit_tp', BASHFarmConfig.CatherbyFruitTP);
-  Self.SetNamedCombo('lcb_bash_brim_fruit_tp', BASHFarmConfig.BrimhavenFruitTP);
-  Self.SetNamedCombo('lcb_bash_lletya_fruit_tp', BASHFarmConfig.LletyaFruitTP);
+  Self.SetNamedCombo('lcb_bash_weiss_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_WEISS, BASHFarmConfig.WeissTP));
+  Self.SetNamedCombo('lcb_bash_stronghold_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_STRONGHOLD, BASHFarmConfig.StrongholdTP));
+  Self.SetNamedCombo('lcb_bash_ardougne_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_ARDOUGNE, BASHFarmConfig.ArdougneTP));
+  Self.SetNamedCombo('lcb_bash_falador_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_FALADOR, BASHFarmConfig.FaladorTP));
+  Self.SetNamedCombo('lcb_bash_catherby_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_CATHERBY, BASHFarmConfig.CatherbyTP));
+  Self.SetNamedCombo('lcb_bash_hosidius_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_HOSIDIUS, BASHFarmConfig.HosidiusTP));
+  Self.SetNamedCombo('lcb_bash_ortus_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_ORTUS, BASHFarmConfig.OrtusTP));
+  Self.SetNamedCombo('lcb_bash_guild_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_GUILD, BASHFarmConfig.GuildTP));
+  Self.SetNamedCombo('lcb_bash_house_tp', BASHFarmConfig.HouseTP);
+  Self.SetNamedCombo('lcb_bash_lum_tree_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_LUMBRIDGE_TREE, BASHFarmConfig.LumbridgeTreeTP));
+  Self.SetNamedCombo('lcb_bash_var_tree_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_VARROCK_TREE, BASHFarmConfig.VarrockTreeTP));
+  Self.SetNamedCombo('lcb_bash_fally_tree_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_FALADOR_TREE, BASHFarmConfig.FaladorTreeTP));
+  Self.SetNamedCombo('lcb_bash_tav_tree_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_TAVERLEY_TREE, BASHFarmConfig.TaverleyTreeTP));
+  Self.SetNamedCombo('lcb_bash_gnome_tree_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_GNOME_TREE, BASHFarmConfig.GnomeTreeTP));
+  Self.SetNamedCombo('lcb_bash_gnome_fruit_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_GNOME_FRUIT, BASHFarmConfig.GnomeFruitTP));
+  Self.SetNamedCombo('lcb_bash_gnome_village_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_GNOME_VILLAGE_FRUIT, BASHFarmConfig.GnomeVillageFruitTP));
+  Self.SetNamedCombo('lcb_bash_cath_fruit_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_CATHERBY_FRUIT, BASHFarmConfig.CatherbyFruitTP));
+  Self.SetNamedCombo('lcb_bash_brim_fruit_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_BRIMHAVEN_FRUIT, BASHFarmConfig.BrimhavenFruitTP));
+  Self.SetNamedCombo('lcb_bash_lletya_fruit_tp', BASHFarmTravelSortedIdx(BASH_TRAVEL_LLETYA_FRUIT, BASHFarmConfig.LletyaFruitTP));
 
   Self.SetNamedCheck('cb_bash_barbdibber', BASHFarmConfig.BarbDibber);
   Self.SetNamedCheck('cb_bash_magicsecs', BASHFarmConfig.MagicSecateurs);
@@ -1128,6 +1152,12 @@ begin
   if Self.HasNamedControl('lcb_bash_catherby_tp', '_combobox') then
     BASHFarmConfig.CatherbyTP := Self.ReadTravelIdx('lcb_bash_catherby_tp', BASH_TRAVEL_CATHERBY);
   BASHFarmConfig.PhasmatysTP := 0;
+  if Self.HasNamedControl('lcb_bash_house_tp', '_combobox') then
+  begin
+    BASHFarmConfig.HouseTP := Self.ReadComboIdx('lcb_bash_house_tp');
+    if (BASHFarmConfig.HouseTP < 0) or (BASHFarmConfig.HouseTP > High(BASH_HOUSE_TELEPORT)) then
+      BASHFarmConfig.HouseTP := 0;
+  end;
   if Self.HasNamedControl('lcb_bash_hosidius_tp', '_combobox') then
     BASHFarmConfig.HosidiusTP := Self.ReadTravelIdx('lcb_bash_hosidius_tp', BASH_TRAVEL_HOSIDIUS);
   if Self.HasNamedControl('lcb_bash_ortus_tp', '_combobox') then

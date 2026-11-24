@@ -11,6 +11,7 @@ type
   TPoHLayoutFinder = record(TSRLBaseRecord)
     IMAGES_PATH: String;
     RoomImages: array [EHouseRoom] of TMufasaBitmapArray;
+    ViewColumns, ViewRows: Int32;
   end;
 
   TPoHLayoutFinderMatch = record
@@ -115,15 +116,212 @@ begin
 end;
 
 function TPoHLayoutFinder.GetLayoutPoint(b: TBox): TPoint;
-const
-  TOP_LEFT: TPoint := [51, 59];
-  BOTTOM_RIGHT: TPoint := [274, 282];
-var
-  x, y: Int32;
 begin
-  x := b.x1 - TOP_LEFT.x;
-  y := b.y1 - TOP_LEFT.y;
-  Result := [x div 32, y div 32];
+  // Kept for older callers. Run() no longer uses a fixed 32px viewport.
+  Result := [b.X1 div 32, b.Y1 div 32];
+end;
+
+function TPoHLayoutFinder.GridLines(client: TMufasaBitmap; horizontal: Boolean): TIntegerArray;
+const
+  LINE: TColor = 11513775; // RGB 175,175,175, the house viewer grid
+var
+  points: TPointArray;
+  counts: TIntegerArray;
+  p: TPoint;
+  area: TBox;
+  index, axis, minCount: Int32;
+begin
+  area := RSInterface.Bounds;
+  if not client.FindColors(points, LINE) then
+    Exit;
+
+  if horizontal then
+    SetLength(counts, client.GetWidth())
+  else
+    SetLength(counts, client.GetHeight());
+
+  for p in points do
+  begin
+    if (p.X < area.X1) or (p.X > area.X2) or (p.Y < area.Y1) or (p.Y > area.Y2) then
+      Continue;
+    if horizontal then
+      axis := p.Y
+    else
+      axis := p.X;
+    if (axis >= 0) and (axis < Length(counts)) then
+      Inc(counts[axis]);
+  end;
+
+  minCount := Max(40, (area.Y2 - area.Y1) div 6);
+  for index := 0 to High(counts) do
+    if counts[index] >= minCount then
+      Result += index;
+end;
+
+function TPoHLayoutFinder.NearLine(lines: TIntegerArray; value, slack: Int32): Boolean;
+var
+  line: Int32;
+begin
+  for line in lines do
+    if Abs(line - value) <= slack then
+      Exit(True);
+end;
+
+function TPoHLayoutFinder.FitLattice(lines: TIntegerArray; out origin, pitch, cells: Int32): Boolean;
+var
+  start, step, cursor, hits, bestHits, bestOrigin, bestPitch, bestCells: Int32;
+begin
+  bestHits := 0;
+  bestOrigin := 0;
+  bestPitch := 0;
+  bestCells := 0;
+  for step := 16 to 128 do
+    for start in lines do
+    begin
+      hits := 0;
+      cells := 0;
+      while cells < 40 do
+      begin
+        cursor := start + cells * step;
+        if not Self.NearLine(lines, cursor, 1) then
+          Break;
+        Inc(hits);
+        Inc(cells);
+      end;
+      Dec(cells);
+      if (cells >= 1) and (hits > bestHits) then
+      begin
+        bestHits := hits;
+        bestOrigin := start;
+        bestPitch := step;
+        bestCells := cells;
+      end;
+    end;
+
+  origin := bestOrigin;
+  pitch := bestPitch;
+  cells := bestCells;
+  Result := (bestHits >= 2) and (bestCells >= 1);
+end;
+
+function TPoHLayoutFinder.BackgroundPixel(color: TColor): Boolean;
+var
+  red, green, blue: Int32;
+begin
+  blue := color and $FF;
+  green := (color shr 8) and $FF;
+  red := (color shr 16) and $FF;
+  Result := (Abs(red - 84) < 18) and (Abs(green - 75) < 18) and (Abs(blue - 64) < 18);
+end;
+
+function TPoHLayoutFinder.MatchScore(tile, template: TMufasaBitmap): Single;
+var
+  matrix: TSingleMatrix;
+  p: TPoint;
+begin
+  if (template.GetWidth() <> 32) or (template.GetHeight() <> 32) then
+    Exit(0);
+  matrix := tile.MatchTemplate(template, TM_CCOEFF_NORMED);
+  if Length(matrix) = 0 then
+    Exit(0);
+  p := matrix.ArgMax();
+  Result := matrix[p.Y][p.X];
+end;
+
+function TPoHLayoutFinder.SampleCell(screen: TMufasaBitmap; x, y, pitchX, pitchY: Int32; out occupied: Boolean): TMufasaBitmap;
+var
+  sx, sy, dx, dy, other: Int32;
+begin
+  Result.Init(Client.GetMBitmaps());
+  Result.SetSize(32, 32);
+  other := 0;
+  for dy := 0 to 31 do
+  begin
+    sy := y + ((2 * dy + 1) * pitchY) div 64;
+    for dx := 0 to 31 do
+    begin
+      sx := x + ((2 * dx + 1) * pitchX) div 64;
+      if not Self.BackgroundPixel(screen.GetPixel(sx, sy)) then
+        Inc(other);
+      Result.SetPixel(dx, dy, screen.GetPixel(sx, sy));
+    end;
+  end;
+  occupied := other > 80;
+end;
+
+function TPoHLayoutFinder.ReadView(client: TMufasaBitmap; out columns, rows: Int32): TPoHLayoutFinderMatchArray;
+var
+  vertical, horizontal: TIntegerArray;
+  originX, originY, pitchX, pitchY, cx, cy, rotation: Int32;
+  room: EHouseRoom;
+  images: TMufasaBitmapArray;
+  tile: TMufasaBitmap;
+  occupied: Boolean;
+  score, best, otherBest: Single;
+  bestRoom: EHouseRoom;
+  bestRotation: Int32;
+  match: TPoHLayoutFinderMatch;
+begin
+  vertical := Self.GridLines(client, False);
+  horizontal := Self.GridLines(client, True);
+  if not Self.FitLattice(vertical, originX, pitchX, columns) then
+    Exit;
+  if not Self.FitLattice(horizontal, originY, pitchY, rows) then
+    Exit;
+  if Abs(pitchX - pitchY) > 2 then
+    Exit;
+
+  Self.ViewColumns := columns;
+  Self.ViewRows := rows;
+
+  for room := EHouseRoom(0) to EHouseRoom(High(EHouseRoom)) do
+  begin
+    if (room = EHouseRoom.UNKNOWN) or (room = EHouseRoom.MENAGERIE_INDOORS) then
+      Continue;
+    images := Self.GetRoomImages(room);
+  end;
+
+  for cy := 0 to rows - 1 do
+    for cx := 0 to columns - 1 do
+    begin
+      tile := Self.SampleCell(client, originX + cx * pitchX, originY + cy * pitchY, pitchX, pitchY, occupied);
+      best := 0;
+      otherBest := 0;
+      bestRoom := EHouseRoom.UNKNOWN;
+      bestRotation := 0;
+      for room := EHouseRoom(0) to EHouseRoom(High(EHouseRoom)) do
+      begin
+        if (room = EHouseRoom.UNKNOWN) or (room = EHouseRoom.MENAGERIE_INDOORS) then
+          Continue;
+        images := Self.GetRoomImages(room);
+        for rotation := 0 to High(images) do
+        begin
+          score := Self.MatchScore(tile, images[rotation]);
+          if score > best then
+          begin
+            if bestRoom <> room then
+              otherBest := best;
+            best := score;
+            bestRoom := room;
+            bestRotation := rotation mod 4;
+          end
+          else if (room <> bestRoom) and (score > otherBest) then
+            otherBest := score;
+        end;
+      end;
+      tile.Free();
+
+      // A selected room is redrawn brighter, so it scores below a clean icon but still wins.
+      if (best >= 0.93) or (occupied and (best >= 0.62) and ((best - otherBest) >= 0.08)) then
+      begin
+        match.Room := bestRoom;
+        match.Box := [originX + cx * pitchX, originY + cy * pitchY, originX + (cx + 1) * pitchX - 1, originY + (cy + 1) * pitchY - 1];
+        match.Index := Ord(bestRoom);
+        match.LayoutPoint := [cx, cy];
+        match.Rotation := bestRotation;
+        Result += match;
+      end;
+    end;
 end;
 
 function TPoHLayoutFinder.FindAll(rooms: array of EHouseRoom): TPoHLayoutFinderMatchArray;
@@ -178,12 +376,21 @@ begin
   SRL.FindAllTemplatesIn(self.GetRoomImages(r)[0], clientImage, 0.95, matches);
 end;
 
+function TPoHLayoutFinder.TouchesEdge(matches: TPoHLayoutFinderMatchArray; columns, rows: Int32): Boolean;
+var
+  match: TPoHLayoutFinderMatch;
+begin
+  for match in matches do
+    if (match.LayoutPoint.X = 0) or (match.LayoutPoint.Y = 0) or
+       (match.LayoutPoint.X = columns - 1) or (match.LayoutPoint.Y = rows - 1) then
+      Exit(True);
+end;
+
 function TPoHLayoutFinder.Run(out topLeft, bottomRight: TPoint): TPoHLayoutFinderMatchArray;
 var
-  matches: TPoHLayoutFinderMatchArray;
+  client: TMufasaBitmap;
   match: TPoHLayoutFinderMatch;
-  bs: TBoxArray;
-  r: EHouseRoom;
+  columns, rows: Int32;
 begin
   topLeft := [$FFFFFF, $FFFFFF];
   bottomRight := [0, 0];
@@ -191,24 +398,17 @@ begin
   if Self.Name = '' then
     Self.Setup();
 
-  for r in EHouseRoom do
+  client.FromClient(RSClient.Bounds);
+  Result := Self.ReadView(client, columns, rows);
+  client.Free();
+
+  for match in Result do
   begin
-    if r = EHouseRoom.UNKNOWN then Continue;
-    if r = EHouseRoom.MENAGERIE_INDOORS then Continue; //couldnt get a picture for this room
-
-    Self.Find([r], matches);
-    for match in matches do
-    begin
-      topLeft.X := Min(topLeft.X, match.LayoutPoint.X);
-      topLeft.Y := Min(topLeft.Y, match.LayoutPoint.Y);
-      bottomRight.X := Max(bottomRight.X, match.LayoutPoint.X);
-      bottomRight.Y := Max(bottomRight.Y, match.LayoutPoint.Y);
-
-      bs += match.Box;
-      Result += match;
-    end;
+    topLeft.X := Min(topLeft.X, match.LayoutPoint.X);
+    topLeft.Y := Min(topLeft.Y, match.LayoutPoint.Y);
+    bottomRight.X := Max(bottomRight.X, match.LayoutPoint.X);
+    bottomRight.Y := Max(bottomRight.Y, match.LayoutPoint.Y);
   end;
-  //Debug(bs);
 end;
 
 var
@@ -219,7 +419,7 @@ var
   matches: TPoHLayoutFinderMatchArray;
   match: TPoHLayoutFinderMatch;
   topLeft, bottomRight: TPoint;
-  body, rooms: String;
+  body, rooms, detail: String;
   count: Int32;
 begin
   if path = '' then
@@ -236,7 +436,7 @@ begin
   count := Length(matches);
   if count = 0 then
   begin
-    WriteFileContents(path, '{"status":"empty","detail":"No rooms were found. Open the house viewer and use the smallest icons.","rooms":[]}', False);
+    WriteFileContents(path, '{"status":"empty","detail":"No rooms were found. Open the house viewer, then try again.","rooms":[]}', False);
     Exit;
   end;
 
@@ -251,7 +451,11 @@ begin
              ',"rotation":' + ToStr(match.Rotation) + '}';
   end;
 
-  body := '{"status":"ok","detail":"","count":' + ToStr(count) +
+  detail := '';
+  if LayoutFinder.TouchesEdge(matches, LayoutFinder.ViewColumns, LayoutFinder.ViewRows) then
+    detail := 'A room is on the edge of the viewer. If the house continues past the window, scroll that part into view and read again.';
+
+  body := '{"status":"ok","detail":"' + detail + '","count":' + ToStr(count) +
           ',"top_left":[' + ToStr(topLeft.X) + ',' + ToStr(topLeft.Y) + ']' +
           ',"bottom_right":[' + ToStr(bottomRight.X) + ',' + ToStr(bottomRight.Y) + ']' +
           ',"rooms":[' + rooms + ']}';
