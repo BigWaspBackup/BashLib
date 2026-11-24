@@ -1,3 +1,12 @@
+## [8.8.9](https://github.com/BigWaspBackup/BashLib/compare/v8.8.8...v8.8.9) (2026-11-24)
+
+
+### Bug Fixes
+
+* Improvements to house layout finder, world hopper, support for latest assets, inital nexus support for farm runs ([e909671](https://github.com/BigWaspBackup/BashLib/commit/e90967119d74b5cf4a77665c8bab2dff3f961b31))
+
+
+
 ## [8.8.8](https://github.com/BigWaspBackup/BashLib/compare/v8.8.7...v8.8.8) (2026-11-13)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Recorder fixes ([5bd5179](https://github.com/BigWaspBackup/BashLib/commit/5bd5179549da6a921f0bc90449396c30c4895f0e))
-
-
-
-## [8.8.4](https://github.com/BigWaspBackup/BashLib/compare/v8.8.3...v8.8.4) (2026-10-31)
-
-
-### Bug Fixes
-
-* BASH Launcher 2.0 now supports crash recorder. ([6ce1ea3](https://github.com/BigWaspBackup/BashLib/commit/6ce1ea31b83f7765e12e61ac237038bab1ee2ddb))
 
 
 
