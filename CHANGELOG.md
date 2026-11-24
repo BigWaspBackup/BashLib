@@ -1,3 +1,12 @@
+## [8.8.8](https://github.com/BigWaspBackup/BashLib/compare/v8.8.7...v8.8.8) (2026-11-13)
+
+
+### Bug Fixes
+
+* Fixed some broken walker nodes around ardy, Improvements to web walking on all scripts, added support for Imcando hammer for birdhouse runs, Updated AI Chat to support more providers. ([848a665](https://github.com/BigWaspBackup/BashLib/commit/848a6653603098a475b6a3c239b1277869f7406a))
+
+
+
 ## [8.8.7](https://github.com/BigWaspBackup/BashLib/compare/v8.8.6...v8.8.7) (2026-11-09)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * BASH Launcher 2.0 now supports crash recorder. ([6ce1ea3](https://github.com/BigWaspBackup/BashLib/commit/6ce1ea31b83f7765e12e61ac237038bab1ee2ddb))
-
-
-
-## [8.8.3](https://github.com/BigWaspBackup/BashLib/compare/v8.8.2...v8.8.3) (2026-10-31)
-
-
-### Bug Fixes
-
-* Fixes for gear handler, initial support for unlimited runes in runners. ([4d3242a](https://github.com/BigWaspBackup/BashLib/commit/4d3242aa1fdc0e5e895c45a5b5907ea310d97693))
 
 
 
