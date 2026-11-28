@@ -4,13 +4,40 @@
 {$ENDIF}
 
 // Printed for the BASH launcher. A line starting with "#BASH status " is shown on the
-// running card and is not written into the script log.
+// running card and the client overlay, and is not written into the script log.
 procedure BashReportStatus(status: String);
 begin
   if status = '' then
     Exit;
   WriteLn('#BASH status ' + status);
 end;
+
+// Printed for the BASH launcher. A line starting with "#BASH stat " is shown on the
+// client overlay and is not written into the script log.
+// Example: BashReportStat('XP/H', '48.2k');
+procedure BashReportStat(name, value: String);
+begin
+  if (name = '') or (value = '') then
+    Exit;
+  WriteLn('#BASH stat ' + name + ' ' + value);
+end;
+
+// Removes one overlay row. Use '*' to remove every row the script added.
+procedure BashReportClear(name: String);
+begin
+  if name = '' then
+    Exit;
+  WriteLn('#BASH clear ' + name);
+end;
+
+type
+  TBashOverlay = record
+    Names, Values, Hidden: TStringArray;
+    LastPublish: UInt64;
+  end;
+
+var
+  BashOverlay: TBashOverlay;
 
 procedure TAntiban.OnFinishBreakingTask({$H-}task: PBreakTask);{$H+}
 begin
@@ -935,6 +962,7 @@ begin
   else
     Result := 'Break in: ' + SRL.MsToTime(Round(nextAt - GetTimeRunning()), Time_Short) +
               ' for: ' + SRL.MsToTime(Max(0, Round(nextLen)), Time_Short);
+  BashOverlay.Publish();
 end;
 
 function TAntiban.SleepScheduleText(): String;
@@ -959,6 +987,176 @@ begin
   else
     Result := 'Sleep in: ' + SRL.MsToTime(Round(nextAt - GetTimeRunning()), Time_Short) +
               ' for: ' + SRL.MsToTime(Max(0, Round(nextLen)), Time_Short);
+  BashOverlay.Publish();
+end;
+
+function TAntiban.NextBreakIn(): String;
+var
+  i: Int32;
+  nextAt: Double;
+begin
+  if Length(Self.Breaks) = 0 then
+    Exit('off');
+
+  nextAt := Self.Breaks[0].NextAtTime;
+  for i := 1 to High(Self.Breaks) do
+    if Self.Breaks[i].NextAtTime < nextAt then
+      nextAt := Self.Breaks[i].NextAtTime;
+
+  if nextAt <= GetTimeRunning() then
+    Result := 'ready'
+  else
+    Result := SRL.MsToTime(Round(nextAt - GetTimeRunning()), Time_Short).Strip();
+end;
+
+function TAntiban.NextSleepIn(): String;
+var
+  i: Int32;
+  nextAt: Double;
+begin
+  if Length(Self.Sleeps) = 0 then
+    Exit('off');
+
+  nextAt := Self.Sleeps[0].NextAtTime;
+  for i := 1 to High(Self.Sleeps) do
+    if Self.Sleeps[i].NextAtTime < nextAt then
+      nextAt := Self.Sleeps[i].NextAtTime;
+
+  if nextAt <= GetTimeRunning() then
+    Result := 'ready'
+  else
+    Result := SRL.MsToTime(Round(nextAt - GetTimeRunning()), Time_Short).Strip();
+end;
+
+(*
+BashOverlay is the client overlay report shared by every script.
+
+The skeleton (revision, next break, sleep) is published from the break and sleep
+lines scripts already print. A script adds its own rows, and hides a row it does
+not want. Level and XP are optional: without them the overlay has XP/H and no
+time-to-level bar.
+
+```pascal
+BashOverlay.SetValue('XP/H', '48.2k');
+BashOverlay.SetLevel(74, totalXP);          // shows the time-to-level bar
+BashOverlay.Hide('Level');                   // this script has no time to level
+BashOverlay.SetValue('Marks of grace', '14');
+BashOverlay.SetValue('Marks/H', '22');
+BashOverlay.Clear('Marks of grace');         // stop showing that row
+```
+Set the rows before the report prints the break line. That line publishes them.
+*)
+function TBashOverlay.IndexOf(name: String): Int32;
+var
+  i: Int32;
+begin
+  Result := -1;
+  for i := 0 to High(Self.Names) do
+    if SameText(Self.Names[i], name) then
+      Exit(i);
+end;
+
+function TBashOverlay.IsHidden(name: String): Boolean;
+var
+  i: Int32;
+begin
+  Result := False;
+  for i := 0 to High(Self.Hidden) do
+    if SameText(Self.Hidden[i], name) then
+      Exit(True);
+end;
+
+procedure TBashOverlay.Unhide(name: String);
+var
+  i: Int32;
+  kept: TStringArray;
+begin
+  for i := 0 to High(Self.Hidden) do
+    if not SameText(Self.Hidden[i], name) then
+      kept += Self.Hidden[i];
+  Self.Hidden := kept;
+end;
+
+procedure TBashOverlay.Forget(name: String);
+var
+  i: Int32;
+  names, values: TStringArray;
+begin
+  for i := 0 to High(Self.Names) do
+    if not SameText(Self.Names[i], name) then
+    begin
+      names += Self.Names[i];
+      values += Self.Values[i];
+    end;
+  Self.Names := names;
+  Self.Values := values;
+end;
+
+procedure TBashOverlay.SetValue(name, value: String);
+var
+  i: Int32;
+begin
+  if (name = '') or (value = '') then
+    Exit;
+  Self.Unhide(name);
+  i := Self.IndexOf(name);
+  if i < 0 then
+  begin
+    Self.Names += name;
+    Self.Values += value;
+  end
+  else
+    Self.Values[i] := value;
+end;
+
+procedure TBashOverlay.SetLevel(level: Int32; totalXP: Int64);
+begin
+  if level <= 0 then
+  begin
+    Self.Hide('Level');
+    Self.Hide('XP');
+    Exit;
+  end;
+  Self.SetValue('Level', IntToStr(level));
+  if totalXP > 0 then
+    Self.SetValue('XP', IntToStr(totalXP));
+end;
+
+procedure TBashOverlay.Hide(name: String);
+begin
+  if name = '' then
+    Exit;
+  Self.Forget(name);
+  if not Self.IsHidden(name) then
+    Self.Hidden += name;
+  BashReportClear(name);
+end;
+
+procedure TBashOverlay.Clear(name: String);
+begin
+  Self.Hide(name);
+end;
+
+procedure TBashOverlay.RememberSkeleton();
+begin
+  if not Self.IsHidden('Revision') then
+    Self.SetValue('Revision', {$MACRO SCRIPT_REVISION});
+  if not Self.IsHidden('Break') then
+    Self.SetValue('Break', Antiban.NextBreakIn());
+  if not Self.IsHidden('Sleep') then
+    Self.SetValue('Sleep', Antiban.NextSleepIn());
+end;
+
+procedure TBashOverlay.Publish();
+var
+  i: Int32;
+begin
+  if (Self.LastPublish <> 0) and (GetTickCount() - Self.LastPublish < 5000) then
+    Exit;
+  Self.RememberSkeleton();
+  Self.LastPublish := GetTickCount();
+  for i := 0 to High(Self.Names) do
+    BashReportStat(Self.Names[i], Self.Values[i]);
 end;
 
 procedure TAntiban.Setup(); //override me to add stuff!

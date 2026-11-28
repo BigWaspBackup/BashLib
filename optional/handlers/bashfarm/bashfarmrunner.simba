@@ -3042,8 +3042,27 @@ begin
   Self.DisplayReport();
 end;
 
+procedure TBASHFarmRunner.ReportNextRun();
+var
+  text: String;
+begin
+  if Self.IsDisabled then
+  begin
+    if not BashOverlay.IsHidden('Farm') then
+      BashOverlay.Hide('Farm');
+    Exit;
+  end;
+  if Self.ReadyTimer.IsFinished() then
+    text := 'ready'
+  else
+    text := SRL.MsToTime(Self.ReadyTimer.TimeRemaining(), TTimeFormat.Time_Short).Strip();
+  BashOverlay.SetValue('Farm', text);
+  BashOverlay.Publish();
+end;
+
 function TBASHFarmRunner.CanDoFarmRun(): Boolean;
 begin
+  Self.ReportNextRun();
   if Self.IsDisabled then
     Exit(False);
 

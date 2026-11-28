@@ -1361,8 +1361,27 @@ begin
   Self.HasRunFinished := False;
 end;
 
+procedure TBASHBirdHouseRunner.ReportNextRun();
+var
+  text: String;
+begin
+  if Self.IsDisabled then
+  begin
+    if not BashOverlay.IsHidden('Birdhouse') then
+      BashOverlay.Hide('Birdhouse');
+    Exit;
+  end;
+  if Self.ScriptIntervalTimer.IsFinished() then
+    text := 'ready'
+  else
+    text := SRL.MsToTime(Self.ScriptIntervalTimer.TimeRemaining(), TTimeFormat.Time_Short).Strip();
+  BashOverlay.SetValue('Birdhouse', text);
+  BashOverlay.Publish();
+end;
+
 function TBASHBirdHouseRunner.CanDoBirdHouseRun(): Boolean;
 begin
+  Self.ReportNextRun();
   if Self.IsDisabled then
     Exit(False);
 
