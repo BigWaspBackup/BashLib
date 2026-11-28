@@ -1,3 +1,12 @@
+## [8.8.10](https://github.com/BigWaspBackup/BashLib/compare/v8.8.9...v8.8.10) (2026-11-28)
+
+
+### Bug Fixes
+
+* Prepare functions for BASH Launcher 2.0 Overlay ([d9e014e](https://github.com/BigWaspBackup/BashLib/commit/d9e014e5ff10795c20fb764e327498b653b61ecd))
+
+
+
 ## [8.8.9](https://github.com/BigWaspBackup/BashLib/compare/v8.8.8...v8.8.9) (2026-11-24)
 
 
@@ -31,15 +40,6 @@
 ### Bug Fixes
 
 * Config tweaks ([6f25a52](https://github.com/BigWaspBackup/BashLib/commit/6f25a521305d4e8364267f197477431e2c60fa0e))
-
-
-
-## [8.8.5](https://github.com/BigWaspBackup/BashLib/compare/v8.8.4...v8.8.5) (2026-10-31)
-
-
-### Bug Fixes
-
-* Recorder fixes ([5bd5179](https://github.com/BigWaspBackup/BashLib/commit/5bd5179549da6a921f0bc90449396c30c4895f0e))
 
 
 
